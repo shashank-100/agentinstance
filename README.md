@@ -2,6 +2,15 @@
 
 **Open-source, self-hostable always-on AI agents on Cloudflare.**
 
+## 🚀 Deploy in one click
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/perch)
+
+Click the button → sign in to Cloudflare → it clones this repo, provisions the
+Durable Object, and deploys the Worker. No local setup. (Add model/channel keys
+later as [secrets](./DEPLOY.md).)
+
+
 Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
 agent with persistent memory, reachable on every channel your users already use.
 Park it when idle; you pay nothing while it sleeps.
