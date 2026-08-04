@@ -49,6 +49,9 @@ export const CAPABILITIES: Record<string, string> = {
   image_to_video: "Animate an image into video.",
   transcribe_voice: "Speech-to-text transcription.",
   email: "Send/receive email.",
+  crm: "Read/write CRM records (contacts, deals).",
+  social_listening: "Monitor mentions and keywords across social platforms.",
+  file_management: "Store, list, and fetch the agent's files.",
 };
 
 export function estimateMonthCost(machine = DEFAULT_MACHINE): number {

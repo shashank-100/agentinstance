@@ -79,11 +79,33 @@ export const sendEmail: Capability = {
   },
 };
 
+// Lightweight stubs for capabilities that need an external provider/config.
+// They return a clear "configure me" result rather than failing, so the whole
+// catalog is selectable and the wiring is testable without third-party keys.
+function stub(name: string, note: string): Capability {
+  return {
+    name,
+    describe: note,
+    async run(_env, input) {
+      return { capability: name, note: `${note} (stub — configure a provider to enable)`, input };
+    },
+  };
+}
+
+export const generateVideo = stub("generate_video", "Text-to-video generation.");
+export const crm = stub("crm", "Read/write CRM records.");
+export const socialListening = stub("social_listening", "Monitor social mentions.");
+export const fileManagement = stub("file_management", "Store/list/fetch agent files.");
+
 const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
   search_serp: searchSerp,
   generate_image: generateImage,
   email: sendEmail,
+  generate_video: generateVideo,
+  crm,
+  social_listening: socialListening,
+  file_management: fileManagement,
 };
 
 export function getCapability(name: string): Capability | null {

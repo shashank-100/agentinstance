@@ -138,6 +138,13 @@ export class AgentInstance extends DurableObject<Env> {
     this.setKV("parked", false);
   }
 
+  /** Permanently erase this agent's history + state. */
+  async wipe(): Promise<void> {
+    this.sql.exec("DELETE FROM messages");
+    this.sql.exec("DELETE FROM kv");
+    await this.ctx.storage.deleteAlarm();
+  }
+
   /** health!=progress: report both heartbeat and last real progress + cadence. */
   async status(): Promise<{
     parked: boolean;

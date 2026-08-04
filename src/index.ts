@@ -61,6 +61,7 @@ function agentStub(env: Env, id: string) {
       name: string,
       input: Record<string, unknown>,
     ): Promise<{ result?: unknown; error?: string }>;
+    wipe(): Promise<void>;
   };
 }
 
@@ -151,6 +152,13 @@ export default {
       return Response.json(withStatus);
     }
 
+    // --- delete an agent: DELETE /agents/:id (wipe state + drop from registry) ---
+    if (parts[0] === "agents" && parts[1] && request.method === "DELETE") {
+      await agentStub(env, parts[1]).wipe();
+      await registry(env).remove(parts[1]);
+      return Response.json({ ok: true, deleted: parts[1] });
+    }
+
     // --- REST agent API: /agents/:id/:action ---
     if (parts[0] === "agents" && parts[1]) {
       const stub = agentStub(env, parts[1]);
@@ -192,6 +200,13 @@ export default {
           case "wake":
             await stub.fireWakeup();
             return Response.json({ ok: true });
+          case "a2a": {
+            // Agent-to-agent: `from` agent sends `text` to this agent (parts[1]).
+            const { from, text } = (await request.json()) as { from: string; text: string };
+            const out = await stub.send(`[from agent ${from}] ${text}`, "a2a");
+            if (out.parked) return Response.json({ error: "target agent parked", parked: true }, { status: 409 });
+            return Response.json({ from, to: parts[1], reply: out.reply });
+          }
           case "tool": {
             const name = parts[3];
             if (!name) return new Response("tool name required", { status: 400 });

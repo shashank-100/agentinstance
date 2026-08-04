@@ -33,4 +33,22 @@ describe("agent registry", () => {
     }[];
     expect(list.find((a) => a.id === "reg-2")!.parked).toBe(true);
   });
+
+  it("DELETE removes an agent from the listing and wipes state", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "reg-del", harness: "chat", model: "claude-sonnet-4-6" }),
+    });
+    await SELF.fetch("https://x/agents/reg-del/send", {
+      method: "POST",
+      body: JSON.stringify({ text: "hi" }),
+    });
+    const res = await SELF.fetch("https://x/agents/reg-del", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as { id: string }[];
+    expect(list.find((a) => a.id === "reg-del")).toBeUndefined();
+    // history wiped
+    const hist = (await (await SELF.fetch("https://x/agents/reg-del/history")).json()) as unknown[];
+    expect(hist).toHaveLength(0);
+  });
 });
