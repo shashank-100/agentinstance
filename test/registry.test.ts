@@ -8,7 +8,7 @@ describe("agent registry", () => {
       method: "POST",
       body: JSON.stringify({ id: "reg-1", harness: "chat", model: "claude-opus-5", machine: "2gb" }),
     });
-    const list = (await (await SELF.fetch("https://x/agents")).json()) as {
+    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
       id: string;
       model: string;
       machine: string;
@@ -27,7 +27,7 @@ describe("agent registry", () => {
       body: JSON.stringify({ id: "reg-2", harness: "chat", model: "claude-sonnet-4-6" }),
     });
     await SELF.fetch("https://x/agents/reg-2/park", { method: "POST" });
-    const list = (await (await SELF.fetch("https://x/agents")).json()) as {
+    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
       id: string;
       parked: boolean;
     }[];

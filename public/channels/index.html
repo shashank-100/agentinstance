@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nimbus — channels</title>
+<style>
+  :root{--ink:#0c0a08;--ink-2:#14110d;--panel:#1a1611;--line:#2c2620;--ember:#f0954a;
+    --ember-soft:#f7b878;--sky:#8fb3c9;--paper:#efe7d9;--muted:#9a8f7e;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;--serif:"Iowan Old Style",Palatino,Georgia,serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);
+    background-image:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(240,149,74,0.10),transparent 60%);}
+  .wrap{max-width:960px;margin:0 auto;padding:28px}
+  nav{display:flex;justify-content:space-between;align-items:center}
+  .brand{display:flex;gap:10px;font-weight:700}.brand .glyph{color:var(--ember)}
+  nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:20px}nav a:hover{color:var(--paper)}
+  h1{font-family:var(--serif);font-weight:400;font-size:2rem;margin:24px 0 4px}
+  .sub{color:var(--muted);margin-bottom:28px;max-width:560px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--ink-2));border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:8px}
+  .card h3{font-family:var(--serif);font-weight:400;font-size:1.25rem;display:flex;align-items:center;gap:10px}
+  .card p{color:var(--muted);font-size:.85rem;flex:1}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .on{background:#7ec98f}.soon{background:var(--muted)}
+  .btn{margin-top:8px;align-self:flex-start;text-decoration:none;padding:9px 16px;border-radius:9px;font-size:.82rem;font-weight:600}
+  .btn.live{background:var(--ember);color:var(--ink)}
+  .btn.live:hover{transform:translateY(-2px)}
+  .btn.soon{border:1px solid var(--line);color:var(--muted);pointer-events:none}
+  code{background:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--ember-soft);font-size:.78rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="brand"><span class="glyph">⌇</span> Nimbus</div>
+    <div>
+      <a href="/agents/">My Agents</a>
+      <a href="/channels/">Channels</a>
+      <a href="/agents/new.html">New Agent</a>
+    </div>
+  </nav>
+  <h1>Channels</h1>
+  <p class="sub">Reach your agents wherever your users are. History is unified per agent — start on one channel, continue on another with shared context.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3><span class="dot on"></span> Telegram</h3>
+      <p>Set up once — every agent answers in one bot chat. Point the webhook at <code>/channels/telegram/:agentId</code>.</p>
+      <a class="btn live" href="https://core.telegram.org/bots#how-do-i-create-a-bot" target="_blank" rel="noopener">Connect Telegram</a>
+    </div>
+    <div class="card">
+      <h3><span class="dot on"></span> Slack</h3>
+      <p>Each agent gets its own channel. Events post to <code>/channels/slack/:agentId</code>.</p>
+      <a class="btn live" href="https://api.slack.com/apps" target="_blank" rel="noopener">Add to Slack</a>
+    </div>
+    <div class="card">
+      <h3><span class="dot on"></span> Discord</h3>
+      <p>Each agent gets its own #channel. Interactions hit <code>/channels/discord/:agentId</code>.</p>
+      <a class="btn live" href="https://discord.com/developers/applications" target="_blank" rel="noopener">Add to Discord</a>
+    </div>
+    <div class="card">
+      <h3><span class="dot on"></span> Web</h3>
+      <p>Built-in web chat — no setup. Open any agent from <a href="/agents/" style="color:var(--sky)">My Agents</a>.</p>
+      <a class="btn live" href="/agents/">Open web chat</a>
+    </div>
+    <div class="card">
+      <h3><span class="dot soon"></span> WhatsApp</h3>
+      <p>Message your agents on WhatsApp via the Meta Cloud API. Adapter is built; hosted connect flow coming soon.</p>
+      <span class="btn soon">Coming soon</span>
+    </div>
+    <div class="card">
+      <h3><span class="dot soon"></span> iMessage</h3>
+      <p>Text your agents from Messages on iPhone and Mac.</p>
+      <span class="btn soon">Coming soon</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

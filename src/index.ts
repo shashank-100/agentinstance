@@ -139,8 +139,8 @@ export default {
       }
     }
 
-    // --- list all agents (dashboard): GET /agents ---
-    if (parts[0] === "agents" && !parts[1] && request.method === "GET") {
+    // --- list all agents (dashboard): GET /api/agents ---
+    if (parts[0] === "api" && parts[1] === "agents" && request.method === "GET") {
       const recs = await registry(env).list();
       const withStatus = await Promise.all(
         recs.map(async (r) => {
