@@ -4,7 +4,7 @@
 
 ## 🚀 Deploy in one click
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/nimbus)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/agentinstance)
 
 Click the button → sign in to Cloudflare → it clones this repo, provisions the
 Durable Object, and deploys the Worker. No local setup. (Add model/channel keys
