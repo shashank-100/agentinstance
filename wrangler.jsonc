@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "perch",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "AGENT", "class_name": "AgentDO" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["AgentDO"] }
+  ],
+  "vars": {
+    "DEFAULT_MODEL": "claude-sonnet-4-6",
+    "DEFAULT_HARNESS": "chat"
+  }
+  // Secrets (set via `wrangler secret put`):
+  //   ANTHROPIC_API_KEY, OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, ...
+}

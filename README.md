@@ -1,0 +1,68 @@
+# ⌇ Perch
+
+**Open-source, self-hostable always-on AI agents on Cloudflare.**
+
+Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
+agent with persistent memory, reachable on every channel your users already use.
+Park it when idle; you pay nothing while it sleeps.
+
+Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
+with SQLite storage — one coordination atom, strongly consistent, always recoverable.
+
+## Features
+
+- **Persistent memory** — full history + state in Durable Object SQLite, survives restarts.
+- **Any model, no lock-in** — Claude (default), GPT, DeepSeek, Gemini, Kimi, GLM… swap freely.
+- **Any harness** — chat loop, Claude Code, Codex, Hermes, OpenClaw.
+- **Three-piece composition** with a compatibility check before launch.
+- **Unified cross-channel history** — one agent, one memory; replies go to the
+  channel that messaged, context is shared across all of them.
+- **Scheduled wakeups** via alarms, with a declared cadence so *stalled* ≠ *idle*
+  (health ≠ progress).
+- **Park = free** — pay only while actively working.
+
+## Quick start
+
+```bash
+npm install
+npm test          # runs the Workers test suite
+npm run dev       # local dev server
+npm run deploy    # deploy to your Cloudflare account
+```
+
+Set secrets for real model backends (optional — an offline echo model runs without keys):
+
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put OPENAI_API_KEY
+```
+
+## API
+
+```
+POST /agents/:id/configure   { harness, model, capabilities, machine, system }
+POST /agents/:id/send        { text, channel? }  -> { reply }
+GET  /agents/:id/history
+GET  /agents/:id/status      -> { parked, lastProgress, expectedCadenceMs, stalled }
+POST /agents/:id/park | /unpark
+```
+
+## Architecture
+
+| Piece | File |
+|-------|------|
+| Per-agent runtime + memory + alarms | `src/agent-do.ts` |
+| Worker gateway (REST) | `src/index.ts` |
+| Model adapters | `src/models/` |
+| Harnesses + spec + compatibility | `src/harnesses/` |
+| Catalog (models/pricing/machines/capabilities) | `src/catalog.ts` |
+
+## Roadmap
+
+Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `perch` CLI incl. `clone`,
+capabilities (scrape, image/video gen, transcribe, email), snapshot/restore with
+idempotency keys for outbound side-effects.
+
+## License
+
+MIT

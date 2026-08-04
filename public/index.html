@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perch — always-on agents that rest for free</title>
+<style>
+  :root {
+    --ink: #0c0a08;
+    --ink-2: #14110d;
+    --panel: #1a1611;
+    --line: #2c2620;
+    --ember: #f0954a;
+    --ember-soft: #f7b878;
+    --sky: #8fb3c9;
+    --paper: #efe7d9;
+    --muted: #9a8f7e;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--mono);
+    line-height: 1.6;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(240,149,74,0.12), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(143,179,201,0.06), transparent 60%);
+  }
+  /* subtle grain */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 2; }
+
+  /* nav */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0; }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: -0.02em; font-size: 1.15rem; }
+  .brand .glyph { color: var(--ember); font-size: 1.3rem; }
+  nav a.ghost { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+  nav a.ghost:hover { color: var(--paper); }
+
+  /* the perch wire */
+  .wire { height: 1px; background: linear-gradient(90deg, transparent, var(--line) 15%, var(--line) 85%, transparent); position: relative; }
+  .wire .bird { position: absolute; top: -9px; left: 18%; color: var(--ember); font-size: 0.9rem; animation: hop 6s ease-in-out infinite; }
+  @keyframes hop { 0%,100%{ transform: translateY(0) } 45%{ transform: translateY(0) } 50%{ transform: translateY(-6px) rotate(-8deg) } 55%{ transform: translateY(0) } }
+
+  /* hero */
+  header { padding: 90px 0 70px; }
+  .kicker { font-size: 0.75rem; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ember); margin-bottom: 26px; opacity: 0; animation: rise 0.7s ease forwards; }
+  h1 {
+    font-family: var(--serif); font-weight: 400; letter-spacing: -0.02em;
+    font-size: clamp(2.6rem, 6vw, 4.6rem); line-height: 1.04; margin-bottom: 26px;
+    opacity: 0; animation: rise 0.8s ease 0.1s forwards;
+  }
+  h1 em { font-style: italic; color: var(--ember-soft); }
+  .lede { max-width: 620px; color: var(--muted); font-size: 1.05rem; margin-bottom: 38px; opacity: 0; animation: rise 0.8s ease 0.22s forwards; }
+  .lede b { color: var(--paper); font-weight: 500; }
+  .cta { display: flex; gap: 14px; flex-wrap: wrap; opacity: 0; animation: rise 0.8s ease 0.34s forwards; }
+  .btn { font-family: var(--mono); font-size: 0.9rem; text-decoration: none; padding: 13px 22px; border-radius: 9px; transition: transform 0.15s ease, box-shadow 0.2s ease; display: inline-flex; align-items: center; gap: 9px; }
+  .btn-primary { background: var(--ember); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 rgba(240,149,74,0); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -8px rgba(240,149,74,0.5); }
+  .btn-ghost { border: 1px solid var(--line); color: var(--paper); }
+  .btn-ghost:hover { border-color: var(--ember); transform: translateY(-2px); }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+  /* code chip */
+  .install { margin-top: 40px; font-size: 0.82rem; color: var(--muted); opacity: 0; animation: rise 0.8s ease 0.46s forwards; }
+  .install code { background: var(--ink-2); border: 1px solid var(--line); padding: 10px 15px; border-radius: 8px; color: var(--ember-soft); display: inline-block; }
+  .install code::before { content: "$ "; color: var(--muted); }
+
+  section { padding: 72px 0; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--sky); margin-bottom: 14px; }
+  h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(1.8rem, 3.5vw, 2.6rem); letter-spacing: -0.02em; margin-bottom: 12px; }
+  .sub { color: var(--muted); max-width: 560px; margin-bottom: 44px; }
+
+  /* composition */
+  .compose { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 0; align-items: stretch; }
+  .piece { background: linear-gradient(180deg, var(--panel), var(--ink-2)); border: 1px solid var(--line); border-radius: 14px; padding: 26px 22px; transition: border-color 0.25s, transform 0.25s; }
+  .piece:hover { border-color: var(--ember); transform: translateY(-4px); }
+  .piece .n { font-size: 0.72rem; color: var(--ember); letter-spacing: 0.2em; }
+  .piece h3 { font-family: var(--serif); font-weight: 400; font-size: 1.3rem; margin: 8px 0 12px; }
+  .piece ul { list-style: none; font-size: 0.85rem; color: var(--muted); }
+  .piece li { padding: 3px 0; }
+  .piece li::before { content: "◦ "; color: var(--ember); }
+  .plus { display: flex; align-items: center; justify-content: center; color: var(--line); font-size: 1.5rem; padding: 0 10px; }
+  @media (max-width: 820px){ .compose { grid-template-columns: 1fr; gap: 14px; } .plus { display: none; } }
+
+  /* channels */
+  .channels { display: flex; flex-wrap: wrap; gap: 12px; }
+  .chan { border: 1px solid var(--line); background: var(--ink-2); border-radius: 999px; padding: 9px 18px; font-size: 0.85rem; color: var(--paper); display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; }
+  .chan:hover { border-color: var(--sky); color: var(--sky); }
+  .chan .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ember); }
+  .chan .tag { color: var(--muted); font-size: 0.72rem; margin-left: 2px; }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  @media (max-width: 700px){ .grid { grid-template-columns: 1fr; } }
+  .feat { border: 1px solid var(--line); border-radius: 14px; padding: 26px; background: var(--ink-2); position: relative; overflow: hidden; }
+  .feat::after { content: ""; position: absolute; right: -40px; top: -40px; width: 120px; height: 120px; background: radial-gradient(circle, rgba(240,149,74,0.14), transparent 70%); }
+  .feat h4 { font-size: 1.05rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .feat h4 .i { color: var(--ember); }
+  .feat p { color: var(--muted); font-size: 0.88rem; }
+
+  /* pricing note */
+  .park { border: 1px solid var(--line); border-radius: 16px; padding: 40px; text-align: center; background: linear-gradient(180deg, var(--panel), var(--ink)); }
+  .park .big { font-family: var(--serif); font-size: clamp(2rem,5vw,3.2rem); color: var(--ember-soft); }
+  .park p { color: var(--muted); margin-top: 10px; }
+  .park .fine { font-size: 0.8rem; margin-top: 18px; }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0; color: var(--muted); font-size: 0.82rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: var(--muted); text-decoration: none; } footer a:hover { color: var(--ember); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="brand"><span class="glyph">⌇</span> Perch</div>
+    <div style="display:flex; gap:24px; align-items:center;">
+      <a class="ghost" href="#compose">Compose</a>
+      <a class="ghost" href="#channels">Channels</a>
+      <a class="ghost" href="#pricing">Pricing</a>
+      <a class="ghost" href="https://github.com/">GitHub ↗</a>
+    </div>
+  </nav>
+</div>
+
+<div class="wrap"><div class="wire"><span class="bird">🐦</span></div></div>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">Open source · Self-hostable on Cloudflare</div>
+    <h1>Always-on agents that<br><em>rest for free.</em></h1>
+    <p class="lede">Snap together a <b>harness</b>, a <b>model</b>, and <b>capabilities</b> — launch a long-lived agent with persistent memory, reachable on every channel your users already use. Park it when idle; you pay nothing while it sleeps.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#">⚡ Deploy to Cloudflare</a>
+      <a class="btn btn-ghost" href="https://github.com/">★ View on GitHub</a>
+    </div>
+    <div class="install"><code>npm create perch@latest &amp;&amp; npx wrangler deploy</code></div>
+  </header>
+</div>
+
+<div class="wrap">
+  <section id="compose">
+    <div class="eyebrow">Three pieces</div>
+    <h2>Snap it together. We check they fit.</h2>
+    <p class="sub">Pick a runtime, a brain, and a set of hands. Perch validates the combination, then launches a persistent agent in one command.</p>
+    <div class="compose">
+      <div class="piece">
+        <div class="n">01 · HARNESS</div>
+        <h3>The runtime that acts</h3>
+        <ul><li>Chat loop</li><li>Claude Code</li><li>Codex</li><li>Hermes · OpenClaw</li></ul>
+      </div>
+      <div class="plus">+</div>
+      <div class="piece">
+        <div class="n">02 · MODEL</div>
+        <h3>The brain that reasons</h3>
+        <ul><li>Claude Opus / Sonnet / Fable</li><li>GPT-5.6 family</li><li>DeepSeek · Gemini · Kimi</li><li>No lock-in — swap freely</li></ul>
+      </div>
+      <div class="plus">+</div>
+      <div class="piece">
+        <div class="n">03 · CAPABILITIES</div>
+        <h3>The hands that reach</h3>
+        <ul><li>Scrape web · Browser</li><li>Image / video gen</li><li>Transcribe voice</li><li>Email · SERP search</li></ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <section id="channels">
+    <div class="eyebrow">One agent, every surface</div>
+    <h2>Reachable wherever your users are.</h2>
+    <p class="sub">History is unified at the agent level — start a thread on Slack, continue it on WhatsApp. Same memory, same context, every channel.</p>
+    <div class="channels">
+      <span class="chan"><span class="dot"></span>WhatsApp</span>
+      <span class="chan"><span class="dot"></span>iMessage</span>
+      <span class="chan"><span class="dot"></span>Telegram</span>
+      <span class="chan"><span class="dot"></span>Slack</span>
+      <span class="chan"><span class="dot"></span>Discord</span>
+      <span class="chan"><span class="dot"></span>Web</span>
+      <span class="chan"><span class="dot"></span>CLI</span>
+      <span class="chan"><span class="dot"></span>REST API</span>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <section>
+    <div class="eyebrow">Durable by design</div>
+    <h2>Survives restarts. Remembers everything.</h2>
+    <p class="sub">Each agent lives in its own Durable Object with SQLite storage — one coordination atom, strongly consistent, always recoverable.</p>
+    <div class="grid">
+      <div class="feat"><h4><span class="i">◉</span> Persistent memory</h4><p>Full conversation history and state written to durable storage. Nothing is lost on eviction or crash.</p></div>
+      <div class="feat"><h4><span class="i">⟲</span> Snapshots &amp; restore</h4><p>Best-effort recovery to the latest state. Outbound side-effects carry idempotency keys so a resumed agent never double-sends.</p></div>
+      <div class="feat"><h4><span class="i">◷</span> Scheduled wakeups</h4><p>Alarms let agents act autonomously on a timer — with a declared cadence, so <em>stalled</em> is never mistaken for <em>idle</em>.</p></div>
+      <div class="feat"><h4><span class="i">⇄</span> Unified cross-channel history</h4><p>One agent, one memory. It replies on the channel you messaged from, but the context is shared across all of them.</p></div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <section id="pricing">
+    <div class="park">
+      <div class="eyebrow" style="justify-content:center;">Pricing</div>
+      <div class="big">Parked agents are free.</div>
+      <p>You only pay while an agent is actively working — model tokens plus compute seconds.</p>
+      <p class="fine">Self-host on your own Cloudflare account and the plumbing is yours. No seats, no subscriptions.</p>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer>
+    <div>⌇ Perch — open-source always-on agents. MIT licensed.</div>
+    <div><a href="https://github.com/">GitHub</a> · <a href="#">Docs</a> · <a href="#">CLI</a></div>
+  </footer>
+</div>
+</body>
+</html>
