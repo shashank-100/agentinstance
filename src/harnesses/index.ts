@@ -40,13 +40,17 @@ export interface AgentSpec {
 }
 
 export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
+  // Drop undefined keys so they don't clobber defaults via spread.
+  const clean = Object.fromEntries(
+    Object.entries(partial).filter(([, v]) => v !== undefined),
+  );
   return {
     harness: "chat",
     model: "claude-sonnet-4-6",
     capabilities: [],
     machine: DEFAULT_MACHINE,
     system: "You are a helpful always-on agent.",
-    ...partial,
+    ...clean,
   };
 }
 

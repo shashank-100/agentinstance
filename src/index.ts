@@ -9,6 +9,15 @@ import {
   WebAdapter,
   type ChannelAdapter,
 } from "./channels/index.js";
+import {
+  HARNESSES,
+  MODELS,
+  MACHINES,
+  CAPABILITIES,
+  DEFAULT_MACHINE,
+  estimateMonthCost,
+} from "./catalog.js";
+import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
 export { AgentDO } from "./agent-do.js";
 
 const CHANNELS: Record<string, ChannelAdapter> = {
@@ -42,6 +51,45 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean);
+
+    // --- catalog for the builder UI ---
+    if (parts[0] === "catalog") {
+      return Response.json({
+        harnesses: Object.entries(HARNESSES).map(([id, desc]) => ({ id, desc })),
+        models: Object.values(MODELS),
+        capabilities: Object.entries(CAPABILITIES).map(([id, desc]) => ({ id, desc })),
+        machines: Object.entries(MACHINES).map(([id, m]) => ({ id, ...m })),
+        defaultMachine: DEFAULT_MACHINE,
+      });
+    }
+
+    // --- launch (compatibility check + configure) from the builder UI ---
+    if (parts[0] === "api" && parts[1] === "launch" && request.method === "POST") {
+      const body = (await request.json()) as {
+        id?: string;
+        harness?: string;
+        model?: string;
+        capabilities?: string[];
+        machine?: string;
+        system?: string;
+      };
+      const spec = defaultSpec({
+        harness: body.harness,
+        model: body.model,
+        capabilities: body.capabilities ?? [],
+        machine: body.machine,
+        system: body.system,
+      });
+      try {
+        checkCompatible(spec);
+      } catch (e) {
+        const msg = e instanceof IncompatibleSpec ? e.message : String(e);
+        return Response.json({ error: msg }, { status: 400 });
+      }
+      const id = body.id || `agent-${crypto.randomUUID().slice(0, 8)}`;
+      await agentStub(env, id).configure(spec);
+      return Response.json({ id, spec, estMonthly: estimateMonthCost(spec.machine) });
+    }
 
     // --- channel webhooks: /channels/:name/:agentId ---
     if (parts[0] === "channels" && parts[1]) {

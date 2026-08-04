@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perch — create your agent</title>
+<style>
+  :root {
+    --ink:#0c0a08; --ink-2:#14110d; --panel:#1a1611; --line:#2c2620;
+    --ember:#f0954a; --ember-soft:#f7b878; --sky:#8fb3c9; --paper:#efe7d9; --muted:#9a8f7e;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);line-height:1.5;
+    background-image:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(240,149,74,0.10),transparent 60%);}
+  .layout{display:grid;grid-template-columns:1fr 340px;gap:32px;max-width:1160px;margin:0 auto;padding:28px}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;margin-bottom:24px}
+  .brand .glyph{color:var(--ember)}
+  h1{font-family:var(--serif);font-weight:400;font-size:2rem;margin-bottom:6px}
+  .lede{color:var(--muted);margin-bottom:8px}
+  .clone{color:var(--sky);font-size:.85rem;margin-bottom:28px}
+  .step{margin-bottom:30px}
+  .step-h{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .step-h .n{width:22px;height:22px;border:1px solid var(--ember);border-radius:50%;color:var(--ember);
+    display:inline-flex;align-items:center;justify-content:center;font-size:.75rem}
+  .step-h h2{font-family:var(--serif);font-weight:400;font-size:1.25rem}
+  .step-h .hint{color:var(--muted);font-size:.8rem}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:640px){.cards{grid-template-columns:1fr 1fr}}
+  .card{text-align:left;background:linear-gradient(180deg,var(--panel),var(--ink-2));border:1px solid var(--line);
+    border-radius:12px;padding:16px;color:var(--paper);cursor:pointer;font-family:var(--mono);transition:.18s}
+  .card:hover{border-color:var(--ember-soft);transform:translateY(-2px)}
+  .card.active{border-color:var(--ember);box-shadow:0 0 0 1px var(--ember) inset}
+  .card-t{font-size:.95rem;text-transform:capitalize;margin-bottom:4px}
+  .card-d{color:var(--muted);font-size:.78rem}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{background:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:8px 15px;
+    color:var(--paper);cursor:pointer;font-family:var(--mono);font-size:.82rem;text-transform:capitalize;transition:.18s}
+  .chip:hover{border-color:var(--sky)}
+  .chip.active{border-color:var(--ember);color:var(--ember-soft)}
+  /* summary */
+  .panel{position:sticky;top:28px;align-self:start;background:linear-gradient(180deg,var(--panel),var(--ink));
+    border:1px solid var(--line);border-radius:16px;padding:24px}
+  .panel .eyebrow{font-size:.68rem;letter-spacing:.24em;text-transform:uppercase;color:var(--sky);margin-bottom:16px}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:.85rem}
+  .row .k{color:var(--muted)} .row .v{text-align:right}
+  .cost{margin-top:16px;display:flex;justify-content:space-between;font-size:1.05rem}
+  .cost .free{color:var(--ember-soft)}
+  .free-row{display:flex;justify-content:space-between;color:var(--muted);font-size:.8rem;margin-top:4px}
+  #compat{font-size:.78rem;color:var(--muted);margin:14px 0}
+  #launch{width:100%;background:var(--ember);color:var(--ink);border:none;border-radius:10px;padding:13px;
+    font-family:var(--mono);font-weight:600;cursor:pointer;transition:.18s}
+  #launch:hover:not(:disabled){transform:translateY(-2px)}
+  #launch:disabled{opacity:.4;cursor:not-allowed}
+  #result{margin-top:14px;font-size:.8rem;color:var(--ember-soft);min-height:1em}
+  .fine{color:var(--muted);font-size:.72rem;text-align:center;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div>
+    <div class="brand"><span class="glyph">⌇</span> Perch</div>
+    <h1>Create your agent</h1>
+    <p class="lede">Snap together three pieces. We check they're compatible, then launch a persistent agent.</p>
+    <p class="clone">Already running an agent locally? Use <code>perch clone</code> to push it to the cloud →</p>
+
+    <div class="step">
+      <div class="step-h"><span class="n">1</span><h2>Choose a harness</h2><span class="hint">the runtime that acts</span></div>
+      <div class="cards" id="harnesses"></div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="n">2</span><h2>Pick a model</h2><span class="hint">the brain that reasons</span></div>
+      <div class="cards" id="models"></div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="n">3</span><h2>Add capabilities</h2><span class="hint">the hands that reach · optional</span></div>
+      <div class="chips" id="capabilities"></div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="n">4</span><h2>Machine</h2><span class="hint">compute tier</span></div>
+      <div class="cards" id="machines"></div>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="eyebrow">Your agent</div>
+    <div class="row"><span class="k">Harness</span><span class="v" id="s-harness">—</span></div>
+    <div class="row"><span class="k">Model</span><span class="v" id="s-model">—</span></div>
+    <div class="row"><span class="k">Capabilities</span><span class="v" id="s-caps">none</span></div>
+    <div class="row"><span class="k">Machine</span><span class="v" id="s-machine">—</span></div>
+    <div class="cost"><span>Estimated monthly</span><span id="s-cost">~$0/mo</span></div>
+    <div class="free-row"><span>Parked (idle)</span><span class="free">Free</span></div>
+    <div id="compat">Ready — one click to launch</div>
+    <button id="launch">⚡ Launch agent <span style="opacity:.6">· ⌘↵</span></button>
+    <div id="result"></div>
+    <p class="fine">Persistent · runs for months · swap parts anytime</p>
+  </aside>
+</div>
+<script type="module" src="/agents/builder.js"></script>
+</body>
+</html>
