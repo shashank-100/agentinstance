@@ -18,7 +18,24 @@ import {
   estimateMonthCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
-export { AgentDO } from "./agent-do.js";
+export { AgentInstance } from "./agent-instance.js";
+export { RegistryDO } from "./registry-do.js";
+
+function registry(env: Env) {
+  return env.REGISTRY.get(env.REGISTRY.idFromName("global")) as unknown as {
+    register(rec: {
+      id: string;
+      model: string;
+      harness: string;
+      machine: string;
+      createdAt: number;
+    }): Promise<void>;
+    list(): Promise<
+      { id: string; model: string; harness: string; machine: string; createdAt: number }[]
+    >;
+    remove(id: string): Promise<void>;
+  };
+}
 
 const CHANNELS: Record<string, ChannelAdapter> = {
   telegram: new TelegramAdapter(),
@@ -88,6 +105,13 @@ export default {
       }
       const id = body.id || `agent-${crypto.randomUUID().slice(0, 8)}`;
       await agentStub(env, id).configure(spec);
+      await registry(env).register({
+        id,
+        model: spec.model,
+        harness: spec.harness,
+        machine: spec.machine,
+        createdAt: Date.now(),
+      });
       return Response.json({ id, spec, estMonthly: estimateMonthCost(spec.machine) });
     }
 
@@ -113,6 +137,18 @@ export default {
       } catch (e) {
         return Response.json({ error: String(e) }, { status: 400 });
       }
+    }
+
+    // --- list all agents (dashboard): GET /agents ---
+    if (parts[0] === "agents" && !parts[1] && request.method === "GET") {
+      const recs = await registry(env).list();
+      const withStatus = await Promise.all(
+        recs.map(async (r) => {
+          const st = (await agentStub(env, r.id).status()) as { parked: boolean };
+          return { ...r, parked: st.parked };
+        }),
+      );
+      return Response.json(withStatus);
     }
 
     // --- REST agent API: /agents/:id/:action ---

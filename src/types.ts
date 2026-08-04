@@ -18,6 +18,7 @@ export function makeMessage(
 
 export interface Env {
   AGENT: DurableObjectNamespace;
+  REGISTRY: DurableObjectNamespace;
   ASSETS: { fetch(request: Request): Promise<Response> };
   DEFAULT_MODEL: string;
   DEFAULT_HARNESS: string;

@@ -17,7 +17,7 @@ async function history(id: string) {
   }[];
 }
 
-describe("AgentDO runtime + memory", () => {
+describe("AgentInstance runtime + memory", () => {
   it("replies with the mock model by default (no key)", async () => {
     const res = await send("a1", "hello");
     const reply = ((await res.json()) as { reply: string }).reply;

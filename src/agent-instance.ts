@@ -13,7 +13,7 @@ const OPENAI_BASE: Record<string, string> = {
   openai: "https://api.openai.com/v1",
 };
 
-export class AgentDO extends DurableObject<Env> {
+export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
 
   constructor(ctx: DurableObjectState, env: Env) {
