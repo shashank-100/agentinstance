@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Perch — always-on agents that rest for free</title>
+<title>Nimbus — always-on agents that rest for free</title>
 <style>
   :root {
     --ink: #0c0a08;
@@ -44,7 +44,7 @@
   nav a.ghost { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
   nav a.ghost:hover { color: var(--paper); }
 
-  /* the perch wire */
+  /* the nimbus wire */
   .wire { height: 1px; background: linear-gradient(90deg, transparent, var(--line) 15%, var(--line) 85%, transparent); position: relative; }
   .wire .bird { position: absolute; top: -9px; left: 18%; color: var(--ember); font-size: 0.9rem; animation: hop 6s ease-in-out infinite; }
   @keyframes hop { 0%,100%{ transform: translateY(0) } 45%{ transform: translateY(0) } 50%{ transform: translateY(-6px) rotate(-8deg) } 55%{ transform: translateY(0) } }
@@ -119,7 +119,7 @@
 <body>
 <div class="wrap">
   <nav>
-    <div class="brand"><span class="glyph">⌇</span> Perch</div>
+    <div class="brand"><span class="glyph">⌇</span> Nimbus</div>
     <div style="display:flex; gap:24px; align-items:center;">
       <a class="ghost" href="#compose">Compose</a>
       <a class="ghost" href="#channels">Channels</a>
@@ -140,7 +140,7 @@
       <a class="btn btn-primary" href="#">⚡ Deploy to Cloudflare</a>
       <a class="btn btn-ghost" href="https://github.com/">★ View on GitHub</a>
     </div>
-    <div class="install"><code>npm create perch@latest &amp;&amp; npx wrangler deploy</code></div>
+    <div class="install"><code>npm create nimbus@latest &amp;&amp; npx wrangler deploy</code></div>
   </header>
 </div>
 
@@ -148,7 +148,7 @@
   <section id="compose">
     <div class="eyebrow">Three pieces</div>
     <h2>Snap it together. We check they fit.</h2>
-    <p class="sub">Pick a runtime, a brain, and a set of hands. Perch validates the combination, then launches a persistent agent in one command.</p>
+    <p class="sub">Pick a runtime, a brain, and a set of hands. Nimbus validates the combination, then launches a persistent agent in one command.</p>
     <div class="compose">
       <div class="piece">
         <div class="n">01 · HARNESS</div>
@@ -216,7 +216,7 @@
 
 <div class="wrap">
   <footer>
-    <div>⌇ Perch — open-source always-on agents. MIT licensed.</div>
+    <div>⌇ Nimbus — open-source always-on agents. MIT licensed.</div>
     <div><a href="https://github.com/">GitHub</a> · <a href="#">Docs</a> · <a href="#">CLI</a></div>
   </footer>
 </div>

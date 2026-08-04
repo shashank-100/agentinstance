@@ -1,10 +1,10 @@
 {
-  "name": "perch",
+  "name": "nimbus",
   "version": "0.1.0",
   "description": "Open-source, self-hostable always-on AI agents on Cloudflare. Any harness, any model, persistent memory, many channels.",
   "type": "module",
   "bin": {
-    "perch": "./cli/perch.mjs"
+    "nimbus": "./cli/nimbus.mjs"
   },
   "scripts": {
     "dev": "wrangler dev",

@@ -1,6 +1,6 @@
-# Deploying Perch
+# Deploying Nimbus
 
-Perch runs entirely on Cloudflare Workers + Durable Objects. One agent = one
+Nimbus runs entirely on Cloudflare Workers + Durable Objects. One agent = one
 Durable Object with its own SQLite storage.
 
 ## 1. Prerequisites
@@ -38,11 +38,11 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 ## 5. Create and talk to an agent
 
 ```bash
-export PERCH_URL=https://perch.<your-subdomain>.workers.dev
+export NIMBUS_URL=https://nimbus.<your-subdomain>.workers.dev
 
-node cli/perch.mjs launch mybot --harness chat --model claude-sonnet-4-6
-node cli/perch.mjs send mybot "hello"
-node cli/perch.mjs status mybot
+node cli/nimbus.mjs launch mybot --harness chat --model claude-sonnet-4-6
+node cli/nimbus.mjs send mybot "hello"
+node cli/nimbus.mjs status mybot
 ```
 
 ## 6. Wire a channel (Telegram example)
@@ -50,7 +50,7 @@ node cli/perch.mjs status mybot
 Point Telegram's webhook at your deployment:
 
 ```bash
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=$PERCH_URL/channels/telegram/mybot"
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=$NIMBUS_URL/channels/telegram/mybot"
 ```
 
 Now messages to your bot drive the `mybot` agent, and its reply is sent back to

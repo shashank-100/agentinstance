@@ -1,10 +1,10 @@
-# ⌇ Perch
+# ⌇ Nimbus
 
 **Open-source, self-hostable always-on AI agents on Cloudflare.**
 
 ## 🚀 Deploy in one click
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/perch)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/nimbus)
 
 Click the button → sign in to Cloudflare → it clones this repo, provisions the
 Durable Object, and deploys the Worker. No local setup. (Add model/channel keys
@@ -69,7 +69,7 @@ POST /channels/web/:id       { text }              -> { reply }
 ```
 
 See [DEPLOY.md](./DEPLOY.md) for one-command Cloudflare deployment and channel setup.
-The `perch` CLI (`cli/perch.mjs`) wraps these routes, including `perch clone` to
+The `nimbus` CLI (`cli/nimbus.mjs`) wraps these routes, including `nimbus clone` to
 push a local agent (spec + history) into the cloud.
 
 ## Architecture
@@ -84,7 +84,7 @@ push a local agent (spec + history) into the cloud.
 
 ## Roadmap
 
-Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `perch` CLI incl. `clone`,
+Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `nimbus` CLI incl. `clone`,
 capabilities (scrape, image/video gen, transcribe, email), snapshot/restore with
 idempotency keys for outbound side-effects.
 

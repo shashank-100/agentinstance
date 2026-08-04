@@ -15,4 +15,4 @@ WHATSAPP_PHONE_ID=
 # Capabilities
 SERP_API_KEY=
 RESEND_API_KEY=
-EMAIL_FROM=perch@example.com
+EMAIL_FROM=nimbus@example.com

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// Feature #12 — the `perch` CLI. Talks to a deployed Perch worker over REST.
+// Feature #12 — the `nimbus` CLI. Talks to a deployed Nimbus worker over REST.
 //
 // Usage:
-//   perch --url https://perch.you.workers.dev launch <id> [--harness chat --model claude-sonnet-4-6]
-//   perch send <id> "hello"
-//   perch history <id>
-//   perch status <id>
-//   perch park <id> | perch unpark <id>
-//   perch snapshot <id> > backup.json
-//   perch clone <id> ./agent.json      # push a local agent (spec+history) to the cloud
+//   nimbus --url https://nimbus.you.workers.dev launch <id> [--harness chat --model claude-sonnet-4-6]
+//   nimbus send <id> "hello"
+//   nimbus history <id>
+//   nimbus status <id>
+//   nimbus park <id> | nimbus unpark <id>
+//   nimbus snapshot <id> > backup.json
+//   nimbus clone <id> ./agent.json      # push a local agent (spec+history) to the cloud
 //
-// Config: --url flag or PERCH_URL env. Optional PERCH_TOKEN -> Authorization header.
+// Config: --url flag or NIMBUS_URL env. Optional NIMBUS_TOKEN -> Authorization header.
 import { readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -18,15 +18,15 @@ function flag(name, def) {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : def;
 }
-const BASE = (flag("url", process.env.PERCH_URL) || "").replace(/\/$/, "");
-const TOKEN = process.env.PERCH_TOKEN;
-if (!BASE) fail("set --url or PERCH_URL to your Perch worker URL");
+const BASE = (flag("url", process.env.NIMBUS_URL) || "").replace(/\/$/, "");
+const TOKEN = process.env.NIMBUS_TOKEN;
+if (!BASE) fail("set --url or NIMBUS_URL to your Nimbus worker URL");
 
 const positional = args.filter((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
 const [cmd, id, ...rest] = positional;
 
 function fail(msg) {
-  console.error(`perch: ${msg}`);
+  console.error(`nimbus: ${msg}`);
   process.exit(1);
 }
 async function api(path, method = "GET", body) {
@@ -78,7 +78,7 @@ switch (cmd) {
   case "clone": {
     // Push a locally-defined agent (spec + optional history) into the cloud.
     const file = rest[0];
-    if (!file) fail("usage: perch clone <id> <local-agent.json>");
+    if (!file) fail("usage: nimbus clone <id> <local-agent.json>");
     const local = JSON.parse(readFileSync(file, "utf8"));
     await api(`/agents/${id}/restore`, "POST", {
       spec: local.spec,
@@ -89,7 +89,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log(`perch — always-on agents CLI
+    console.log(`nimbus — always-on agents CLI
 
 commands:
   launch <id> [--harness --model --machine]
@@ -100,5 +100,5 @@ commands:
   snapshot <id>
   clone <id> <local-agent.json>
 
-config: --url <workerUrl> or PERCH_URL, optional PERCH_TOKEN`);
+config: --url <workerUrl> or NIMBUS_URL, optional NIMBUS_TOKEN`);
 }
