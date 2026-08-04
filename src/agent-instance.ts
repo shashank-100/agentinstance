@@ -94,7 +94,11 @@ export class AgentInstance extends DurableObject<Env> {
     if (this.getKV("parked", false)) return { parked: true };
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness) ?? new ChatHarness();
-    const reply = await harness.run(this.buildModel(), this.history(), this.spec.system);
+    const { getSandbox } = await import("./sandbox/index.js");
+    const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
+      sandbox: getSandbox(this.env),
+      agentId: this.ctx.id.toString(), // stable per-agent workspace key
+    });
     this.record(makeMessage("assistant", reply, channel));
     // health != progress: advance last-progress only when a unit of work completes.
     this.setKV("last_progress", Date.now());

@@ -1,11 +1,18 @@
 // Feature #4 — pluggable harnesses + 3-piece AgentSpec with compatibility check.
 import type { Message } from "../types.js";
 import type { Model } from "../models/index.js";
+import type { Sandbox } from "../sandbox/index.js";
 import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
+
+/** Optional execution context passed to harnesses that can run code. */
+export interface HarnessContext {
+  sandbox?: Sandbox | null;
+  agentId?: string;
+}
 
 export interface Harness {
   name: string;
-  run(model: Model, history: Message[], system: string): Promise<string>;
+  run(model: Model, history: Message[], system: string, ctx?: HarnessContext): Promise<string>;
 }
 
 // Default: one model completion per turn.
@@ -16,13 +23,55 @@ export class ChatHarness implements Harness {
   }
 }
 
-// Base for CLI-wrapping harnesses (claude-code, codex). Falls back to a single
-// model call so composition works without the external binary.
+// CLI-wrapping harnesses (claude-code, codex). If a sandbox is available, the
+// model can act: it may emit a fenced ```sh block, which the harness runs in the
+// sandbox and feeds the output back for a final answer. Without a sandbox it
+// falls back to a single model call — so it always works, just less capable.
 export class CliHarness implements Harness {
   constructor(public name: string) {}
-  run(model: Model, history: Message[], system: string): Promise<string> {
-    return model.complete(history, system);
+
+  async run(
+    model: Model,
+    history: Message[],
+    system: string,
+    ctx?: HarnessContext,
+  ): Promise<string> {
+    const sandbox = ctx?.sandbox;
+    const agentId = ctx?.agentId;
+    if (!sandbox || !agentId) return model.complete(history, system);
+
+    const toolSystem =
+      system +
+      "\n\nYou can run shell commands. To run one, reply with a single fenced " +
+      "```sh code block containing the command. I will run it and give you the output.";
+    const first = await model.complete(history, toolSystem);
+
+    const cmd = extractShell(first);
+    if (!cmd) return first; // model chose to just answer
+
+    const result = await sandbox.exec(agentId, cmd);
+    const observation: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content:
+        `Command output (exit ${result.exitCode}):\n` +
+        `stdout:\n${result.stdout}\nstderr:\n${result.stderr}\n` +
+        `Now give the user a final answer.`,
+      channel: "sandbox",
+      ts: Date.now(),
+    };
+    return model.complete([...history, { ...msgFrom("assistant", first) }, observation], system);
   }
+}
+
+function msgFrom(role: "assistant" | "user", content: string): Message {
+  return { id: crypto.randomUUID(), role, content, channel: "core", ts: Date.now() };
+}
+
+/** Pull the command out of the first ```sh / ```bash / ```shell fenced block. */
+export function extractShell(text: string): string | null {
+  const m = text.match(/```(?:sh|bash|shell)\s*\n([\s\S]*?)```/);
+  return m ? m[1].trim() : null;
 }
 
 export function getHarness(name: string): Harness {

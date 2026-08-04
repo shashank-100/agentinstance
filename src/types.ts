@@ -32,4 +32,6 @@ export interface Env {
   SERP_API_KEY?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  SANDBOX_URL?: string;
+  SANDBOX_TOKEN?: string;
 }

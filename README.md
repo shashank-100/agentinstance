@@ -82,6 +82,15 @@ push a local agent (spec + history) into the cloud.
 | Harnesses + spec + compatibility | `src/harnesses/` |
 | Catalog (models/pricing/machines/capabilities) | `src/catalog.ts` |
 
+## Self-hostable sandbox
+
+Agents can run **real shell commands / code** via a pluggable sandbox. The
+default backend is a small **self-hosted** HTTP service (Docker container you
+run anywhere) — no proprietary sandbox cloud. See
+[`sandbox-service/`](./sandbox-service/). Set `SANDBOX_URL` to enable it; the
+`claude-code` / `codex` harnesses then execute commands (and fall back to a
+plain model call when it's unset).
+
 ## Roadmap
 
 Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `nimbus` CLI incl. `clone`,

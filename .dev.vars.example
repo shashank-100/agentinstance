@@ -16,3 +16,7 @@ WHATSAPP_PHONE_ID=
 SERP_API_KEY=
 RESEND_API_KEY=
 EMAIL_FROM=nimbus@example.com
+
+# Self-hostable sandbox (agents run real commands)
+SANDBOX_URL=
+SANDBOX_TOKEN=
