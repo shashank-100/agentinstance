@@ -18,9 +18,17 @@ export function makeMessage(
 
 export interface Env {
   AGENT: DurableObjectNamespace;
+  ASSETS: { fetch(request: Request): Promise<Response> };
   DEFAULT_MODEL: string;
   DEFAULT_HARNESS: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  DISCORD_BOT_TOKEN?: string;
+  SLACK_BOT_TOKEN?: string;
+  WHATSAPP_TOKEN?: string;
+  WHATSAPP_PHONE_ID?: string;
+  SERP_API_KEY?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
 }

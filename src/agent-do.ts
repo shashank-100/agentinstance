@@ -87,20 +87,47 @@ export class AgentDO extends DurableObject<Env> {
     return merged;
   }
 
-  /** Core message loop: unified across channels (history is per-agent). */
-  async send(text: string, channel = "core"): Promise<string> {
-    if (this.getKV("parked", false)) throw new Error("agent is parked");
+  /** Core message loop: unified across channels (history is per-agent).
+   * Returns { parked: true } instead of throwing for the expected parked state. */
+  async send(text: string, channel = "core"): Promise<{ reply?: string; parked?: boolean }> {
+    if (this.getKV("parked", false)) return { parked: true };
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness) ?? new ChatHarness();
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system);
     this.record(makeMessage("assistant", reply, channel));
     // health != progress: advance last-progress only when a unit of work completes.
     this.setKV("last_progress", Date.now());
-    return reply;
+    return { reply };
   }
 
   async getHistory(): Promise<Message[]> {
     return this.history();
+  }
+
+  // --- Feature #5: snapshot / restore --------------------------------------
+  /** Export full agent state (spec + history + kv) for backup. */
+  async snapshot(): Promise<{ spec: AgentSpec; history: Message[]; kv: Record<string, unknown> }> {
+    const kv: Record<string, unknown> = {};
+    for (const r of this.sql.exec("SELECT key,value FROM kv").toArray() as {
+      key: string;
+      value: string;
+    }[]) {
+      kv[r.key] = JSON.parse(r.value);
+    }
+    return { spec: this.spec, history: this.history(), kv };
+  }
+
+  /** Restore from a snapshot (best-effort recovery — replaces current state). */
+  async restore(snap: {
+    spec?: AgentSpec;
+    history?: Message[];
+    kv?: Record<string, unknown>;
+  }): Promise<void> {
+    this.sql.exec("DELETE FROM messages");
+    this.sql.exec("DELETE FROM kv");
+    if (snap.spec) this.setKV("spec", snap.spec);
+    for (const [k, v] of Object.entries(snap.kv ?? {})) this.setKV(k, v);
+    for (const m of snap.history ?? []) this.record(m);
   }
 
   async park(): Promise<void> {
@@ -125,6 +152,22 @@ export class AgentDO extends DurableObject<Env> {
     return { parked, lastProgress, expectedCadenceMs: cadence, stalled };
   }
 
+  // --- Feature #13: capabilities -------------------------------------------
+  /** Run one of this agent's enabled capabilities.
+   * Returns { error } for expected failures instead of throwing across RPC. */
+  async runTool(
+    name: string,
+    input: Record<string, unknown>,
+  ): Promise<{ result?: unknown; error?: string }> {
+    if (!this.spec.capabilities.includes(name)) {
+      return { error: `capability '${name}' not enabled for this agent` };
+    }
+    const { getCapability } = await import("./capabilities/index.js");
+    const cap = getCapability(name);
+    if (!cap) return { error: `capability '${name}' has no implementation` };
+    return { result: await cap.run(this.env, input) };
+  }
+
   // --- Feature #14: scheduled wakeups --------------------------------------
   async scheduleWakeup(atMs: number, prompt: string, cadenceMs?: number): Promise<void> {
     this.setKV("wakeup_prompt", prompt);
@@ -136,8 +179,8 @@ export class AgentDO extends DurableObject<Env> {
   async fireWakeup(): Promise<void> {
     await this.ctx.storage.deleteAlarm();
     const prompt = this.getKV<string | null>("wakeup_prompt", null);
-    if (prompt && !this.getKV("parked", false)) {
-      await this.send(prompt, "scheduler");
+    if (prompt) {
+      await this.send(prompt, "scheduler"); // no-op if parked
     }
   }
 

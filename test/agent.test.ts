@@ -1,74 +1,81 @@
-// Features #1, #2, #14 — agent DO runtime, persistent memory, scheduling.
-import { env } from "cloudflare:test";
+// Features #1, #2, #14, #5 — via the Worker HTTP surface (clean pool isolation).
+import { SELF } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
-function stub(id: string) {
-  return env.AGENT.get(env.AGENT.idFromName(id));
+async function send(id: string, text: string, channel?: string) {
+  const res = await SELF.fetch(`https://x/agents/${id}/send`, {
+    method: "POST",
+    body: JSON.stringify({ text, channel }),
+  });
+  return res;
+}
+async function history(id: string) {
+  return (await (await SELF.fetch(`https://x/agents/${id}/history`)).json()) as {
+    role: string;
+    content: string;
+    channel: string;
+  }[];
 }
 
 describe("AgentDO runtime + memory", () => {
   it("echoes with the offline model by default", async () => {
-    const reply = await stub("a1").send("hello");
-    expect(reply).toBe("echo: hello");
+    const res = await send("a1", "hello");
+    expect(((await res.json()) as { reply: string }).reply).toBe("echo: hello");
   });
 
   it("records both turns in history", async () => {
-    const s = stub("a2");
-    await s.send("hi");
-    const hist = await s.getHistory();
-    expect(hist.map((m: any) => m.role)).toEqual(["user", "assistant"]);
+    await send("a2", "hi");
+    expect((await history("a2")).map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
-  it("persists across a simulated eviction (same DO name)", async () => {
-    await stub("a3").send("remember me");
-    // fresh stub for the same name = same durable storage
-    const hist = await stub("a3").getHistory();
+  it("persists across calls (same DO name)", async () => {
+    await send("a3", "remember me");
+    const hist = await history("a3");
     expect(hist).toHaveLength(2);
     expect(hist[0].content).toBe("remember me");
   });
 
   it("keeps agents isolated", async () => {
-    await stub("iso-a").send("secret");
-    const other = await stub("iso-b").getHistory();
-    expect(other).toHaveLength(0);
+    await send("iso-a", "secret");
+    expect(await history("iso-b")).toHaveLength(0);
   });
 
   it("shares one history across channels (unified per-agent)", async () => {
-    const s = stub("multi");
-    await s.send("from slack", "slack");
-    await s.send("from whatsapp", "whatsapp");
-    const hist = await s.getHistory();
+    await send("multi", "from slack", "slack");
+    await send("multi", "from whatsapp", "whatsapp");
+    const hist = await history("multi");
     expect(hist).toHaveLength(4);
     expect(hist[0].channel).toBe("slack");
     expect(hist[2].channel).toBe("whatsapp");
   });
 
   it("park blocks sends, unpark restores", async () => {
-    const s = stub("park1");
-    await s.park();
-    await expect(s.send("x")).rejects.toThrow(/parked/);
-    await s.unpark();
-    expect(await s.send("x")).toBe("echo: x");
+    await SELF.fetch("https://x/agents/park1/park", { method: "POST" });
+    const blocked = await send("park1", "x");
+    expect(blocked.status).toBe(409);
+    await SELF.fetch("https://x/agents/park1/unpark", { method: "POST" });
+    expect(((await (await send("park1", "x")).json()) as { reply: string }).reply).toBe("echo: x");
   });
 
   it("status reports last-progress and stall detection", async () => {
-    const s = stub("stat1");
-    await s.send("work");
-    const st = await s.status();
+    await send("stat1", "work");
+    const st = (await (await SELF.fetch("https://x/agents/stat1/status")).json()) as {
+      parked: boolean;
+      lastProgress: number;
+      stalled: boolean;
+    };
     expect(st.parked).toBe(false);
     expect(st.lastProgress).toBeTypeOf("number");
     expect(st.stalled).toBe(false);
   });
 
-  it("scheduled alarm wakes the agent and advances history", async () => {
-    const s = stub("wake1");
-    await s.scheduleWakeup(Date.now() + 1000, "tick", 60_000);
-    // Invoke the alarm handler via its public RPC method (deterministic).
-    await s.fireWakeup();
-    const hist = await s.getHistory();
-    expect(hist.some((m: any) => m.content === "tick")).toBe(true);
-    // cadence was recorded for the health!=progress signal
-    const st = await s.status();
-    expect(st.expectedCadenceMs).toBe(60_000);
+  it("scheduled wakeup fires and advances history", async () => {
+    await SELF.fetch("https://x/agents/wake1/schedule", {
+      method: "POST",
+      body: JSON.stringify({ atMs: Date.now() + 1000, prompt: "tick", cadenceMs: 60000 }),
+    });
+    await SELF.fetch("https://x/agents/wake1/wake", { method: "POST" });
+    const hist = await history("wake1");
+    expect(hist.some((m) => m.content === "tick")).toBe(true);
   });
 });

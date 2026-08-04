@@ -1,0 +1,18 @@
+# Copy to .dev.vars for local dev (never commit .dev.vars).
+# In production, set these with `wrangler secret put <NAME>`.
+
+# Models (optional — without any key, an offline echo model is used)
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+
+# Channels
+TELEGRAM_BOT_TOKEN=
+DISCORD_BOT_TOKEN=
+SLACK_BOT_TOKEN=
+WHATSAPP_TOKEN=
+WHATSAPP_PHONE_ID=
+
+# Capabilities
+SERP_API_KEY=
+RESEND_API_KEY=
+EMAIL_FROM=perch@example.com

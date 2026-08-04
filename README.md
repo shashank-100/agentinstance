@@ -41,11 +41,27 @@ npx wrangler secret put OPENAI_API_KEY
 
 ```
 POST /agents/:id/configure   { harness, model, capabilities, machine, system }
-POST /agents/:id/send        { text, channel? }  -> { reply }
+POST /agents/:id/send        { text, channel? }  -> { reply }  (409 if parked)
 GET  /agents/:id/history
 GET  /agents/:id/status      -> { parked, lastProgress, expectedCadenceMs, stalled }
 POST /agents/:id/park | /unpark
+GET  /agents/:id/snapshot                          -> { spec, history, kv }
+POST /agents/:id/restore     { spec, history, kv }
+POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }
+POST /agents/:id/wake
+POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capabilities)
+
+# channel webhooks
+POST /channels/telegram/:id
+POST /channels/discord/:id
+POST /channels/slack/:id
+POST /channels/whatsapp/:id
+POST /channels/web/:id       { text }              -> { reply }
 ```
+
+See [DEPLOY.md](./DEPLOY.md) for one-command Cloudflare deployment and channel setup.
+The `perch` CLI (`cli/perch.mjs`) wraps these routes, including `perch clone` to
+push a local agent (spec + history) into the cloud.
 
 ## Architecture
 

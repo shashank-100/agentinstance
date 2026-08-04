@@ -5,6 +5,7 @@
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
   "durable_objects": {
     "bindings": [{ "name": "AGENT", "class_name": "AgentDO" }]
   },

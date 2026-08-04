@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Open-source, self-hostable always-on AI agents on Cloudflare. Any harness, any model, persistent memory, many channels.",
   "type": "module",
+  "bin": {
+    "perch": "./cli/perch.mjs"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -11,6 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.5.0",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0",
     "wrangler": "^3.90.0"
