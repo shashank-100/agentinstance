@@ -6,7 +6,7 @@ import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
 import { MODELS } from "./catalog.js";
 import { ChatHarness, getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
-import { ClaudeModel, EchoModel, OpenAIModel, type Model } from "./models/index.js";
+import { ClaudeModel, MockModel, OpenAIModel, type Model } from "./models/index.js";
 
 const OPENAI_BASE: Record<string, string> = {
   // OpenAI-compatible providers reached via base_url swap (no lock-in).
@@ -51,14 +51,15 @@ export class AgentDO extends DurableObject<Env> {
   }
 
   private buildModel(): Model {
+    // No API key? Fall back to the MockModel so the product is fully demoable.
     const info = MODELS[this.spec.model];
-    if (!info || info.backend === "echo") return new EchoModel();
+    if (!info) return new MockModel();
     if (info.backend === "claude") {
       const key = this.env.ANTHROPIC_API_KEY;
-      return key ? new ClaudeModel(key, this.spec.model) : new EchoModel();
+      return key ? new ClaudeModel(key, this.spec.model) : new MockModel();
     }
     const key = this.env.OPENAI_API_KEY;
-    return key ? new OpenAIModel(key, this.spec.model, OPENAI_BASE.openai) : new EchoModel();
+    return key ? new OpenAIModel(key, this.spec.model, OPENAI_BASE.openai) : new MockModel();
   }
 
   // --- history -------------------------------------------------------------

@@ -17,6 +17,44 @@ export class EchoModel implements Model {
   }
 }
 
+/**
+ * MockModel — a keyless "brain" that gives believable, varied replies so the
+ * whole product can be demoed without any API key. Deterministic per input so
+ * tests stay stable. Swap to ClaudeModel by setting ANTHROPIC_API_KEY.
+ */
+export class MockModel implements Model {
+  name = "mock";
+  constructor(private persona = "a helpful always-on agent") {}
+
+  async complete(messages: Message[], system?: string): Promise<string> {
+    const last = [...messages].reverse().find((m) => m.role === "user");
+    const text = (last?.content ?? "").trim();
+    const turns = messages.filter((m) => m.role === "user").length;
+    const lower = text.toLowerCase();
+
+    if (!text) return "I'm here and listening — what would you like to do?";
+    if (/^(hi|hey|hello|yo|sup)\b/.test(lower))
+      return `Hey! I'm ${this.persona}. What are we working on?`;
+    if (lower.includes("?")) {
+      return `Good question. Here's how I'd approach "${trim(text)}": break it into steps, ` +
+        `tackle the riskiest part first, then verify. Want me to go deeper on any step?`;
+    }
+    if (/thank|thanks|ty\b/.test(lower)) return "Anytime — what's next?";
+    if (/who are you|what are you|what can you do/.test(lower))
+      return `I'm ${this.persona} running on Perch. I keep memory across our chats, ` +
+        `work across channels, and stay parked (free) when idle. (Demo mode — add an API key for a real model.)`;
+    if (turns > 1)
+      return `Got it, continuing from before — on "${trim(text)}", here's my take: ` +
+        `let's make one concrete change, confirm it works, then iterate.`;
+    return `Understood: "${trim(text)}". I'll treat that as the goal and start on it. ` +
+      `Tell me if you'd rather adjust scope.`;
+  }
+}
+
+function trim(s: string, n = 60): string {
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
 export class ClaudeModel implements Model {
   name = "claude";
   constructor(

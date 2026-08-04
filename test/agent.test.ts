@@ -18,9 +18,11 @@ async function history(id: string) {
 }
 
 describe("AgentDO runtime + memory", () => {
-  it("echoes with the offline model by default", async () => {
+  it("replies with the mock model by default (no key)", async () => {
     const res = await send("a1", "hello");
-    expect(((await res.json()) as { reply: string }).reply).toBe("echo: hello");
+    const reply = ((await res.json()) as { reply: string }).reply;
+    expect(reply.length).toBeGreaterThan(0);
+    expect(reply).not.toBe("hello"); // it generated, not echoed verbatim
   });
 
   it("records both turns in history", async () => {
@@ -54,7 +56,8 @@ describe("AgentDO runtime + memory", () => {
     const blocked = await send("park1", "x");
     expect(blocked.status).toBe(409);
     await SELF.fetch("https://x/agents/park1/unpark", { method: "POST" });
-    expect(((await (await send("park1", "x")).json()) as { reply: string }).reply).toBe("echo: x");
+    const reply = ((await (await send("park1", "x")).json()) as { reply: string }).reply;
+    expect(reply.length).toBeGreaterThan(0); // sends work again after unpark
   });
 
   it("status reports last-progress and stall detection", async () => {
