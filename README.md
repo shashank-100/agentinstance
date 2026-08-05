@@ -18,6 +18,17 @@ Park it when idle; you pay nothing while it sleeps.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
+> **Note — demo mode:** with no API key set, agents reply using a built-in **mock
+> model** so you can try the whole product instantly. Set `ANTHROPIC_API_KEY`
+> (see [DEPLOY.md](./DEPLOY.md)) to switch to real Claude responses.
+
+## Try it
+
+- **Landing page:** `/`
+- **Agent builder (one click):** `/agents/new.html`
+- **Your agents dashboard:** `/agents/`
+- **Web chat:** `/chat.html?id=<agent>`
+
 ## Features
 
 - **Persistent memory** — full history + state in Durable Object SQLite, survives restarts.

@@ -12,6 +12,15 @@ describe("worker gateway", () => {
     expect(data.reply.length).toBeGreaterThan(0);
   });
 
+  it("send accepts AgentSky-style parts[] body", async () => {
+    const res = await SELF.fetch("https://x/agents/agentParts/send", {
+      method: "POST",
+      body: JSON.stringify({ parts: [{ type: "text", index: 0, text: "via parts" }] }),
+    });
+    const data = (await res.json()) as { reply: string };
+    expect(data.reply.length).toBeGreaterThan(0);
+  });
+
   it("telegram webhook drives the agent (unified history)", async () => {
     await SELF.fetch("https://x/channels/telegram/agentT", {
       method: "POST",

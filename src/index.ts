@@ -18,6 +18,7 @@ import {
   estimateMonthCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
+import { toText } from "./parts.js";
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
 
@@ -166,8 +167,14 @@ export default {
       try {
         switch (action) {
           case "send": {
-            const { text, channel } = (await request.json()) as { text: string; channel?: string };
-            const out = await stub.send(text, channel);
+            // Accept either { text } or AgentSky-style { parts: [...] }.
+            const body = (await request.json()) as {
+              text?: string;
+              parts?: import("./parts.js").Part[];
+              channel?: string;
+            };
+            const text = body.parts ? toText(body.parts) : (body.text ?? "");
+            const out = await stub.send(text, body.channel);
             if (out.parked) return Response.json({ error: "agent is parked", parked: true }, { status: 409 });
             return Response.json({ reply: out.reply });
           }
