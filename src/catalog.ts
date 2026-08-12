@@ -1,26 +1,45 @@
 // Catalog of models (with real pricing), harnesses, machine tiers, capabilities.
 // Prices are USD per 1M tokens (input / output). Modeled on the public AgentSky catalog.
 
+/** OpenAI-compatible providers, reached by swapping base_url (no lock-in). */
+export type Provider = "openai" | "deepseek" | "moonshot" | "zai" | "google";
+
 export interface ModelInfo {
   id: string;
   label: string;
   priceIn: number;
   priceOut: number;
   backend: "claude" | "openai" | "echo";
+  /** Which OpenAI-compatible host serves this model (backend: "openai" only). */
+  provider?: Provider;
+  /** Upstream's own name for the model, when it differs from our catalog id. */
+  upstreamId?: string;
 }
+
+/** Base URL + API-key env var for each OpenAI-compatible provider. */
+export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
+  openai: { baseUrl: "https://api.openai.com/v1", keyVar: "OPENAI_API_KEY" },
+  deepseek: { baseUrl: "https://api.deepseek.com/v1", keyVar: "DEEPSEEK_API_KEY" },
+  moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
+  zai: { baseUrl: "https://api.z.ai/api/paas/v4", keyVar: "ZAI_API_KEY" },
+  google: {
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyVar: "GEMINI_API_KEY",
+  },
+};
 
 export const MODELS: Record<string, ModelInfo> = {
   "claude-fable-5": { id: "claude-fable-5", label: "Claude Fable 5", priceIn: 10, priceOut: 50, backend: "claude" },
   "claude-opus-5": { id: "claude-opus-5", label: "Claude Opus 5", priceIn: 5, priceOut: 25, backend: "claude" },
   "claude-sonnet-4-6": { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", priceIn: 3, priceOut: 15, backend: "claude" },
-  "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, backend: "openai" },
-  "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, backend: "openai" },
-  "gpt-5.6-luna": { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", priceIn: 1, priceOut: 6, backend: "openai" },
-  "deepseek-v4-pro": { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", priceIn: 0.44, priceOut: 0.87, backend: "openai" },
-  "deepseek-v4-flash": { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", priceIn: 0.14, priceOut: 0.28, backend: "openai" },
-  "gemini-3.5-flash": { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", priceIn: 1.5, priceOut: 9, backend: "openai" },
-  "glm-5.2": { id: "glm-5.2", label: "GLM-5.2", priceIn: 1.4, priceOut: 4.4, backend: "openai" },
-  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, backend: "openai" },
+  "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, backend: "openai", provider: "openai" },
+  "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, backend: "openai", provider: "openai" },
+  "gpt-5.6-luna": { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", priceIn: 1, priceOut: 6, backend: "openai", provider: "openai" },
+  "deepseek-v4-pro": { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", priceIn: 0.44, priceOut: 0.87, backend: "openai", provider: "deepseek", upstreamId: "deepseek-chat" },
+  "deepseek-v4-flash": { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", priceIn: 0.14, priceOut: 0.28, backend: "openai", provider: "deepseek", upstreamId: "deepseek-chat" },
+  "gemini-3.5-flash": { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", priceIn: 1.5, priceOut: 9, backend: "openai", provider: "google" },
+  "glm-5.2": { id: "glm-5.2", label: "GLM-5.2", priceIn: 1.4, priceOut: 4.4, backend: "openai", provider: "zai", upstreamId: "glm-4.6" },
+  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, backend: "openai", provider: "moonshot" },
 };
 
 export const HARNESSES: Record<string, string> = {

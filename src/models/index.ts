@@ -60,7 +60,7 @@ export class ClaudeModel implements Model {
   constructor(
     private apiKey: string,
     private modelId = "claude-sonnet-4-6",
-    private maxTokens = 1024,
+    private maxTokens = 10000,
   ) {}
 
   async complete(messages: Message[], system?: string): Promise<string> {
@@ -95,7 +95,10 @@ export class OpenAIModel implements Model {
     private apiKey: string,
     private modelId = "gpt-4o",
     private baseUrl = "https://api.openai.com/v1",
-    private maxTokens = 1024,
+    // Reasoning models (kimi-k3, deepseek-reasoner, ...) spend part of this
+    // budget on hidden reasoning tokens before emitting any answer, so a small
+    // cap can return an empty message. Keep enough headroom for both.
+    private maxTokens = 10000,
   ) {}
 
   async complete(messages: Message[], system?: string): Promise<string> {
@@ -114,7 +117,22 @@ export class OpenAIModel implements Model {
       body: JSON.stringify({ model: this.modelId, max_tokens: this.maxTokens, messages: api }),
     });
     if (!res.ok) throw new Error(`openai ${res.status}: ${await res.text()}`);
-    const data = (await res.json()) as { choices: { message: { content: string } }[] };
-    return data.choices[0]?.message?.content ?? "";
+    const data = (await res.json()) as {
+      choices: {
+        finish_reason?: string;
+        message: { content?: string; reasoning_content?: string };
+      }[];
+    };
+    const choice = data.choices[0];
+    const content = choice?.message?.content ?? "";
+    if (content) return content;
+    // Reasoning models can burn the whole token budget thinking and return an
+    // empty content field. Say so plainly rather than handing back "".
+    if (choice?.finish_reason === "length") {
+      throw new Error(
+        `${this.modelId} hit the ${this.maxTokens}-token cap while reasoning and produced no answer`,
+      );
+    }
+    return "";
   }
 }

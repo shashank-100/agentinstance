@@ -8,10 +8,7 @@ import { MODELS } from "./catalog.js";
 import { ChatHarness, getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
 import { ClaudeModel, MockModel, OpenAIModel, type Model } from "./models/index.js";
 
-const OPENAI_BASE: Record<string, string> = {
-  // OpenAI-compatible providers reached via base_url swap (no lock-in).
-  openai: "https://api.openai.com/v1",
-};
+import { PROVIDERS } from "./catalog.js";
 
 export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -58,8 +55,14 @@ export class AgentInstance extends DurableObject<Env> {
       const key = this.env.ANTHROPIC_API_KEY;
       return key ? new ClaudeModel(key, this.spec.model) : new MockModel();
     }
-    const key = this.env.OPENAI_API_KEY;
-    return key ? new OpenAIModel(key, this.spec.model, OPENAI_BASE.openai) : new MockModel();
+    // OpenAI-compatible: route to the provider that actually serves this model,
+    // using that provider's key. Sending e.g. a Moonshot key to api.openai.com
+    // would just 401.
+    const provider = info.provider ?? "openai";
+    const { baseUrl, keyVar } = PROVIDERS[provider];
+    const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
+    if (!key) return new MockModel();
+    return new OpenAIModel(key, info.upstreamId ?? info.id, baseUrl);
   }
 
   // --- history -------------------------------------------------------------
