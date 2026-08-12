@@ -13,9 +13,7 @@
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["AgentDO"] },
-    { "tag": "v2", "new_sqlite_classes": ["RegistryDO"] },
-    { "tag": "v3", "renamed_classes": [{ "from": "AgentDO", "to": "AgentInstance" }] }
+    { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] }
   ],
   "vars": {
     "DEFAULT_MODEL": "claude-sonnet-4-6",
