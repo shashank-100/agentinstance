@@ -6,12 +6,19 @@ import type { Env } from "../types.js";
 export interface Capability {
   name: string;
   describe: string;
+  /** JSON Schema for the tool input, when this capability is model-callable. */
+  parameters?: Record<string, unknown>;
   run(env: Env, input: Record<string, unknown>): Promise<unknown>;
 }
 
 export const scrapeWeb: Capability = {
   name: "scrape_web",
-  describe: "Fetch a URL and return its text content.",
+  describe: "Fetch a URL and return its readable text content.",
+  parameters: {
+    type: "object",
+    properties: { url: { type: "string", description: "Absolute URL to fetch." } },
+    required: ["url"],
+  },
   async run(_env, input) {
     const url = String(input.url ?? "");
     if (!url) throw new Error("scrape_web requires { url }");
@@ -30,15 +37,38 @@ export const scrapeWeb: Capability = {
 
 export const searchSerp: Capability = {
   name: "search_serp",
-  describe: "Search the web (requires SERP_API_KEY).",
+  describe:
+    "Search the web and return the top results (title, link, snippet). " +
+    "Use for current facts, companies, people, or anything not in your training data.",
+  parameters: {
+    type: "object",
+    properties: { query: { type: "string", description: "The search query." } },
+    required: ["query"],
+  },
   async run(env, input) {
     const q = String(input.query ?? "");
+    if (!q) throw new Error("search_serp requires { query }");
     if (!env.SERP_API_KEY) return { query: q, results: [], note: "SERP_API_KEY not set" };
     const res = await fetch(
       `https://serpapi.com/search.json?q=${encodeURIComponent(q)}&api_key=${env.SERP_API_KEY}`,
     );
-    const data = (await res.json()) as { organic_results?: unknown[] };
-    return { query: q, results: (data.organic_results ?? []).slice(0, 5) };
+    if (!res.ok) throw new Error(`serpapi ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as {
+      error?: string;
+      answer_box?: { answer?: string; snippet?: string };
+      organic_results?: { title?: string; link?: string; snippet?: string }[];
+    };
+    if (data.error) throw new Error(`serpapi: ${data.error}`);
+    // Keep only the fields a model needs — raw SERP payloads are enormous.
+    return {
+      query: q,
+      answer: data.answer_box?.answer ?? data.answer_box?.snippet ?? null,
+      results: (data.organic_results ?? []).slice(0, 5).map((r) => ({
+        title: r.title,
+        link: r.link,
+        snippet: r.snippet,
+      })),
+    };
   },
 };
 

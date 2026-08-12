@@ -98,9 +98,28 @@ export class AgentInstance extends DurableObject<Env> {
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness) ?? new ChatHarness();
     const { getSandbox } = await import("./sandbox/index.js");
+    const { getCapability } = await import("./capabilities/index.js");
+
+    // Expose this agent's enabled capabilities as model-callable tools, so it
+    // can search/scrape mid-conversation instead of only via POST /tool/:name.
+    const tools = this.spec.capabilities
+      .map((name) => {
+        const cap = getCapability(name);
+        return cap?.parameters
+          ? { name: cap.name, description: cap.describe, parameters: cap.parameters }
+          : null;
+      })
+      .filter((t): t is NonNullable<typeof t> => t !== null);
+
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
       sandbox: getSandbox(this.env),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
+      tools,
+      runTool: async (name, input) => {
+        const out = await this.runTool(name, input);
+        if (out.error) throw new Error(out.error);
+        return out.result;
+      },
     });
     this.record(makeMessage("assistant", reply, channel));
     // health != progress: advance last-progress only when a unit of work completes.

@@ -1,6 +1,6 @@
 // Feature #4 — pluggable harnesses + 3-piece AgentSpec with compatibility check.
 import type { Message } from "../types.js";
-import type { Model } from "../models/index.js";
+import type { Model, ToolDef } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";
 import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
 
@@ -8,6 +8,9 @@ import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../c
 export interface HarnessContext {
   sandbox?: Sandbox | null;
   agentId?: string;
+  /** Tools the model may call this turn, with a runner for each. */
+  tools?: ToolDef[];
+  runTool?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
 }
 
 export interface Harness {
@@ -15,12 +18,65 @@ export interface Harness {
   run(model: Model, history: Message[], system: string, ctx?: HarnessContext): Promise<string>;
 }
 
-// Default: one model completion per turn.
+/** Cap on model<->tool round trips, so a looping model can't run forever. */
+const MAX_TOOL_STEPS = 5;
+
+// Default: one model completion per turn — unless capabilities are enabled and
+// the model supports tool calls, in which case run a bounded tool loop.
 export class ChatHarness implements Harness {
   name = "chat";
-  run(model: Model, history: Message[], system: string): Promise<string> {
-    return model.complete(history, system);
+
+  async run(
+    model: Model,
+    history: Message[],
+    system: string,
+    ctx?: HarnessContext,
+  ): Promise<string> {
+    const tools = ctx?.tools ?? [];
+    if (!tools.length || !model.turn || !ctx?.runTool) {
+      return model.complete(history, system);
+    }
+
+    const priorTurns: unknown[] = [];
+    for (let step = 0; step < MAX_TOOL_STEPS; step++) {
+      const turn = await model.turn(history, system, tools, priorTurns);
+      if (!turn.toolCalls.length) {
+        return turn.text || "(no reply)";
+      }
+      priorTurns.push(turn.raw);
+      for (const call of turn.toolCalls) {
+        // A failing tool must come back as an observation, not blow up the
+        // turn — the model can then apologise or try something else.
+        let result: unknown;
+        try {
+          result = await ctx.runTool(call.name, call.input);
+        } catch (e) {
+          result = { error: String(e) };
+        }
+        priorTurns.push(toolResultMessage(model, call.id, call.name, result));
+      }
+    }
+    // Out of steps: ask for a final answer with no tools offered.
+    const final = await model.turn(history, system, [], priorTurns);
+    return final.text || "(stopped after too many tool steps)";
   }
+}
+
+/** Tool results use different shapes on Claude vs OpenAI-compatible APIs. */
+function toolResultMessage(
+  model: Model,
+  id: string,
+  name: string,
+  result: unknown,
+): unknown {
+  const content = JSON.stringify(result).slice(0, 8000);
+  if (model.name === "claude") {
+    return {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: id, content }],
+    };
+  }
+  return { role: "tool", tool_call_id: id, name, content };
 }
 
 // CLI-wrapping harnesses (claude-code, codex). If a sandbox is available, the
