@@ -4,195 +4,296 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Nimbus — always-on agents that rest for free</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⌇%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,560;1,9..144,340&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --ink: #0c0a08;
-    --ink-2: #14110d;
-    --panel: #1a1611;
-    --line: #2c2620;
-    --ember: #f0954a;
-    --ember-soft: #f7b878;
-    --sky: #8fb3c9;
-    --paper: #efe7d9;
-    --muted: #9a8f7e;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sky: #e9f1fb;
+    --paper: #f7fafd;
+    --ink: #0b1a2e;
+    --ink-2: #13253f;
+    --board: #0a1420;
+    --board-line: #1d2f47;
+    --blue: #1c4fd8;
+    --blue-soft: #6b93f0;
+    --amber: #f5a623;
+    --green: #35d07f;
+    --muted: #5b6b82;
+    --line: #d3dfee;
+    --serif: "Fraunces", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    background: var(--ink);
-    color: var(--paper);
-    font-family: var(--mono);
+    background: linear-gradient(180deg, var(--sky) 0%, var(--paper) 340px);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-weight: 340;
     line-height: 1.6;
     overflow-x: hidden;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(240,149,74,0.12), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(143,179,201,0.06), transparent 60%);
   }
-  /* subtle grain */
-  body::before {
-    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0.035;
+  body::before { /* grain */
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: .028;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 2; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 2; }
+  .mono { font-family: var(--mono); }
 
-  /* nav */
-  nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0; }
-  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: -0.02em; font-size: 1.15rem; }
-  .brand .glyph { color: var(--ember); font-size: 1.3rem; }
-  nav a.ghost { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
-  nav a.ghost:hover { color: var(--paper); }
+  /* ── nav ─────────────────────────── */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 26px 0; font-family: var(--mono); }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 600; font-size: .95rem; letter-spacing: .14em; text-transform: uppercase; }
+  .brand .glyph { color: var(--blue); font-size: 1.25rem; }
+  nav .links { display: flex; gap: 26px; align-items: center; }
+  nav a.ghost { color: var(--muted); text-decoration: none; font-size: .78rem; letter-spacing: .06em; }
+  nav a.ghost:hover { color: var(--blue); }
 
-  /* the nimbus wire */
-  .wire { height: 1px; background: linear-gradient(90deg, transparent, var(--line) 15%, var(--line) 85%, transparent); position: relative; }
-  .wire .bird { position: absolute; top: -9px; left: 18%; color: var(--ember); font-size: 0.9rem; animation: hop 6s ease-in-out infinite; }
-  @keyframes hop { 0%,100%{ transform: translateY(0) } 45%{ transform: translateY(0) } 50%{ transform: translateY(-6px) rotate(-8deg) } 55%{ transform: translateY(0) } }
-
-  /* hero */
-  header { padding: 90px 0 70px; }
-  .kicker { font-size: 0.75rem; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ember); margin-bottom: 26px; opacity: 0; animation: rise 0.7s ease forwards; }
-  h1 {
-    font-family: var(--serif); font-weight: 400; letter-spacing: -0.02em;
-    font-size: clamp(2.6rem, 6vw, 4.6rem); line-height: 1.04; margin-bottom: 26px;
-    opacity: 0; animation: rise 0.8s ease 0.1s forwards;
+  /* ── hero ────────────────────────── */
+  header { padding: 84px 0 46px; position: relative; }
+  .kicker {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .3em; text-transform: uppercase;
+    color: var(--blue); margin-bottom: 28px; display: flex; align-items: center; gap: 12px;
   }
-  h1 em { font-style: italic; color: var(--ember-soft); }
-  .lede { max-width: 620px; color: var(--muted); font-size: 1.05rem; margin-bottom: 38px; opacity: 0; animation: rise 0.8s ease 0.22s forwards; }
-  .lede b { color: var(--paper); font-weight: 500; }
-  .cta { display: flex; gap: 14px; flex-wrap: wrap; opacity: 0; animation: rise 0.8s ease 0.34s forwards; }
-  .btn { font-family: var(--mono); font-size: 0.9rem; text-decoration: none; padding: 13px 22px; border-radius: 9px; transition: transform 0.15s ease, box-shadow 0.2s ease; display: inline-flex; align-items: center; gap: 9px; }
-  .btn-primary { background: var(--ember); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 rgba(240,149,74,0); }
-  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -8px rgba(240,149,74,0.5); }
-  .btn-ghost { border: 1px solid var(--line); color: var(--paper); }
-  .btn-ghost:hover { border-color: var(--ember); transform: translateY(-2px); }
-  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  .kicker::before { content: ""; width: 34px; height: 1px; background: var(--blue); }
+  h1 {
+    font-weight: 300; letter-spacing: -.025em;
+    font-size: clamp(2.9rem, 7vw, 5.4rem); line-height: 1.0; margin-bottom: 28px;
+  }
+  h1 em { font-style: italic; font-weight: 340; color: var(--blue); }
+  .lede { max-width: 600px; color: var(--muted); font-size: 1.12rem; margin-bottom: 40px; }
+  .lede b { color: var(--ink); font-weight: 560; }
+  .cta { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--mono); }
+  .btn {
+    font-size: .85rem; text-decoration: none; padding: 14px 24px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 9px; letter-spacing: .02em;
+    transition: transform .16s ease, box-shadow .25s ease, border-color .2s;
+  }
+  .btn-primary { background: var(--blue); color: #fff; font-weight: 500; box-shadow: 0 14px 34px -14px rgba(28,79,216,.55); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -14px rgba(28,79,216,.65); }
+  .btn-ghost { border: 1px solid var(--line); color: var(--ink); background: rgba(255,255,255,.5); }
+  .btn-ghost:hover { border-color: var(--blue); color: var(--blue); transform: translateY(-2px); }
+  .install { margin-top: 34px; font-family: var(--mono); font-size: .8rem; color: var(--muted); }
+  .install code { background: var(--ink); border-radius: 8px; padding: 11px 16px; color: #9fc0ff; display: inline-block; cursor: pointer; transition: .2s; }
+  .install code:hover { background: var(--ink-2); }
+  .install code::before { content: "$ "; color: #4d688f; }
 
-  /* code chip */
-  .install { margin-top: 40px; font-size: 0.82rem; color: var(--muted); opacity: 0; animation: rise 0.8s ease 0.46s forwards; }
-  .install code { background: var(--ink-2); border: 1px solid var(--line); padding: 10px 15px; border-radius: 8px; color: var(--ember-soft); display: inline-block; }
-  .install code::before { content: "$ "; color: var(--muted); }
+  /* staggered load-in */
+  .rise { opacity: 0; transform: translateY(18px); animation: rise .8s cubic-bezier(.2,.7,.3,1) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
 
-  section { padding: 72px 0; }
-  .eyebrow { font-size: 0.72rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--sky); margin-bottom: 14px; }
-  h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(1.8rem, 3.5vw, 2.6rem); letter-spacing: -0.02em; margin-bottom: 12px; }
-  .sub { color: var(--muted); max-width: 560px; margin-bottom: 44px; }
+  /* ── the board (split-flap) ──────── */
+  .board-shell { padding: 26px 0 10px; }
+  .board {
+    background: var(--board); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 30px 60px -30px rgba(11,26,46,.45), inset 0 1px 0 rgba(255,255,255,.06);
+    font-family: var(--mono); color: #dfe9f5;
+  }
+  .board-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 22px; border-bottom: 1px solid var(--board-line);
+    font-size: .7rem; letter-spacing: .26em; text-transform: uppercase; color: #7d93b0;
+  }
+  .board-head .live { display: flex; align-items: center; gap: 8px; color: var(--green); }
+  .board-head .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .brow, .bhead {
+    display: grid; grid-template-columns: 1.1fr 1.3fr 1.2fr 1fr .9fr;
+    gap: 12px; padding: 0 22px; align-items: center;
+  }
+  .bhead { padding-top: 12px; padding-bottom: 10px; font-size: .62rem; letter-spacing: .2em; color: #51698a; text-transform: uppercase; border-bottom: 1px solid var(--board-line); }
+  .brow { padding-top: 13px; padding-bottom: 13px; border-bottom: 1px solid rgba(29,47,71,.55); font-size: .82rem; }
+  .brow:last-child { border-bottom: 0; }
+  .brow .id { color: #8fa8c6; }
+  .flap { display: inline-block; min-width: 1ch; }
+  .st-working { color: var(--green); }
+  .st-parked { color: var(--amber); }
+  .st-waking { color: var(--blue-soft); }
+  .cost-zero { color: #51698a; }
+  .cost-run { color: #dfe9f5; }
+  .board-foot { padding: 11px 22px; font-size: .68rem; color: #51698a; letter-spacing: .12em; border-top: 1px solid var(--board-line); display: flex; justify-content: space-between; }
+  .board-foot b { color: var(--amber); font-weight: 500; }
+  @media (max-width: 720px) { .brow, .bhead { grid-template-columns: 1fr 1.2fr 1fr; } .brow .hide-s, .bhead .hide-s { display: none; } }
 
-  /* composition */
-  .compose { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 0; align-items: stretch; }
-  .piece { background: linear-gradient(180deg, var(--panel), var(--ink-2)); border: 1px solid var(--line); border-radius: 14px; padding: 26px 22px; transition: border-color 0.25s, transform 0.25s; }
-  .piece:hover { border-color: var(--ember); transform: translateY(-4px); }
-  .piece .n { font-size: 0.72rem; color: var(--ember); letter-spacing: 0.2em; }
-  .piece h3 { font-family: var(--serif); font-weight: 400; font-size: 1.3rem; margin: 8px 0 12px; }
-  .piece ul { list-style: none; font-size: 0.85rem; color: var(--muted); }
-  .piece li { padding: 3px 0; }
-  .piece li::before { content: "◦ "; color: var(--ember); }
-  .plus { display: flex; align-items: center; justify-content: center; color: var(--line); font-size: 1.5rem; padding: 0 10px; }
-  @media (max-width: 820px){ .compose { grid-template-columns: 1fr; gap: 14px; } .plus { display: none; } }
+  /* ── sections ────────────────────── */
+  section { padding: 84px 0; }
+  .eyebrow { font-family: var(--mono); font-size: .7rem; letter-spacing: .28em; text-transform: uppercase; color: var(--blue); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+  .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--blue); }
+  h2 { font-weight: 300; font-size: clamp(1.9rem, 3.8vw, 2.9rem); letter-spacing: -.02em; margin-bottom: 14px; line-height: 1.08; }
+  h2 em { font-style: italic; color: var(--blue); font-weight: 340; }
+  .sub { color: var(--muted); max-width: 580px; margin-bottom: 48px; font-size: 1.02rem; }
 
-  /* channels */
-  .channels { display: flex; flex-wrap: wrap; gap: 12px; }
-  .chan { border: 1px solid var(--line); background: var(--ink-2); border-radius: 999px; padding: 9px 18px; font-size: 0.85rem; color: var(--paper); display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; }
-  .chan:hover { border-color: var(--sky); color: var(--sky); }
-  .chan .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ember); }
-  .chan .tag { color: var(--muted); font-size: 0.72rem; margin-left: 2px; }
+  /* flight plan */
+  .plan { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; }
+  .piece {
+    background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px 24px;
+    transition: border-color .25s, transform .25s, box-shadow .25s;
+  }
+  .piece:hover { border-color: var(--blue); transform: translateY(-4px); box-shadow: 0 18px 40px -22px rgba(11,26,46,.25); }
+  .piece .n { font-family: var(--mono); font-size: .68rem; color: var(--blue); letter-spacing: .22em; }
+  .piece h3 { font-weight: 560; font-size: 1.28rem; margin: 10px 0 14px; letter-spacing: -.01em; }
+  .piece ul { list-style: none; font-size: .94rem; color: var(--muted); }
+  .piece li { padding: 4px 0; }
+  .piece li::before { content: "◦ "; color: var(--blue); font-family: var(--mono); }
+  .plus { display: flex; align-items: center; justify-content: center; color: var(--line); font-size: 1.6rem; padding: 0 12px; font-family: var(--mono); }
+  @media (max-width: 860px) { .plan { grid-template-columns: 1fr; gap: 14px; } .plus { display: none; } }
+  .check { margin-top: 22px; font-family: var(--mono); font-size: .78rem; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+  .check .ok { color: var(--green); }
 
-  /* features */
+  /* routes */
+  .routes { position: relative; background: var(--ink); border-radius: 20px; padding: 44px 40px; color: #dfe9f5; overflow: hidden; }
+  .routes svg.arcs { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; }
+  .routes .eyebrow { color: var(--blue-soft); }
+  .routes .eyebrow::before { background: var(--blue-soft); }
+  .routes h2 { color: #fff; }
+  .routes h2 em { color: var(--blue-soft); }
+  .routes .sub { color: #8fa8c6; }
+  .chips { display: flex; flex-wrap: wrap; gap: 12px; position: relative; z-index: 2; font-family: var(--mono); }
+  .chip {
+    border: 1px solid var(--board-line); background: rgba(19,37,63,.6); backdrop-filter: blur(2px);
+    border-radius: 999px; padding: 10px 20px; font-size: .82rem; color: #dfe9f5;
+    display: inline-flex; align-items: center; gap: 9px; transition: .2s;
+  }
+  .chip:hover { border-color: var(--blue-soft); color: #fff; transform: translateY(-2px); }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .chip .tag { color: #51698a; font-size: .68rem; }
+
+  /* black box */
   .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  @media (max-width: 700px){ .grid { grid-template-columns: 1fr; } }
-  .feat { border: 1px solid var(--line); border-radius: 14px; padding: 26px; background: var(--ink-2); position: relative; overflow: hidden; }
-  .feat::after { content: ""; position: absolute; right: -40px; top: -40px; width: 120px; height: 120px; background: radial-gradient(circle, rgba(240,149,74,0.14), transparent 70%); }
-  .feat h4 { font-size: 1.05rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
-  .feat h4 .i { color: var(--ember); }
-  .feat p { color: var(--muted); font-size: 0.88rem; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .feat { border: 1px solid var(--line); border-radius: 16px; padding: 28px; background: #fff; position: relative; overflow: hidden; transition: border-color .25s, transform .25s; }
+  .feat:hover { border-color: var(--blue); transform: translateY(-3px); }
+  .feat::after { content: ""; position: absolute; right: -46px; top: -46px; width: 130px; height: 130px; background: radial-gradient(circle, rgba(28,79,216,.1), transparent 70%); }
+  .feat h4 { font-size: 1.12rem; margin-bottom: 9px; display: flex; align-items: center; gap: 11px; font-weight: 560; letter-spacing: -.01em; }
+  .feat h4 .i { color: var(--blue); font-family: var(--mono); font-weight: 400; }
+  .feat p { color: var(--muted); font-size: .92rem; }
 
-  /* pricing note */
-  .park { border: 1px solid var(--line); border-radius: 16px; padding: 40px; text-align: center; background: linear-gradient(180deg, var(--panel), var(--ink)); }
-  .park .big { font-family: var(--serif); font-size: clamp(2rem,5vw,3.2rem); color: var(--ember-soft); }
-  .park p { color: var(--muted); margin-top: 10px; }
-  .park .fine { font-size: 0.8rem; margin-top: 18px; }
+  /* parking / pricing */
+  .park { border: 1px solid var(--line); border-radius: 20px; padding: 56px 40px; text-align: center; background: linear-gradient(180deg, #fff, var(--sky)); position: relative; overflow: hidden; }
+  .park .meter { font-family: var(--mono); font-size: .72rem; letter-spacing: .3em; text-transform: uppercase; color: var(--amber); margin-bottom: 18px; }
+  .park .big { font-size: clamp(2.2rem, 5.4vw, 3.6rem); font-weight: 300; letter-spacing: -.02em; line-height: 1.05; }
+  .park .big em { font-style: italic; color: var(--blue); }
+  .park p { color: var(--muted); margin-top: 14px; }
+  .park .fine { font-family: var(--mono); font-size: .76rem; margin-top: 22px; }
+  .park .cta { justify-content: center; margin-top: 30px; }
 
-  footer { border-top: 1px solid var(--line); padding: 40px 0; color: var(--muted); font-size: 0.82rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-  footer a { color: var(--muted); text-decoration: none; } footer a:hover { color: var(--ember); }
+  footer { border-top: 1px solid var(--line); padding: 40px 0 50px; color: var(--muted); font-size: .8rem; font-family: var(--mono); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer a { color: var(--muted); text-decoration: none; } footer a:hover { color: var(--blue); }
+
+  /* scroll reveal */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s cubic-bezier(.2,.7,.3,1), transform .7s cubic-bezier(.2,.7,.3,1); }
+  .reveal.in { opacity: 1; transform: none; }
 </style>
 </head>
 <body>
+
 <div class="wrap">
   <nav>
     <div class="brand"><span class="glyph">⌇</span> Nimbus</div>
-    <div style="display:flex; gap:24px; align-items:center;">
-      <a class="ghost" href="#compose">Compose</a>
-      <a class="ghost" href="#channels">Channels</a>
-      <a class="ghost" href="#pricing">Pricing</a>
-      <a class="ghost" href="https://github.com/">GitHub ↗</a>
+    <div class="links">
+      <a class="ghost" href="#plan">FLIGHT PLAN</a>
+      <a class="ghost" href="#routes">ROUTES</a>
+      <a class="ghost" href="#blackbox">BLACK BOX</a>
+      <a class="ghost" href="#parking">PARKING</a>
+      <a class="ghost" href="https://github.com/shashank-100/agentinstance">GITHUB ↗</a>
     </div>
   </nav>
 </div>
 
-<div class="wrap"><div class="wire"><span class="bird">🐦</span></div></div>
-
 <div class="wrap">
   <header>
-    <div class="kicker">Open source · Self-hostable on Cloudflare</div>
-    <h1>Always-on agents that<br><em>rest for free.</em></h1>
-    <p class="lede">Snap together a <b>harness</b>, a <b>model</b>, and <b>capabilities</b> — launch a long-lived agent with persistent memory, reachable on every channel your users already use. Park it when idle; you pay nothing while it sleeps.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#">⚡ Deploy to Cloudflare</a>
-      <a class="btn btn-ghost" href="https://github.com/">★ View on GitHub</a>
+    <div class="kicker rise" style="animation-delay:.05s">Open source · Self-hostable on Cloudflare</div>
+    <h1 class="rise" style="animation-delay:.15s">Agents that sleep<br>on the job — <em>by design.</em></h1>
+    <p class="lede rise" style="animation-delay:.28s">Snap together a <b>harness</b>, a <b>model</b>, and <b>capabilities</b> — launch a long-lived agent with persistent memory, reachable on every channel your users already use. Park it when idle; <b>you pay nothing while it sleeps.</b></p>
+    <div class="cta rise" style="animation-delay:.4s">
+      <a class="btn btn-primary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/agentinstance">⚡ Deploy to Cloudflare</a>
+      <a class="btn btn-ghost" href="https://github.com/shashank-100/agentinstance">★ View on GitHub</a>
+      <a class="btn btn-ghost" href="/agents/new">Build an agent →</a>
     </div>
-    <div class="install"><code>npm create nimbus@latest &amp;&amp; npx wrangler deploy</code></div>
+    <div class="install rise" style="animation-delay:.52s"><code id="copycmd" title="Click to copy">npm create nimbus@latest &amp;&amp; npx wrangler deploy</code></div>
   </header>
 </div>
 
+<!-- ░░ THE BOARD ░░ -->
+<div class="wrap board-shell rise" style="animation-delay:.62s">
+  <div class="board" id="board">
+    <div class="board-head">
+      <span>NIMBUS OPS · AGENT BOARD</span>
+      <span class="live">LIVE</span>
+    </div>
+    <div class="bhead">
+      <span>Agent</span><span class="hide-s">Channel</span><span>Status</span><span class="hide-s">Cadence</span><span>Cost/hr</span>
+    </div>
+    <div id="rows"></div>
+    <div class="board-foot">
+      <span>PARKED AGENTS BILL AT <b>$0.00/hr</b> — ALWAYS</span>
+      <span id="clock">—</span>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
-  <section id="compose">
-    <div class="eyebrow">Three pieces</div>
-    <h2>Snap it together. We check they fit.</h2>
-    <p class="sub">Pick a runtime, a brain, and a set of hands. Nimbus validates the combination, then launches a persistent agent in one command.</p>
-    <div class="compose">
+  <section id="plan" class="reveal">
+    <div class="eyebrow">01 · Flight plan</div>
+    <h2>Snap it together.<br><em>We check they fit.</em></h2>
+    <p class="sub">Pick an airframe, an engine, and a set of instruments. Nimbus validates the combination for compatibility, then launches a persistent agent in one command.</p>
+    <div class="plan">
       <div class="piece">
-        <div class="n">01 · HARNESS</div>
+        <div class="n">01 · AIRFRAME</div>
         <h3>The runtime that acts</h3>
         <ul><li>Chat loop</li><li>Claude Code</li><li>Codex</li><li>Hermes · OpenClaw</li></ul>
       </div>
       <div class="plus">+</div>
       <div class="piece">
-        <div class="n">02 · MODEL</div>
+        <div class="n">02 · ENGINE</div>
         <h3>The brain that reasons</h3>
-        <ul><li>Claude Opus / Sonnet / Fable</li><li>GPT-5.6 family</li><li>DeepSeek · Gemini · Kimi</li><li>No lock-in — swap freely</li></ul>
+        <ul><li>Claude Opus / Sonnet / Fable</li><li>GPT-5.6 family</li><li>DeepSeek · Gemini · Kimi · GLM</li><li>No lock-in — swap freely</li></ul>
       </div>
       <div class="plus">+</div>
       <div class="piece">
-        <div class="n">03 · CAPABILITIES</div>
+        <div class="n">03 · INSTRUMENTS</div>
         <h3>The hands that reach</h3>
         <ul><li>Scrape web · Browser</li><li>Image / video gen</li><li>Transcribe voice</li><li>Email · SERP search</li></ul>
       </div>
     </div>
+    <div class="check"><span class="ok">✓</span> compatibility checked before launch — a bad combination never leaves the ground</div>
   </section>
 </div>
 
 <div class="wrap">
-  <section id="channels">
-    <div class="eyebrow">One agent, every surface</div>
-    <h2>Reachable wherever your users are.</h2>
-    <p class="sub">History is unified at the agent level — start a thread on Slack, continue it on WhatsApp. Same memory, same context, every channel.</p>
-    <div class="channels">
-      <span class="chan"><span class="dot"></span>WhatsApp</span>
-      <span class="chan"><span class="dot"></span>iMessage</span>
-      <span class="chan"><span class="dot"></span>Telegram</span>
-      <span class="chan"><span class="dot"></span>Slack</span>
-      <span class="chan"><span class="dot"></span>Discord</span>
-      <span class="chan"><span class="dot"></span>Web</span>
-      <span class="chan"><span class="dot"></span>CLI</span>
-      <span class="chan"><span class="dot"></span>REST API</span>
+  <section id="routes" class="reveal" style="padding-top:20px">
+    <div class="routes">
+      <svg class="arcs" viewBox="0 0 800 300" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M40,260 C200,80 420,60 760,120" fill="none" stroke="#2c4a7a" stroke-width="1.2" stroke-dasharray="5 7" class="dash"/>
+        <path d="M60,280 C260,140 480,120 780,200" fill="none" stroke="#223f68" stroke-width="1" stroke-dasharray="4 8" class="dash"/>
+        <path d="M20,220 C180,40 500,20 740,70" fill="none" stroke="#1d3457" stroke-width="1" stroke-dasharray="3 9" class="dash"/>
+        <circle cx="40" cy="260" r="3.5" fill="#35d07f"/>
+        <circle cx="760" cy="120" r="3.5" fill="#6b93f0"/>
+        <circle cx="780" cy="200" r="3.5" fill="#6b93f0"/>
+        <circle cx="740" cy="70" r="3.5" fill="#f5a623"/>
+      </svg>
+      <div class="eyebrow">02 · Routes</div>
+      <h2>One agent,<br><em>every destination.</em></h2>
+      <p class="sub">History is unified at the agent level — start a thread on Slack, continue it on WhatsApp. Same memory, same context, every channel. Replies go out on the channel that messaged in.</p>
+      <div class="chips">
+        <span class="chip"><span class="dot"></span>WhatsApp <span class="tag">webhook</span></span>
+        <span class="chip"><span class="dot"></span>Telegram <span class="tag">webhook</span></span>
+        <span class="chip"><span class="dot"></span>Slack <span class="tag">webhook</span></span>
+        <span class="chip"><span class="dot"></span>Discord <span class="tag">webhook</span></span>
+        <span class="chip"><span class="dot"></span>Web <span class="tag">built-in</span></span>
+        <span class="chip"><span class="dot"></span>CLI <span class="tag">nimbus</span></span>
+        <span class="chip"><span class="dot"></span>REST API <span class="tag">/agents/:id</span></span>
+        <span class="chip"><span class="dot"></span>A2A <span class="tag">agent→agent</span></span>
+      </div>
     </div>
   </section>
 </div>
 
 <div class="wrap">
-  <section>
-    <div class="eyebrow">Durable by design</div>
-    <h2>Survives restarts. Remembers everything.</h2>
+  <section id="blackbox" class="reveal">
+    <div class="eyebrow">03 · Black box</div>
+    <h2>Survives crashes.<br><em>Remembers everything.</em></h2>
     <p class="sub">Each agent lives in its own Durable Object with SQLite storage — one coordination atom, strongly consistent, always recoverable.</p>
     <div class="grid">
       <div class="feat"><h4><span class="i">◉</span> Persistent memory</h4><p>Full conversation history and state written to durable storage. Nothing is lost on eviction or crash.</p></div>
@@ -204,11 +305,14 @@
 </div>
 
 <div class="wrap">
-  <section id="pricing">
+  <section id="parking" class="reveal" style="padding-top:24px">
     <div class="park">
-      <div class="eyebrow" style="justify-content:center;">Pricing</div>
-      <div class="big">Parked agents are free.</div>
-      <p>You only pay while an agent is actively working — model tokens plus compute seconds.</p>
+      <div class="meter">✈ Gate fees</div>
+      <div class="big">Parking is <em>free.</em></div>
+      <p>You only pay while an agent is actively working — model tokens plus compute seconds.<br>A parked agent bills exactly $0.00/hr, forever.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/agentinstance">⚡ Deploy to Cloudflare</a>
+      </div>
       <p class="fine">Self-host on your own Cloudflare account and the plumbing is yours. No seats, no subscriptions.</p>
     </div>
   </section>
@@ -216,9 +320,97 @@
 
 <div class="wrap">
   <footer>
-    <div>⌇ Nimbus — open-source always-on agents. MIT licensed.</div>
-    <div><a href="https://github.com/">GitHub</a> · <a href="#">Docs</a> · <a href="#">CLI</a></div>
+    <div>⌇ NIMBUS — open-source always-on agents · MIT</div>
+    <div>
+      <a href="https://github.com/shashank-100/agentinstance">GitHub</a> ·
+      <a href="https://github.com/shashank-100/agentinstance/blob/main/DEPLOY.md">Docs</a> ·
+      <a href="/agents">Dashboard</a>
+    </div>
   </footer>
 </div>
+
+<script>
+// ── split-flap board ─────────────────────────────────────────────
+const CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789·-";
+const STATUSES = {
+  WORKING: { cls: "st-working", cost: "$0.07", costCls: "cost-run" },
+  PARKED:  { cls: "st-parked",  cost: "$0.00", costCls: "cost-zero" },
+  WAKING:  { cls: "st-waking",  cost: "$0.07", costCls: "cost-run" },
+};
+const agents = [
+  { id: "NBX-001", chan: "TELEGRAM",  st: "WORKING", cad: "on-msg" },
+  { id: "NBX-002", chan: "SLACK",     st: "PARKED",  cad: "15m" },
+  { id: "NBX-003", chan: "WEB",       st: "WORKING", cad: "on-msg" },
+  { id: "NBX-004", chan: "WHATSAPP",  st: "PARKED",  cad: "1h" },
+  { id: "NBX-005", chan: "DISCORD",   st: "WAKING",  cad: "5m" },
+  { id: "NBX-006", chan: "A2A",       st: "PARKED",  cad: "on-call" },
+];
+const rowsEl = document.getElementById("rows");
+
+function flapSpan(text) {
+  return [...text].map((c) => `<span class="flap">${c}</span>`).join("");
+}
+function renderRows() {
+  rowsEl.innerHTML = agents.map((a, i) => {
+    const s = STATUSES[a.st];
+    return `<div class="brow">
+      <span class="id">${a.id}</span>
+      <span class="hide-s">${a.chan}</span>
+      <span class="${s.cls}" data-flap="st" data-i="${i}">${flapSpan(a.st)}</span>
+      <span class="hide-s" style="color:#51698a">${a.cad}</span>
+      <span class="${s.costCls}" data-flap="cost" data-i="${i}">${flapSpan(s.cost)}</span>
+    </div>`;
+  }).join("");
+}
+renderRows();
+
+// scramble-settle animation, left to right
+function flapTo(el, target) {
+  const chars = el.querySelectorAll(".flap");
+  chars.forEach((ch, i) => {
+    const final = target[i] || " ";
+    let ticks = 4 + i * 2 + Math.floor(Math.random() * 4);
+    const iv = setInterval(() => {
+      if (ticks-- <= 0) { ch.textContent = final; clearInterval(iv); }
+      else ch.textContent = CHARSET[Math.floor(Math.random() * CHARSET.length)];
+    }, 45);
+  });
+}
+
+setInterval(() => {
+  // pick a random agent and advance its state machine
+  const i = Math.floor(Math.random() * agents.length);
+  const a = agents[i];
+  a.st = a.st === "WORKING" ? "PARKED" : a.st === "PARKED" ? "WAKING" : "WORKING";
+  const s = STATUSES[a.st];
+  const stEl = rowsEl.querySelector(`[data-flap="st"][data-i="${i}"]`);
+  const costEl = rowsEl.querySelector(`[data-flap="cost"][data-i="${i}"]`);
+  stEl.className = s.cls; stEl.dataset.flap = "st"; stEl.dataset.i = i;
+  costEl.className = s.costCls; costEl.dataset.flap = "cost"; costEl.dataset.i = i;
+  flapTo(stEl, a.st);
+  flapTo(costEl, s.cost);
+}, 2600);
+
+// clock
+setInterval(() => {
+  document.getElementById("clock").textContent =
+    "UTC " + new Date().toISOString().slice(11, 19);
+}, 1000);
+
+// copy install command
+document.getElementById("copycmd").addEventListener("click", async (e) => {
+  const el = e.currentTarget;
+  try { await navigator.clipboard.writeText("npm create nimbus@latest && npx wrangler deploy"); } catch {}
+  const old = el.textContent;
+  el.textContent = "copied ✓";
+  setTimeout(() => { el.textContent = old; }, 1200);
+});
+
+// ── scroll reveals ───────────────────────────────────────────────
+const io = new IntersectionObserver((entries) => {
+  for (const en of entries) if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+}, { threshold: 0.12 });
+document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+</script>
 </body>
 </html>
