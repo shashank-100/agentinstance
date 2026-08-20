@@ -96,6 +96,10 @@ export const generateVideo = stub("generate_video", "Text-to-video generation.")
 export const crm = stub("crm", "Read/write CRM records.");
 export const socialListening = stub("social_listening", "Monitor social mentions.");
 export const fileManagement = stub("file_management", "Store/list/fetch agent files.");
+export const browserUse = stub("browser_use", "Drive a real browser.");
+export const removeImageBg = stub("remove_image_bg", "Remove image background.");
+export const imageToVideo = stub("image_to_video", "Animate an image into video.");
+export const transcribeVoice = stub("transcribe_voice", "Speech-to-text transcription.");
 
 const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
@@ -106,6 +110,10 @@ const REGISTRY: Record<string, Capability> = {
   crm,
   social_listening: socialListening,
   file_management: fileManagement,
+  browser_use: browserUse,
+  remove_image_bg: removeImageBg,
+  image_to_video: imageToVideo,
+  transcribe_voice: transcribeVoice,
 };
 
 export function getCapability(name: string): Capability | null {

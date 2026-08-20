@@ -51,4 +51,13 @@ describe("capabilities", () => {
     });
     expect(denied.status).toBe(400);
   });
+
+  it("every catalog capability has an implementation", async () => {
+    const { CAPABILITIES } = await import("../src/catalog");
+    const { getCapability } = await import("../src/capabilities/index");
+    for (const name of Object.keys(CAPABILITIES)) {
+      expect(getCapability(name), name).not.toBeNull();
+    }
+  });
 });
+
