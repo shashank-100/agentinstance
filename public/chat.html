@@ -21,7 +21,7 @@
     font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
     display:grid;grid-template-columns:272px 1fr;height:100vh;overflow:hidden}
 
-  /* ---------- column list ---------- */
+  /* ---------- agent list ---------- */
   .cols{border-right:1px solid var(--line);display:flex;flex-direction:column;
     padding:16px 14px;gap:5px;overflow-y:auto;background:var(--rail)}
   .cols .brand{display:flex;align-items:center;gap:9px;font-size:1.1rem;font-weight:700;
@@ -39,13 +39,14 @@
     border-radius:11px;padding:11px 12px;cursor:pointer;background:var(--bg)}
   .col:hover{border-color:#d4d4d8}
   .col.on{background:var(--rail-2);border-color:#d4d4d8}
-  .col .star{color:#d97757;font-size:.86rem;line-height:1.4}
+  .col .star{width:7px;height:7px;border-radius:50%;background:var(--ok);
+    flex:none;margin-top:6px}
+  .col .star.off{background:var(--faint)}
   .col .body{flex:1;min-width:0}
   .col .nm{font-size:.88rem;font-weight:600;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .col .mdl{font-family:var(--mono);font-size:.75rem;color:var(--muted);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .col .dash{color:var(--faint);font-size:.8rem;line-height:1.5}
   .addnew{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:11px;
     font-size:.88rem;color:var(--ink-2);cursor:pointer}
   .addnew:hover{background:var(--rail-2)}
@@ -66,9 +67,7 @@
   .agenthead{padding:18px 26px 0;background:var(--rail);
     border-bottom:1px solid var(--line)}
   .ahtop{display:flex;align-items:center;gap:11px}
-  .ahtop .star{color:#d97757}
   .ahtop .nm{font-weight:700;font-size:1rem}
-  .ahtop .x{color:var(--faint)}
   .ahtop .mdl{font-family:var(--mono);font-size:.88rem;color:var(--ink-2)}
   .ahtop .grow{flex:1}
   .status{display:inline-flex;align-items:center;gap:6px;background:var(--ok-bg);
@@ -90,9 +89,6 @@
   .apirow .lbl{cursor:pointer}.apirow .lbl:hover{text-decoration:underline}
   .apirow .bar{color:var(--line);}
   .apirow code{font-family:var(--mono);font-size:.82rem;color:var(--ink-2)}
-  .compare{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
-    background:var(--rail);text-align:center;padding:9px;font-size:.86rem;
-    color:var(--muted);display:flex;align-items:center;justify-content:center;gap:9px}
 
   #log{flex:1;overflow-y:auto;padding:30px 26px 10px}
   .inner{max-width:920px;margin:0 auto}
@@ -147,7 +143,7 @@
 </head>
 <body>
 
-<!-- ================= comparison columns ================= -->
+<!-- ================= agent list ================= -->
 <aside class="cols">
   <a class="brand" href="/agents/" style="text-decoration:none;color:inherit">
     <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -157,8 +153,8 @@
     agentinstance
   </a>
 
-  <h2><span aria-hidden="true">◫</span> Comparison <span id="cmpCount"
-      style="color:var(--muted);font-weight:400">0/8</span></h2>
+  <h2><span aria-hidden="true">◫</span> Agents <span id="cmpCount"
+      style="color:var(--muted);font-weight:400">0</span></h2>
   <div id="colList"></div>
   <div class="addnew" id="addNew"><span class="ico" aria-hidden="true">◫</span> Add new</div>
   <button class="newsession" id="newSession">＋ New session</button>
@@ -175,9 +171,7 @@
 <main>
   <section class="agenthead">
     <div class="ahtop">
-      <span class="star" aria-hidden="true">✳</span>
       <span class="nm" id="agentName">—</span>
-      <span class="x" aria-hidden="true">×</span>
       <span class="mdl" id="agentModel">—</span>
       <span class="grow"></span>
       <span class="status" id="agentStatus"><span class="dot"></span><span>Ready</span></span>
@@ -199,9 +193,6 @@
       <button class="iconbtn" id="moreApi" title="More">›</button>
     </div>
   </section>
-
-  <div class="compare"><span aria-hidden="true">◫</span>
-    Compare with another agent — add one from the Comparison list</div>
 
   <div id="log"><div class="inner" id="logInner"></div></div>
 
@@ -329,30 +320,30 @@ function renderColumns() {
     const el = document.createElement("div");
     el.className = "col" + (a.id === agentId ? " on" : "");
     el.innerHTML =
-      `<span class="star">✳</span>
+      `<span class="star"></span>
        <div class="body">
          <div class="nm"></div>
          <div class="mdl"></div>
-       </div>
-       <div class="dash">—<br>—</div>`;
-    el.querySelector(".nm").textContent = a.harness ? cap(a.harness) : a.id;
-    el.querySelector(".mdl").textContent = a.model || "—";
+       </div>`;
+    // The agent's own id names it; the harness/model pair is what it runs on.
+    el.querySelector(".star").className = "star" + (a.parked ? " off" : "");
+    el.querySelector(".nm").textContent = a.id;
+    el.querySelector(".mdl").textContent =
+      [a.harness, a.model].filter(Boolean).join(" · ") || "—";
     el.onclick = () => switchAgent(a.id);
     list.appendChild(el);
   }
-  $("cmpCount").textContent = `${rows.length}/8`;
+  $("cmpCount").textContent = rows.length;
   $("agentCount").textContent = agents.length || "—";
 }
-
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function renderHead() {
   const rec = agents.find((a) => a.id === agentId);
   const model = rec?.model || catalog?.models?.[0]?.id || "—";
-  $("agentName").textContent = rec?.harness ? cap(rec.harness) : agentId;
-  $("agentModel").textContent = model;
-  $("composerModel").textContent =
-    `${rec?.harness ? cap(rec.harness) : agentId} × ${model}`;
+  const runs = [rec?.harness, model].filter(Boolean).join(" · ");
+  $("agentName").textContent = agentId;
+  $("agentModel").textContent = runs;
+  $("composerModel").textContent = runs;
   $("apiSnippet").textContent =
     `await fetch("${location.origin}/agents/${agentId}/send", { method: "POST" })`;
 
