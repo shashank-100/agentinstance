@@ -71,6 +71,11 @@ export default {
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean);
 
+    // --- root: no landing page, so the agent list is the front door ---
+    if (url.pathname === "/") {
+      return Response.redirect(new URL("/agents/", url).toString(), 302);
+    }
+
     // --- catalog for the builder UI ---
     if (parts[0] === "catalog") {
       return Response.json({

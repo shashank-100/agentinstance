@@ -58,27 +58,13 @@
 
   /* ---------- main ---------- */
   main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
-  .broadcast{border-bottom:1px solid var(--line);background:var(--rail);
-    padding:16px 26px 15px}
-  .broadcast .lead{font-size:.94rem;margin-bottom:9px}
-  .broadcast .lead b{font-weight:600}
-  .broadcast .lead span{color:var(--muted)}
-  .bcrow{display:flex;gap:13px;align-items:flex-start;max-width:1040px}
-  .bcrow textarea{flex:1;border:1px solid var(--line);border-radius:12px;
-    padding:13px 15px;font-family:var(--sans);font-size:.92rem;resize:none;height:64px;
-    background:var(--bg);color:var(--ink)}
-  .bcrow textarea:focus{outline:none;border-color:#d4d4d8}
-  .sendall{background:#5c5c66;color:#fff;border:none;border-radius:11px;
-    padding:0 19px;height:44px;font-family:var(--sans);font-size:.9rem;font-weight:500;
-    cursor:pointer;display:flex;align-items:center;gap:9px;flex:none}
-  .sendall:hover{background:#46464e}
-  .sendall:disabled{opacity:.5;cursor:default}
   .chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
     background:var(--bg);border-radius:9px;padding:6px 12px;font-size:.83rem;
     color:var(--ink-2);cursor:pointer;margin-top:11px}
   .chip:hover{border-color:#d4d4d8}
 
-  .agenthead{padding:16px 26px 0}
+  .agenthead{padding:18px 26px 0;background:var(--rail);
+    border-bottom:1px solid var(--line)}
   .ahtop{display:flex;align-items:center;gap:11px}
   .ahtop .star{color:#d97757}
   .ahtop .nm{font-weight:700;font-size:1rem}
@@ -163,7 +149,7 @@
 
 <!-- ================= comparison columns ================= -->
 <aside class="cols">
-  <a class="brand" href="/" style="text-decoration:none;color:inherit">
+  <a class="brand" href="/agents/" style="text-decoration:none;color:inherit">
     <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M4 15a4 4 0 014-4 5 5 0 019.6-1.4A3.5 3.5 0 1118 17H8a4 4 0 01-4-2z"
             stroke="#2563eb" stroke-width="1.8" stroke-linejoin="round"/>
@@ -187,17 +173,6 @@
 
 <!-- ================= main ================= -->
 <main>
-  <section class="broadcast">
-    <div class="lead"><b>Send your first message</b>
-      <span id="bcHint">goes to all columns at once — after that, each column chats on its own</span></div>
-    <div class="bcrow">
-      <textarea id="bcInput" placeholder="One message, every option…"></textarea>
-      <button class="sendall" id="bcSend"><span aria-hidden="true">➤</span>
-        <span id="bcSendLabel">Send to all</span></button>
-    </div>
-    <div class="chip" id="connectApps"><span aria-hidden="true">⊞</span> Connect apps</div>
-  </section>
-
   <section class="agenthead">
     <div class="ahtop">
       <span class="star" aria-hidden="true">✳</span>
@@ -255,7 +230,6 @@ let agentId = qs.get("id") || "default";
 let agents = [];            // registry records
 let catalog = null;         // /catalog payload
 let turns = 0;
-let broadcastDone = false;
 
 const $ = (id) => document.getElementById(id);
 const log = $("logInner");
@@ -368,7 +342,6 @@ function renderColumns() {
   }
   $("cmpCount").textContent = `${rows.length}/8`;
   $("agentCount").textContent = agents.length || "—";
-  $("bcSendLabel").textContent = `Send to all ${rows.length}`;
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -427,8 +400,6 @@ async function loadHistory() {
     log.innerHTML =
       `<div class="empty">No messages yet — send one above to start this session.<br>
        Demo mode uses a mock model; add an API key for a real one.</div>`;
-  } else {
-    broadcastDone = true;
   }
   $("stTurns").textContent = turns;
 }
@@ -449,7 +420,6 @@ async function send(text) {
   if (!text || sending) return;
   sending = true;
   $("send").disabled = true;
-  $("bcSend").disabled = true;
   add("user", text);
   const ph = pending();
   const t0 = performance.now();
@@ -472,9 +442,6 @@ async function send(text) {
   } finally {
     sending = false;
     $("send").disabled = false;
-    $("bcSend").disabled = false;
-    broadcastDone = true;
-    $("bcHint").textContent = "each column now chats on its own";
   }
 }
 
@@ -498,13 +465,6 @@ $("send").onclick = () => {
   send(t);
 };
 
-$("bcSend").onclick = () => {
-  const t = $("bcInput").value.trim();
-  if (!t) return;
-  $("bcInput").value = "";
-  send(t);
-};
-
 $("newSession").onclick = async () => {
   if (!confirm("Clear this session's history?")) return;
   try {
@@ -517,7 +477,7 @@ $("newSession").onclick = async () => {
   toast("New session started");
 };
 
-$("addNew").onclick = () => { location.href = "/"; };
+$("addNew").onclick = () => { location.href = "/agents/new.html"; };
 $("openRaw").onclick = () => window.open(`/agents/${agentId}/history`, "_blank");
 
 $("parkBtn").onclick = async () => {
@@ -540,9 +500,8 @@ $("copyApi").onclick = async () => {
 $("apiToggle").onclick = () =>
   window.open("https://github.com/shashank-100/agentinstance#rest-api", "_blank");
 
-for (const id of ["connectApps", "connectApps2"]) {
-  $(id).onclick = () => toast("Capabilities are set when you launch an agent");
-}
+$("connectApps2").onclick = () =>
+  toast("Capabilities are set when you launch an agent");
 $("moreApi").onclick = () => toast("See the README for the full REST API");
 
 /* ------------------------------------------------------------------ boot */
