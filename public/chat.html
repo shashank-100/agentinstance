@@ -329,7 +329,7 @@ function renderColumns() {
     el.querySelector(".star").className = "star" + (a.parked ? " off" : "");
     el.querySelector(".nm").textContent = a.id;
     el.querySelector(".mdl").textContent =
-      [a.harness, a.model].filter(Boolean).join(" · ") || "—";
+      [a.harness, a.model ? modelLabel(a.model) : null].filter(Boolean).join(" · ") || "—";
     el.onclick = () => switchAgent(a.id);
     list.appendChild(el);
   }
@@ -337,10 +337,20 @@ function renderColumns() {
   $("agentCount").textContent = agents.length || "—";
 }
 
+/* Catalog ids are our own naming; some resolve to a different name upstream
+   (deepseek-v4-pro -> deepseek-chat). Show what the provider actually gets. */
+function modelLabel(id) {
+  const info = catalog?.models?.find((m) => m.id === id);
+  if (!info) return id;
+  return info.upstreamId && info.upstreamId !== info.id
+    ? `${info.id} → ${info.upstreamId}`
+    : info.id;
+}
+
 function renderHead() {
   const rec = agents.find((a) => a.id === agentId);
   const model = rec?.model || catalog?.models?.[0]?.id || "—";
-  const runs = [rec?.harness, model].filter(Boolean).join(" · ");
+  const runs = [rec?.harness, modelLabel(model)].filter(Boolean).join(" · ");
   $("agentName").textContent = agentId;
   $("agentModel").textContent = runs;
   $("composerModel").textContent = runs;
