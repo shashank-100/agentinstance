@@ -74,7 +74,7 @@ export class MockModel implements Model {
     }
     if (/thank|thanks|ty\b/.test(lower)) return "Anytime — what's next?";
     if (/who are you|what are you|what can you do/.test(lower))
-      return `I'm ${this.persona} running on Nimbus. I keep memory across our chats, ` +
+      return `I'm ${this.persona} running on agentinstance. I keep memory across our chats, ` +
         `work across channels, and stay parked (free) when idle. (Demo mode — add an API key for a real model.)`;
     if (turns > 1)
       return `Got it, continuing from before — on "${trim(text)}", here's my take: ` +

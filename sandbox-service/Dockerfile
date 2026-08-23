@@ -1,4 +1,4 @@
-# Self-hostable Nimbus sandbox service.
+# Self-hostable agentinstance sandbox service.
 # Includes Node + Python + common CLI tools so agents can actually do work.
 FROM node:20-slim
 

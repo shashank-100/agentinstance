@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Nimbus — always-on agents that rest for free</title>
+<title>agentinstance — always-on agents that rest for free</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E⌇%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -190,7 +190,7 @@
 
 <div class="wrap">
   <nav>
-    <div class="brand"><span class="glyph">⌇</span> Nimbus</div>
+    <div class="brand"><span class="glyph">⌇</span> agentinstance</div>
     <div class="links">
       <a class="ghost" href="#plan">FLIGHT PLAN</a>
       <a class="ghost" href="#routes">ROUTES</a>
@@ -211,7 +211,7 @@
       <a class="btn btn-ghost" href="https://github.com/shashank-100/agentinstance">★ View on GitHub</a>
       <a class="btn btn-ghost" href="/agents/new">Build an agent →</a>
     </div>
-    <div class="install rise" style="animation-delay:.52s"><code id="copycmd" title="Click to copy">npm create nimbus@latest &amp;&amp; npx wrangler deploy</code></div>
+    <div class="install rise" style="animation-delay:.52s"><code id="copycmd" title="Click to copy">npm create agentinstance@latest &amp;&amp; npx wrangler deploy</code></div>
   </header>
 </div>
 
@@ -219,7 +219,7 @@
 <div class="wrap board-shell rise" style="animation-delay:.62s">
   <div class="board" id="board">
     <div class="board-head">
-      <span>NIMBUS OPS · AGENT BOARD</span>
+      <span>AGENTINSTANCE OPS · AGENT BOARD</span>
       <span class="live">LIVE</span>
     </div>
     <div class="bhead">
@@ -237,7 +237,7 @@
   <section id="plan" class="reveal">
     <div class="eyebrow">01 · Flight plan</div>
     <h2>Snap it together.<br><em>We check they fit.</em></h2>
-    <p class="sub">Pick an airframe, an engine, and a set of instruments. Nimbus validates the combination for compatibility, then launches a persistent agent in one command.</p>
+    <p class="sub">Pick an airframe, an engine, and a set of instruments. agentinstance validates the combination for compatibility, then launches a persistent agent in one command.</p>
     <div class="plan">
       <div class="piece">
         <div class="n">01 · AIRFRAME</div>
@@ -282,7 +282,7 @@
         <span class="chip"><span class="dot"></span>Slack <span class="tag">webhook</span></span>
         <span class="chip"><span class="dot"></span>Discord <span class="tag">webhook</span></span>
         <span class="chip"><span class="dot"></span>Web <span class="tag">built-in</span></span>
-        <span class="chip"><span class="dot"></span>CLI <span class="tag">nimbus</span></span>
+        <span class="chip"><span class="dot"></span>CLI <span class="tag">agentinstance</span></span>
         <span class="chip"><span class="dot"></span>REST API <span class="tag">/agents/:id</span></span>
         <span class="chip"><span class="dot"></span>A2A <span class="tag">agent→agent</span></span>
       </div>
@@ -320,7 +320,7 @@
 
 <div class="wrap">
   <footer>
-    <div>⌇ NIMBUS — open-source always-on agents · MIT</div>
+    <div>⌇ AGENTINSTANCE — open-source always-on agents · MIT</div>
     <div>
       <a href="https://github.com/shashank-100/agentinstance">GitHub</a> ·
       <a href="https://github.com/shashank-100/agentinstance/blob/main/DEPLOY.md">Docs</a> ·
@@ -400,7 +400,7 @@ setInterval(() => {
 // copy install command
 document.getElementById("copycmd").addEventListener("click", async (e) => {
   const el = e.currentTarget;
-  try { await navigator.clipboard.writeText("npm create nimbus@latest && npx wrangler deploy"); } catch {}
+  try { await navigator.clipboard.writeText("npm create agentinstance@latest && npx wrangler deploy"); } catch {}
   const old = el.textContent;
   el.textContent = "copied ✓";
   setTimeout(() => { el.textContent = old; }, 1200);

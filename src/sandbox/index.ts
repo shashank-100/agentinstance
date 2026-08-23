@@ -1,6 +1,6 @@
 // Pluggable code-execution sandbox. The default backend is HttpSandbox, which
 // talks to a SELF-HOSTABLE sandbox service (a Docker container you run anywhere)
-// over a tiny HTTP API. This keeps Nimbus vendor-neutral: swap the backend
+// over a tiny HTTP API. This keeps agentinstance vendor-neutral: swap the backend
 // without touching agents/harnesses.
 import type { Env } from "../types.js";
 

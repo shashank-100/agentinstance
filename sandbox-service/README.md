@@ -1,14 +1,14 @@
-# Nimbus self-hostable sandbox
+# agentinstance self-hostable sandbox
 
-A tiny HTTP service that gives Nimbus agents a real place to run commands and
+A tiny HTTP service that gives agentinstance agents a real place to run commands and
 files — **self-hosted**, so you're not locked to any sandbox cloud.
 
 ## Run it
 
 ```bash
 cd sandbox-service
-docker build -t nimbus-sandbox .
-docker run -p 8080:8080 -e SANDBOX_TOKEN=your-secret nimbus-sandbox
+docker build -t agentinstance-sandbox .
+docker run -p 8080:8080 -e SANDBOX_TOKEN=your-secret agentinstance-sandbox
 ```
 
 Or without Docker (Node 20+):
@@ -17,7 +17,7 @@ Or without Docker (Node 20+):
 SANDBOX_TOKEN=your-secret node server.mjs
 ```
 
-## Point Nimbus at it
+## Point agentinstance at it
 
 Set on the Worker (or in `.dev.vars` for local dev):
 
@@ -45,6 +45,6 @@ blocked. If `SANDBOX_TOKEN` is set, all requests require
 ## Security
 
 Commands run as a non-root user inside the container, but they **do** run real
-shell commands. Only expose this to your trusted Nimbus deployment: keep the
+shell commands. Only expose this to your trusted agentinstance deployment: keep the
 token secret, run it in an isolated container/VM, and don't put it on the open
 internet without a firewall.

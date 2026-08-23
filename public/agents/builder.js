@@ -1,4 +1,4 @@
-// Nimbus agent builder — client logic. Pure functions are exported for testing;
+// agentinstance agent builder — client logic. Pure functions are exported for testing;
 // DOM wiring runs only in a browser (guarded by `typeof document`).
 
 // One-click ready: pre-select sensible defaults so Launch is enabled instantly.

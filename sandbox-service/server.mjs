@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Self-hostable sandbox service for Nimbus.
+// Self-hostable sandbox service for agentinstance.
 //
 // A tiny HTTP API that runs shell commands and does file I/O inside an isolated
 // per-workspace directory. Run it anywhere (Docker, a VPS, your laptop) and
-// point Nimbus at it via SANDBOX_URL. This is the vendor-neutral alternative to
+// point agentinstance at it via SANDBOX_URL. This is the vendor-neutral alternative to
 // a proprietary sandbox cloud.
 //
 // Security notes (READ before exposing publicly):
@@ -98,5 +98,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`[nimbus-sandbox] listening on :${PORT} root=${ROOT} auth=${TOKEN ? "on" : "off"}`);
+  console.log(`[agentinstance-sandbox] listening on :${PORT} root=${ROOT} auth=${TOKEN ? "on" : "off"}`);
 });

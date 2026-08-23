@@ -22,7 +22,7 @@ export const scrapeWeb: Capability = {
   async run(_env, input) {
     const url = String(input.url ?? "");
     if (!url) throw new Error("scrape_web requires { url }");
-    const res = await fetch(url, { headers: { "user-agent": "NimbusBot/0.1" } });
+    const res = await fetch(url, { headers: { "user-agent": "AgentInstanceBot/0.1" } });
     const html = await res.text();
     // crude text extraction: strip tags, collapse whitespace
     const text = html
@@ -103,7 +103,7 @@ export const sendEmail: Capability = {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ from: env.EMAIL_FROM ?? "nimbus@example.com", to, subject, text: body }),
+      body: JSON.stringify({ from: env.EMAIL_FROM ?? "agentinstance@example.com", to, subject, text: body }),
     });
     return { sent: res.ok, status: res.status };
   },

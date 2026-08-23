@@ -1,4 +1,4 @@
-# ⌇ Nimbus
+# ⌇ agentinstance
 
 **Open-source, self-hostable always-on AI agents on Cloudflare.**
 
@@ -80,7 +80,7 @@ POST /channels/web/:id       { text }              -> { reply }
 ```
 
 See [DEPLOY.md](./DEPLOY.md) for one-command Cloudflare deployment and channel setup.
-The `nimbus` CLI (`cli/nimbus.mjs`) wraps these routes, including `nimbus clone` to
+The `agentinstance` CLI (`cli/agentinstance.mjs`) wraps these routes, including `agentinstance clone` to
 push a local agent (spec + history) into the cloud.
 
 ## Architecture
@@ -104,7 +104,7 @@ plain model call when it's unset).
 
 ## Roadmap
 
-Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `nimbus` CLI incl. `clone`,
+Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `agentinstance` CLI incl. `clone`,
 capabilities (scrape, image/video gen, transcribe, email), snapshot/restore with
 idempotency keys for outbound side-effects.
 

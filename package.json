@@ -1,10 +1,10 @@
 {
-  "name": "nimbus",
+  "name": "agentinstance",
   "version": "0.1.0",
   "description": "Open-source, self-hostable always-on AI agents on Cloudflare. Any harness, any model, persistent memory, many channels.",
   "type": "module",
   "bin": {
-    "nimbus": "./cli/nimbus.mjs"
+    "agentinstance": "./cli/agentinstance.mjs"
   },
   "scripts": {
     "dev": "wrangler dev",

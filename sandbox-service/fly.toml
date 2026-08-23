@@ -1,4 +1,4 @@
-# Fly.io deployment for the self-hostable Nimbus sandbox service.
+# Fly.io deployment for the self-hostable agentinstance sandbox service.
 # Deploy:  fly launch --copy-config --now   (first time)
 #          fly deploy                        (subsequent)
 #
@@ -6,7 +6,7 @@
 # endpoint runs arbitrary shell commands:
 #   fly secrets set SANDBOX_TOKEN=<random>
 
-app = "nimbus-sandbox"
+app = "agentinstance-sandbox"
 primary_region = "iad"
 
 [build]
