@@ -74,7 +74,16 @@ export const searchSerp: Capability = {
 
 export const generateImage: Capability = {
   name: "generate_image",
-  describe: "Generate an image from a prompt (requires OPENAI_API_KEY).",
+  describe:
+    "Generate an image from a text prompt and return its URL. " +
+    "Describe the desired image in full; the prompt is not rewritten.",
+  parameters: {
+    type: "object",
+    properties: {
+      prompt: { type: "string", description: "What the image should depict." },
+    },
+    required: ["prompt"],
+  },
   async run(env, input) {
     const prompt = String(input.prompt ?? "");
     if (!env.OPENAI_API_KEY) return { prompt, url: null, note: "OPENAI_API_KEY not set" };
@@ -93,9 +102,21 @@ export const generateImage: Capability = {
 
 export const sendEmail: Capability = {
   name: "email",
-  describe: "Send an email (requires RESEND_API_KEY).",
+  describe:
+    "Send an email. This actually delivers to the recipient — only send when " +
+    "the user has asked for it, and never to an address they did not give you.",
+  parameters: {
+    type: "object",
+    properties: {
+      to: { type: "string", description: "Recipient email address." },
+      subject: { type: "string", description: "Subject line." },
+      body: { type: "string", description: "Plain-text body." },
+    },
+    required: ["to", "subject", "body"],
+  },
   async run(env, input) {
     const { to, subject, body } = input as { to?: string; subject?: string; body?: string };
+    if (!to || !subject || !body) throw new Error("email requires { to, subject, body }");
     if (!env.RESEND_API_KEY) return { sent: false, note: "RESEND_API_KEY not set" };
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

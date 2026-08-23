@@ -6,9 +6,19 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/agentinstance)
 
-Click the button → sign in to Cloudflare → it clones this repo, provisions the
-Durable Object, and deploys the Worker. No local setup. (Add model/channel keys
-later as [secrets](./DEPLOY.md).)
+Click the button → sign in to Cloudflare → it forks this repo to your account,
+provisions the Durable Objects, and deploys the Worker with CI wired up. No
+local setup.
+
+It lands in **demo mode** (a built-in mock model, no key needed), so the UI works
+immediately. For real replies, add a key as a secret afterwards:
+
+```sh
+wrangler secret put ANTHROPIC_API_KEY
+```
+
+Other providers use their own key — `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`,
+`MOONSHOT_API_KEY`, `ZAI_API_KEY`, `GEMINI_API_KEY`. See [DEPLOY.md](./DEPLOY.md).
 
 
 Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
@@ -24,10 +34,9 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 
 ## Try it
 
-- **Landing page:** `/`
+- **Your agents dashboard:** `/agents/` (`/` redirects here)
 - **Agent builder (one click):** `/agents/new.html`
-- **Your agents dashboard:** `/agents/`
-- **Web chat:** `/chat.html?id=<agent>`
+- **Web chat:** `/chat?id=<agent>`
 
 ## Features
 
