@@ -5,26 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>agentinstance — my agents</title>
 <style>
-  :root{--ink:#0c0a08;--ink-2:#14110d;--panel:#1a1611;--line:#2c2620;--ember:#f0954a;
-    --ember-soft:#f7b878;--sky:#8fb3c9;--paper:#efe7d9;--muted:#9a8f7e;
-    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;--serif:"Iowan Old Style",Palatino,Georgia,serif;}
+  /* Light palette, matching the chat playground. Token names are unchanged so
+     the rest of the sheet keeps working: --ink is now text, --paper the page. */
+  :root{--ink:#18181b;--ink-2:#fafafa;--panel:#f4f4f5;--line:#e8e8e8;--ember:#2563eb;
+    --ember-soft:#1d4ed8;--sky:#2563eb;--paper:#ffffff;--muted:#71717a;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+    --serif:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;}
   *{margin:0;padding:0;box-sizing:border-box}
-  body{background:var(--ink);color:var(--paper);font-family:var(--mono);
-    background-image:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(240,149,74,0.10),transparent 60%);}
+  body{background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;}
   .wrap{max-width:960px;margin:0 auto;padding:28px}
   nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   .brand{display:flex;gap:10px;font-weight:700}.brand .glyph{color:var(--ember)}
-  nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:20px}nav a:hover{color:var(--paper)}
+  nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:20px}nav a:hover{color:var(--ink)}
   h1{font-family:var(--serif);font-weight:400;font-size:2rem;margin:24px 0 4px}
   .sub{color:var(--muted);margin-bottom:26px}
-  .new{background:var(--ember);color:var(--ink);text-decoration:none;padding:9px 16px;border-radius:9px;font-weight:600;font-size:.85rem}
+  .new{background:var(--ember);color:#fff;text-decoration:none;padding:9px 16px;border-radius:9px;font-weight:600;font-size:.85rem}
   table{width:100%;border-collapse:collapse}
   th{text-align:left;color:var(--muted);font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--line)}
   td{padding:14px 12px;border-bottom:1px solid var(--line);font-size:.88rem}
   tr:hover td{background:var(--ink-2)}
   .id{color:var(--ember-soft)}
   .badge{font-size:.72rem;padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
-  .live{color:#7ec98f;border-color:#2f5138}.parked{color:var(--muted)}
+  .live{color:#16a34a;border-color:#bbf7d0;background:#f0fdf4}.parked{color:var(--muted)}
   .act{color:var(--sky);text-decoration:none;cursor:pointer;font-size:.8rem;margin-right:12px}.act:hover{color:var(--ember)}
   .empty{color:var(--muted);text-align:center;padding:60px 0}
 </style>
@@ -74,8 +77,8 @@ async function load() {
       : `<a class="act" data-act="park" data-id="${a.id}">park</a>`;
     tr.innerHTML = `<td class="id">${a.id}</td><td>${a.model}</td><td>${a.harness}</td>`
       + `<td>${a.machine}</td><td>${status}</td>`
-      + `<td><a class="act" href="/chat.html?id=${a.id}">chat</a>${toggle}`
-      + `<a class="act" data-del="${a.id}" style="color:#c98f8f">delete</a></td>`;
+      + `<td><a class="act" href="/chat?id=${a.id}">chat</a>${toggle}`
+      + `<a class="act" data-del="${a.id}" style="color:#dc2626">delete</a></td>`;
     rows.appendChild(tr);
   }
   rows.querySelectorAll("[data-act]").forEach((el) => {

@@ -43,10 +43,15 @@
     flex:none;margin-top:6px}
   .col .star.off{background:var(--faint)}
   .col .body{flex:1;min-width:0}
+  .col .del{background:none;border:none;color:var(--faint);cursor:pointer;
+    font-size:1rem;line-height:1;padding:2px 4px;opacity:0;flex:none}
+  .col:hover .del{opacity:1}
+  .col .del:hover{color:#dc2626}
   .col .nm{font-size:.88rem;font-weight:600;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
+  /* The upstream arrow makes this line long; wrap rather than truncate it. */
   .col .mdl{font-family:var(--mono);font-size:.75rem;color:var(--muted);
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    overflow-wrap:anywhere;line-height:1.4}
   .addnew{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:11px;
     font-size:.88rem;color:var(--ink-2);cursor:pointer}
   .addnew:hover{background:var(--rail-2)}
@@ -179,9 +184,9 @@
       <button class="iconbtn" id="parkBtn" title="Park agent">▤</button>
     </div>
     <div class="stats">
-      <span>Tokens <b id="stTokens">—</b></span><span class="sep">·</span>
-      <span>Cost <b id="stCost">—</b></span><span class="sep">·</span>
-      <span>Duration <b id="stDur">—</b></span>
+      <!-- No token accounting yet, so rate is the catalog price, not spend. -->
+      <span>Rate <b id="stCost">—</b></span><span class="sep">·</span>
+      <span>Last reply <b id="stDur">—</b></span>
       <span class="turns"><b id="stTurns">0</b> turns</span>
     </div>
     <div class="apirow">
@@ -324,13 +329,18 @@ function renderColumns() {
        <div class="body">
          <div class="nm"></div>
          <div class="mdl"></div>
-       </div>`;
+       </div>
+       <button class="del" title="Delete agent">×</button>`;
     // The agent's own id names it; the harness/model pair is what it runs on.
     el.querySelector(".star").className = "star" + (a.parked ? " off" : "");
     el.querySelector(".nm").textContent = a.id;
     el.querySelector(".mdl").textContent =
       [a.harness, a.model ? modelLabel(a.model) : null].filter(Boolean).join(" · ") || "—";
     el.onclick = () => switchAgent(a.id);
+    el.querySelector(".del").onclick = (e) => {
+      e.stopPropagation(); // don't also switch to the agent we're deleting
+      removeAgent(a.id);
+    };
     list.appendChild(el);
   }
   $("cmpCount").textContent = rows.length;
@@ -403,6 +413,29 @@ async function loadHistory() {
        Demo mode uses a mock model; add an API key for a real one.</div>`;
   }
   $("stTurns").textContent = turns;
+}
+
+/* Wipes the agent's state and drops it from the registry. Not undoable, so it
+   asks first — and never leaves the page pointed at a deleted agent. */
+async function removeAgent(id) {
+  if (!confirm(`Delete agent "${id}"? Its history and state are wiped.`)) return;
+  try {
+    const res = await fetch(`/agents/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    toast(`Could not delete: ${String(e)}`);
+    return;
+  }
+  toast(`Deleted ${id}`);
+  const wasCurrent = id === agentId;
+  await loadAgents();
+  if (wasCurrent) {
+    // Fall back to whatever agent remains; loadAgents already repointed agentId
+    // if the old one is gone, so just re-read the conversation.
+    history.replaceState(null, "", `?id=${encodeURIComponent(agentId)}`);
+    renderHead();
+    await loadHistory();
+  }
 }
 
 async function switchAgent(id) {
