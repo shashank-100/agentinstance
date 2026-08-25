@@ -16,9 +16,9 @@
     { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] }
   ],
   "vars": {
-    "DEFAULT_MODEL": "claude-sonnet-4-6",
+    "DEFAULT_MODEL": "kimi-k3",
     "DEFAULT_HARNESS": "chat"
   }
   // Secrets (set via `wrangler secret put`):
-  //   ANTHROPIC_API_KEY, OPENAI_API_KEY, TELEGRAM_BOT_TOKEN, ...
+  //   MOONSHOT_API_KEY, OPENAI_API_KEY (generate_image), TELEGRAM_BOT_TOKEN, ...
 }

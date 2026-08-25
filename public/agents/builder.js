@@ -7,10 +7,7 @@ export function createState(catalog, { preselect = true } = {}) {
   return {
     catalog,
     harness: preselect ? (catalog.harnesses[0]?.id ?? null) : null,
-    model: preselect
-      ? (catalog.models.find((m) => m.id === "claude-sonnet-4-6")?.id ??
-         catalog.models[0]?.id ?? null)
-      : null,
+    model: preselect ? (catalog.models[0]?.id ?? null) : null,
     capabilities: new Set(),
     machine: catalog.defaultMachine,
   };

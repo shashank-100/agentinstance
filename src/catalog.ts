@@ -1,53 +1,40 @@
-// Catalog of models (with real pricing), harnesses, machine tiers, capabilities.
-// Prices are USD per 1M tokens (input / output). Modeled on the public AgentSky catalog.
-
-/** OpenAI-compatible providers, reached by swapping base_url (no lock-in). */
-export type Provider = "openai" | "deepseek" | "moonshot" | "zai" | "google";
+// Catalog of models, harnesses, machine tiers, capabilities.
+// Prices are USD per 1M tokens (input / output).
 
 export interface ModelInfo {
   id: string;
   label: string;
   priceIn: number;
   priceOut: number;
-  backend: "claude" | "openai" | "echo";
-  /** Which OpenAI-compatible host serves this model (backend: "openai" only). */
-  provider?: Provider;
+  /** OpenAI-compatible host serving this model. */
+  provider: Provider;
   /** Upstream's own name for the model, when it differs from our catalog id. */
   upstreamId?: string;
 }
 
-/** Base URL + API-key env var for each OpenAI-compatible provider. */
+/** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
+ *  Add one here plus its key in Env to offer its models. */
+export type Provider = "moonshot";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", keyVar: "OPENAI_API_KEY" },
-  deepseek: { baseUrl: "https://api.deepseek.com/v1", keyVar: "DEEPSEEK_API_KEY" },
   moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
-  zai: { baseUrl: "https://api.z.ai/api/paas/v4", keyVar: "ZAI_API_KEY" },
-  google: {
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    keyVar: "GEMINI_API_KEY",
-  },
 };
 
+// Only models a configured provider can actually serve.
 export const MODELS: Record<string, ModelInfo> = {
-  "claude-fable-5": { id: "claude-fable-5", label: "Claude Fable 5", priceIn: 10, priceOut: 50, backend: "claude" },
-  "claude-opus-5": { id: "claude-opus-5", label: "Claude Opus 5", priceIn: 5, priceOut: 25, backend: "claude" },
-  "claude-sonnet-4-6": { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", priceIn: 3, priceOut: 15, backend: "claude" },
-  "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, backend: "openai", provider: "openai" },
-  "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, backend: "openai", provider: "openai" },
-  "gpt-5.6-luna": { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", priceIn: 1, priceOut: 6, backend: "openai", provider: "openai" },
-  "deepseek-v4-pro": { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", priceIn: 0.44, priceOut: 0.87, backend: "openai", provider: "deepseek", upstreamId: "deepseek-chat" },
-  "deepseek-v4-flash": { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", priceIn: 0.14, priceOut: 0.28, backend: "openai", provider: "deepseek", upstreamId: "deepseek-chat" },
-  "gemini-3.5-flash": { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", priceIn: 1.5, priceOut: 9, backend: "openai", provider: "google" },
-  "glm-5.2": { id: "glm-5.2", label: "GLM-5.2", priceIn: 1.4, priceOut: 4.4, backend: "openai", provider: "zai", upstreamId: "glm-4.6" },
-  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, backend: "openai", provider: "moonshot" },
+  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshot" },
+  "kimi-k2.7-code": { id: "kimi-k2.7-code", label: "Kimi K2.7 Code", priceIn: 3, priceOut: 15, provider: "moonshot" },
+  "kimi-k2.6": { id: "kimi-k2.6", label: "Kimi K2.6", priceIn: 3, priceOut: 15, provider: "moonshot" },
 };
 
-export const HARNESSES: Record<string, string> = {
-  chat: "Simple single-loop chat harness (default).",
-  "claude-code": "Claude Code harness — best for coding & tool use.",
-  codex: "Codex harness — fast, lightweight loop.",
-  hermes: "Hermes — multi-agent orchestration.",
-  openclaw: "OpenClaw — always-on autonomy.",
+/** `ready` marks what is actually implemented, so the builder can say so
+ *  rather than presenting stubs and real code as equal choices. */
+export interface CatalogEntry { desc: string; ready: boolean }
+
+// Only harnesses that actually exist. `shell` is the sandbox-backed
+// command loop (CliHarness); it needs a sandbox configured to do anything.
+export const HARNESSES: Record<string, CatalogEntry> = {
+  chat: { desc: "Single-loop chat with tool calling.", ready: true },
+  shell: { desc: "Runs shell commands in a sandbox.", ready: false },
 };
 
 export interface MachineTier { label: string; ramGb: number; usdPerHour: number; }
@@ -58,19 +45,21 @@ export const MACHINES: Record<string, MachineTier> = {
 };
 export const DEFAULT_MACHINE = "4gb";
 
-export const CAPABILITIES: Record<string, string> = {
-  scrape_web: "Fetch and extract content from web pages.",
-  browser_use: "Drive a real browser.",
-  search_serp: "Search-engine results.",
-  generate_image: "Text-to-image generation.",
-  remove_image_bg: "Remove image background.",
-  generate_video: "Text-to-video generation.",
-  image_to_video: "Animate an image into video.",
-  transcribe_voice: "Speech-to-text transcription.",
-  email: "Send/receive email.",
-  crm: "Read/write CRM records (contacts, deals).",
-  social_listening: "Monitor mentions and keywords across social platforms.",
-  file_management: "Store, list, and fetch the agent's files.",
+// ready:false entries are stubs — selectable, but they return a "configure a
+// provider" note instead of doing the work. See src/capabilities/index.ts.
+export const CAPABILITIES: Record<string, CatalogEntry> = {
+  scrape_web: { desc: "Fetch and extract page text.", ready: true },
+  search_serp: { desc: "Web search (needs SERP_API_KEY).", ready: true },
+  generate_image: { desc: "Text-to-image (needs OPENAI_API_KEY).", ready: true },
+  email: { desc: "Send email (needs RESEND_API_KEY).", ready: true },
+  browser_use: { desc: "Drive a real browser.", ready: false },
+  remove_image_bg: { desc: "Remove image background.", ready: false },
+  generate_video: { desc: "Text-to-video generation.", ready: false },
+  image_to_video: { desc: "Animate an image into video.", ready: false },
+  transcribe_voice: { desc: "Speech-to-text transcription.", ready: false },
+  crm: { desc: "Read/write CRM records.", ready: false },
+  social_listening: { desc: "Monitor social mentions.", ready: false },
+  file_management: { desc: "Store, list, fetch agent files.", ready: false },
 };
 
 export function estimateMonthCost(machine = DEFAULT_MACHINE): number {

@@ -20,7 +20,7 @@ describe("extractShell", () => {
 describe("CliHarness with sandbox", () => {
   it("falls back to a plain model call when no sandbox", async () => {
     const model = { name: "m", complete: async () => "plain answer" };
-    const h = new CliHarness("claude-code");
+    const h = new CliHarness("shell");
     expect(await h.run(model, hist("hi"), "sys")).toBe("plain answer");
   });
 
@@ -46,7 +46,7 @@ describe("CliHarness with sandbox", () => {
         return "";
       },
     };
-    const h = new CliHarness("claude-code");
+    const h = new CliHarness("shell");
     const out = await h.run(model, hist("say hi via shell"), "sys", { sandbox, agentId: "a1" });
     expect(ran).toEqual(["echo hi"]);
     expect(out).toBe("the command printed hi");

@@ -10,15 +10,14 @@ Click the button → sign in to Cloudflare → it forks this repo to your accoun
 provisions the Durable Objects, and deploys the Worker with CI wired up. No
 local setup.
 
-It lands in **demo mode** (a built-in mock model, no key needed), so the UI works
-immediately. For real replies, add a key as a secret afterwards:
+Agents need a model key before they can reply — add one as a secret after the
+first deploy:
 
 ```sh
-wrangler secret put ANTHROPIC_API_KEY
+wrangler secret put MOONSHOT_API_KEY
 ```
 
-Other providers use their own key — `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`,
-`MOONSHOT_API_KEY`, `ZAI_API_KEY`, `GEMINI_API_KEY`. See [DEPLOY.md](./DEPLOY.md).
+See [DEPLOY.md](./DEPLOY.md).
 
 
 Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
@@ -28,9 +27,8 @@ Park it when idle; you pay nothing while it sleeps.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note — demo mode:** with no API key set, agents reply using a built-in **mock
-> model** so you can try the whole product instantly. Set `ANTHROPIC_API_KEY`
-> (see [DEPLOY.md](./DEPLOY.md)) to switch to real Claude responses.
+> **Note:** a model key is required. Without `MOONSHOT_API_KEY` set, `send`
+> returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 
 ## Try it
 
@@ -41,8 +39,9 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 ## Features
 
 - **Persistent memory** — full history + state in Durable Object SQLite, survives restarts.
-- **Any model, no lock-in** — Claude (default), GPT, DeepSeek, Gemini, Kimi, GLM… swap freely.
-- **Any harness** — chat loop, Claude Code, Codex, Hermes, OpenClaw.
+- **Any model, no lock-in** — one adapter for any OpenAI-compatible provider;
+  Kimi (Moonshot) is wired up, others are a catalog entry plus a key.
+- **Harnesses** — a chat loop with tool calling, and a sandbox-backed shell loop.
 - **Three-piece composition** with a compatibility check before launch.
 - **Unified cross-channel history** — one agent, one memory; replies go to the
   channel that messaged, context is shared across all of them.
@@ -59,11 +58,10 @@ npm run dev       # local dev server
 npm run deploy    # deploy to your Cloudflare account
 ```
 
-Set secrets for real model backends (optional — an offline echo model runs without keys):
+Set the model key (required — agents cannot reply without it):
 
 ```bash
-npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler secret put OPENAI_API_KEY
+npx wrangler secret put MOONSHOT_API_KEY
 ```
 
 ## API
@@ -96,7 +94,7 @@ push a local agent (spec + history) into the cloud.
 
 | Piece | File |
 |-------|------|
-| Per-agent runtime + memory + alarms | `src/agent-do.ts` |
+| Per-agent runtime + memory + alarms | `src/agent-instance.ts` |
 | Worker gateway (REST) | `src/index.ts` |
 | Model adapters | `src/models/` |
 | Harnesses + spec + compatibility | `src/harnesses/` |
@@ -108,8 +106,8 @@ Agents can run **real shell commands / code** via a pluggable sandbox. The
 default backend is a small **self-hosted** HTTP service (Docker container you
 run anywhere) — no proprietary sandbox cloud. See
 [`sandbox-service/`](./sandbox-service/). Set `SANDBOX_URL` to enable it; the
-`claude-code` / `codex` harnesses then execute commands (and fall back to a
-plain model call when it's unset).
+`shell` harness then executes commands (and falls back to a plain model call
+when it's unset).
 
 ## Roadmap
 

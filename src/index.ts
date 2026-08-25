@@ -79,9 +79,9 @@ export default {
     // --- catalog for the builder UI ---
     if (parts[0] === "catalog") {
       return Response.json({
-        harnesses: Object.entries(HARNESSES).map(([id, desc]) => ({ id, desc })),
+        harnesses: Object.entries(HARNESSES).map(([id, h]) => ({ id, ...h })),
         models: Object.values(MODELS),
-        capabilities: Object.entries(CAPABILITIES).map(([id, desc]) => ({ id, desc })),
+        capabilities: Object.entries(CAPABILITIES).map(([id, c]) => ({ id, ...c })),
         machines: Object.entries(MACHINES).map(([id, m]) => ({ id, ...m })),
         defaultMachine: DEFAULT_MACHINE,
       });

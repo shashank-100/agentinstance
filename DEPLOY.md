@@ -24,13 +24,13 @@ npm run deploy
 This publishes the Worker, creates the `AgentDO` Durable Object namespace (via the
 `v1` migration in `wrangler.jsonc`), and serves the landing page from `public/`.
 
-## 4. Add secrets (optional)
+## 4. Add secrets
 
-Without any model key, agents use an offline echo model. To use real models/channels:
+`MOONSHOT_API_KEY` is required — without it, `send` returns an error instead of
+a reply. Channel and capability keys are optional.
 
 ```bash
-npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler secret put OPENAI_API_KEY
+npx wrangler secret put MOONSHOT_API_KEY
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 # ...and any channel/capability keys you need (see .dev.vars.example)
 ```
@@ -40,7 +40,7 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 ```bash
 export AGENTINSTANCE_URL=https://agentinstance.<your-subdomain>.workers.dev
 
-node cli/agentinstance.mjs launch mybot --harness chat --model claude-sonnet-4-6
+node cli/agentinstance.mjs launch mybot --harness chat --model kimi-k3
 node cli/agentinstance.mjs send mybot "hello"
 node cli/agentinstance.mjs status mybot
 ```

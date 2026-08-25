@@ -347,8 +347,8 @@ function renderColumns() {
   $("agentCount").textContent = agents.length || "—";
 }
 
-/* Catalog ids are our own naming; some resolve to a different name upstream
-   (deepseek-v4-pro -> deepseek-chat). Show what the provider actually gets. */
+/* A catalog id can resolve to a different name upstream; show what the
+   provider actually receives when the two differ. */
 function modelLabel(id) {
   const info = catalog?.models?.find((m) => m.id === id);
   if (!info) return id;

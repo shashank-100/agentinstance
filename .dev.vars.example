@@ -1,9 +1,8 @@
 # Copy to .dev.vars for local dev (never commit .dev.vars).
 # In production, set these with `wrangler secret put <NAME>`.
 
-# Models (optional — without any key, an offline echo model is used)
-ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
+# Models: no LLM provider is configured. Add a Model adapter in
+# src/models/index.ts (and its key here) before agents can reply.
 
 # Channels
 TELEGRAM_BOT_TOKEN=
@@ -13,6 +12,7 @@ WHATSAPP_TOKEN=
 WHATSAPP_PHONE_ID=
 
 # Capabilities
+OPENAI_API_KEY=
 SERP_API_KEY=
 RESEND_API_KEY=
 EMAIL_FROM=agentinstance@example.com

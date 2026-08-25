@@ -70,16 +70,10 @@ function toolResultMessage(
   result: unknown,
 ): unknown {
   const content = JSON.stringify(result).slice(0, 8000);
-  if (model.name === "claude") {
-    return {
-      role: "user",
-      content: [{ type: "tool_result", tool_use_id: id, content }],
-    };
-  }
   return { role: "tool", tool_call_id: id, name, content };
 }
 
-// CLI-wrapping harnesses (claude-code, codex). If a sandbox is available, the
+// CLI-wrapping harness. If a sandbox is available, the
 // model can act: it may emit a fenced ```sh block, which the harness runs in the
 // sandbox and feeds the output back for a final answer. Without a sandbox it
 // falls back to a single model call — so it always works, just less capable.
@@ -151,7 +145,7 @@ export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
   );
   return {
     harness: "chat",
-    model: "claude-sonnet-4-6",
+    model: "kimi-k3",
     capabilities: [],
     machine: DEFAULT_MACHINE,
     system: "You are a helpful always-on agent.",

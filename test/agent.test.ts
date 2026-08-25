@@ -18,7 +18,7 @@ async function history(id: string) {
 }
 
 describe("AgentInstance runtime + memory", () => {
-  it("replies with the mock model by default (no key)", async () => {
+  it("replies with a generated answer, not an echo of the input", async () => {
     const res = await send("a1", "hello");
     const reply = ((await res.json()) as { reply: string }).reply;
     expect(reply.length).toBeGreaterThan(0);

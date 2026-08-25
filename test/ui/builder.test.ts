@@ -13,10 +13,10 @@ import {
 } from "../../public/agents/builder.js";
 
 const catalog = {
-  harnesses: [{ id: "chat", desc: "x" }, { id: "claude-code", desc: "y" }],
+  harnesses: [{ id: "chat", desc: "x" }, { id: "shell", desc: "y" }],
   models: [
-    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", priceIn: 3, priceOut: 15 },
-    { id: "claude-opus-5", label: "Claude Opus 5", priceIn: 5, priceOut: 25 },
+    { id: "kimi-k2.6", label: "Kimi K2.6", priceIn: 3, priceOut: 15 },
+    { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15 },
   ],
   capabilities: [
     { id: "scrape_web", desc: "" },
@@ -36,7 +36,7 @@ describe("one-click", () => {
   it("is launch-ready immediately with defaults (chat + sonnet + 4gb)", () => {
     const s = oneClick();
     expect(s.harness).toBe("chat");
-    expect(s.model).toBe("claude-sonnet-4-6");
+    expect(s.model).toBe("kimi-k2.6");
     expect(s.machine).toBe("4gb");
     expect(compatibility(s)).toBeNull(); // ready with zero clicks
     expect(summary(s).ready).toBe(true);
@@ -45,8 +45,8 @@ describe("one-click", () => {
 
 describe("section 1 — harness", () => {
   it("selects a harness", () => {
-    const s = selectHarness(fresh(), "claude-code");
-    expect(s.harness).toBe("claude-code");
+    const s = selectHarness(fresh(), "shell");
+    expect(s.harness).toBe("shell");
   });
   it("blocks compatibility until chosen", () => {
     expect(compatibility(fresh())).toBe("Choose a harness");
@@ -55,8 +55,8 @@ describe("section 1 — harness", () => {
 
 describe("section 2 — model", () => {
   it("selects a model and reflects it in summary", () => {
-    const s = selectModel(selectHarness(fresh(), "chat"), "claude-opus-5");
-    expect(summary(s).model).toBe("Claude Opus 5");
+    const s = selectModel(selectHarness(fresh(), "chat"), "kimi-k3");
+    expect(summary(s).model).toBe("Kimi K3");
   });
   it("still blocks until a model is chosen", () => {
     expect(compatibility(selectHarness(fresh(), "chat"))).toBe("Pick a model");
@@ -88,7 +88,7 @@ describe("section 5 — summary + cost", () => {
   it("summarizes a complete build as ready", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "claude-sonnet-4-6");
+    selectModel(s, "kimi-k2.6");
     toggleCapability(s, "scrape_web");
     const sum = summary(s);
     expect(sum.ready).toBe(true);
@@ -101,7 +101,7 @@ describe("section 6 — launch/compat (mirrors server)", () => {
   it("flags heavy capability on 1gb", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "claude-sonnet-4-6");
+    selectModel(s, "kimi-k2.6");
     selectMachine(s, "1gb");
     toggleCapability(s, "generate_video");
     expect(compatibility(s)).toMatch(/2gb/);
@@ -109,18 +109,18 @@ describe("section 6 — launch/compat (mirrors server)", () => {
   it("is compatible on 2gb", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "claude-sonnet-4-6");
+    selectModel(s, "kimi-k2.6");
     selectMachine(s, "2gb");
     toggleCapability(s, "generate_video");
     expect(compatibility(s)).toBeNull();
   });
   it("toSpec produces the server payload shape", () => {
     let s = fresh();
-    selectHarness(s, "claude-code");
-    selectModel(s, "claude-opus-5");
+    selectHarness(s, "shell");
+    selectModel(s, "kimi-k3");
     expect(toSpec(s)).toEqual({
-      harness: "claude-code",
-      model: "claude-opus-5",
+      harness: "shell",
+      model: "kimi-k3",
       capabilities: [],
       machine: "4gb",
     });

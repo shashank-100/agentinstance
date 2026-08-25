@@ -2,7 +2,7 @@
 // Feature #12 — the `agentinstance` CLI. Talks to a deployed agentinstance worker over REST.
 //
 // Usage:
-//   agentinstance --url https://agentinstance.you.workers.dev launch <id> [--harness chat --model claude-sonnet-4-6]
+//   agentinstance --url https://agentinstance.you.workers.dev launch <id> [--harness chat --model <id>]
 //   agentinstance send <id> "hello"
 //   agentinstance history <id>
 //   agentinstance status <id>
@@ -49,7 +49,7 @@ switch (cmd) {
   case "launch": {
     const spec = {
       harness: flag("harness", "chat"),
-      model: flag("model", "claude-sonnet-4-6"),
+      model: flag("model", "kimi-k3"),
       machine: flag("machine", "4gb"),
     };
     console.log(JSON.stringify(await api(`/agents/${id}/configure`, "POST", spec), null, 2));

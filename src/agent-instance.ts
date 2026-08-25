@@ -4,11 +4,9 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
-import { MODELS } from "./catalog.js";
 import { ChatHarness, getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
-import { ClaudeModel, MockModel, OpenAIModel, type Model } from "./models/index.js";
-
-import { PROVIDERS } from "./catalog.js";
+import { MODELS, PROVIDERS } from "./catalog.js";
+import { EchoModel, OpenAICompatModel, type Model } from "./models/index.js";
 
 export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -48,21 +46,17 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   private buildModel(): Model {
-    // No API key? Fall back to the MockModel so the product is fully demoable.
+    // Tests run offline; USE_ECHO_MODEL must be set explicitly so a real
+    // deployment can never silently fall back to a canned responder.
+    if (this.env.USE_ECHO_MODEL === "1") return new EchoModel();
+    // Otherwise fail loudly on a missing model or key rather than inventing a
+    // reply: a silent stand-in makes a broken deployment look like a working one.
     const info = MODELS[this.spec.model];
-    if (!info) return new MockModel();
-    if (info.backend === "claude") {
-      const key = this.env.ANTHROPIC_API_KEY;
-      return key ? new ClaudeModel(key, this.spec.model) : new MockModel();
-    }
-    // OpenAI-compatible: route to the provider that actually serves this model,
-    // using that provider's key. Sending e.g. a Moonshot key to api.openai.com
-    // would just 401.
-    const provider = info.provider ?? "openai";
-    const { baseUrl, keyVar } = PROVIDERS[provider];
+    if (!info) throw new Error(`unknown model '${this.spec.model}'`);
+    const { baseUrl, keyVar } = PROVIDERS[info.provider];
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
-    if (!key) return new MockModel();
-    return new OpenAIModel(key, info.upstreamId ?? info.id, baseUrl);
+    if (!key) throw new Error(`${keyVar} is not set — cannot run '${info.id}'`);
+    return new OpenAICompatModel(info.provider, key, info.upstreamId ?? info.id, baseUrl);
   }
 
   // --- history -------------------------------------------------------------

@@ -7,6 +7,8 @@ export default defineConfig({
     cloudflareTest({
       singleWorker: true,
       wrangler: { configPath: "./wrangler.jsonc" },
+      // Offline: no provider key in CI, so serve replies from EchoModel.
+      miniflare: { bindings: { USE_ECHO_MODEL: "1" } },
     }),
   ],
   test: {

@@ -22,13 +22,11 @@ export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   DEFAULT_MODEL: string;
   DEFAULT_HARNESS: string;
-  ANTHROPIC_API_KEY?: string;
-  OPENAI_API_KEY?: string;
-  // OpenAI-compatible providers (see PROVIDERS in catalog.ts).
-  DEEPSEEK_API_KEY?: string;
   MOONSHOT_API_KEY?: string;
-  ZAI_API_KEY?: string;
-  GEMINI_API_KEY?: string;
+  /** Test-only: serve replies from the offline EchoModel. */
+  USE_ECHO_MODEL?: string;
+  // Capability keys.
+  OPENAI_API_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
   DISCORD_BOT_TOKEN?: string;
   SLACK_BOT_TOKEN?: string;
