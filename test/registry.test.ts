@@ -6,7 +6,7 @@ describe("agent registry", () => {
   it("launched agents appear in GET /agents with status", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-1", harness: "chat", model: "kimi-k3", machine: "2gb" }),
+      body: JSON.stringify({ id: "reg-1", harness: "chat", model: "gpt-5.6-terra", machine: "2gb" }),
     });
     const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
       id: string;
@@ -16,7 +16,7 @@ describe("agent registry", () => {
     }[];
     const rec = list.find((a) => a.id === "reg-1");
     expect(rec).toBeTruthy();
-    expect(rec!.model).toBe("kimi-k3");
+    expect(rec!.model).toBe("gpt-5.6-terra");
     expect(rec!.machine).toBe("2gb");
     expect(rec!.parked).toBe(false);
   });
@@ -24,7 +24,7 @@ describe("agent registry", () => {
   it("reflects park state in the listing", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-2", harness: "chat", model: "kimi-k2.6" }),
+      body: JSON.stringify({ id: "reg-2", harness: "chat", model: "gpt-5.4-mini" }),
     });
     await SELF.fetch("https://x/agents/reg-2/park", { method: "POST" });
     const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
@@ -37,7 +37,7 @@ describe("agent registry", () => {
   it("DELETE removes an agent from the listing and wipes state", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-del", harness: "chat", model: "kimi-k2.6" }),
+      body: JSON.stringify({ id: "reg-del", harness: "chat", model: "gpt-5.4-mini" }),
     });
     await SELF.fetch("https://x/agents/reg-del/send", {
       method: "POST",

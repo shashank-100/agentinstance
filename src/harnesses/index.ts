@@ -145,7 +145,7 @@ export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
   );
   return {
     harness: "chat",
-    model: "kimi-k3",
+    model: "gpt-5.6-terra",
     capabilities: [],
     machine: DEFAULT_MACHINE,
     system: "You are a helpful always-on agent.",

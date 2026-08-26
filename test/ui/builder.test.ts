@@ -15,8 +15,8 @@ import {
 const catalog = {
   harnesses: [{ id: "chat", desc: "x" }, { id: "shell", desc: "y" }],
   models: [
-    { id: "kimi-k2.6", label: "Kimi K2.6", priceIn: 3, priceOut: 15 },
-    { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15 },
+    { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 3, priceOut: 15 },
+    { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 3, priceOut: 15 },
   ],
   capabilities: [
     { id: "scrape_web", desc: "" },
@@ -36,7 +36,7 @@ describe("one-click", () => {
   it("is launch-ready immediately with defaults (chat + sonnet + 4gb)", () => {
     const s = oneClick();
     expect(s.harness).toBe("chat");
-    expect(s.model).toBe("kimi-k2.6");
+    expect(s.model).toBe("gpt-5.4-mini");
     expect(s.machine).toBe("4gb");
     expect(compatibility(s)).toBeNull(); // ready with zero clicks
     expect(summary(s).ready).toBe(true);
@@ -55,8 +55,8 @@ describe("section 1 — harness", () => {
 
 describe("section 2 — model", () => {
   it("selects a model and reflects it in summary", () => {
-    const s = selectModel(selectHarness(fresh(), "chat"), "kimi-k3");
-    expect(summary(s).model).toBe("Kimi K3");
+    const s = selectModel(selectHarness(fresh(), "chat"), "gpt-5.6-terra");
+    expect(summary(s).model).toBe("GPT-5.6 Terra");
   });
   it("still blocks until a model is chosen", () => {
     expect(compatibility(selectHarness(fresh(), "chat"))).toBe("Pick a model");
@@ -88,7 +88,7 @@ describe("section 5 — summary + cost", () => {
   it("summarizes a complete build as ready", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "kimi-k2.6");
+    selectModel(s, "gpt-5.4-mini");
     toggleCapability(s, "scrape_web");
     const sum = summary(s);
     expect(sum.ready).toBe(true);
@@ -101,7 +101,7 @@ describe("section 6 — launch/compat (mirrors server)", () => {
   it("flags heavy capability on 1gb", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "kimi-k2.6");
+    selectModel(s, "gpt-5.4-mini");
     selectMachine(s, "1gb");
     toggleCapability(s, "generate_video");
     expect(compatibility(s)).toMatch(/2gb/);
@@ -109,7 +109,7 @@ describe("section 6 — launch/compat (mirrors server)", () => {
   it("is compatible on 2gb", () => {
     let s = fresh();
     selectHarness(s, "chat");
-    selectModel(s, "kimi-k2.6");
+    selectModel(s, "gpt-5.4-mini");
     selectMachine(s, "2gb");
     toggleCapability(s, "generate_video");
     expect(compatibility(s)).toBeNull();
@@ -117,10 +117,10 @@ describe("section 6 — launch/compat (mirrors server)", () => {
   it("toSpec produces the server payload shape", () => {
     let s = fresh();
     selectHarness(s, "shell");
-    selectModel(s, "kimi-k3");
+    selectModel(s, "gpt-5.6-terra");
     expect(toSpec(s)).toEqual({
       harness: "shell",
-      model: "kimi-k3",
+      model: "gpt-5.6-terra",
       capabilities: [],
       machine: "4gb",
     });

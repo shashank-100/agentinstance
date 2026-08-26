@@ -22,6 +22,7 @@ export interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   DEFAULT_MODEL: string;
   DEFAULT_HARNESS: string;
+  SOCHEAP_API_KEY?: string;
   MOONSHOT_API_KEY?: string;
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;

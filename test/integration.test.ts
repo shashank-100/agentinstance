@@ -51,7 +51,7 @@ describe("worker gateway", () => {
   it("REST send + configure works", async () => {
     await SELF.fetch("https://x/agents/agentR/configure", {
       method: "POST",
-      body: JSON.stringify({ model: "kimi-k3" }),
+      body: JSON.stringify({ model: "gpt-5.6-terra" }),
     });
     const res = await SELF.fetch("https://x/agents/agentR/send", {
       method: "POST",

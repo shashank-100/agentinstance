@@ -14,7 +14,7 @@ Agents need a model key before they can reply — add one as a secret after the
 first deploy:
 
 ```sh
-wrangler secret put MOONSHOT_API_KEY
+wrangler secret put SOCHEAP_API_KEY
 ```
 
 See [DEPLOY.md](./DEPLOY.md).
@@ -27,7 +27,7 @@ Park it when idle; you pay nothing while it sleeps.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note:** a model key is required. Without `MOONSHOT_API_KEY` set, `send`
+> **Note:** a model key is required. Without `SOCHEAP_API_KEY` set, `send`
 > returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 
 ## Try it
@@ -40,7 +40,7 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 
 - **Persistent memory** — full history + state in Durable Object SQLite, survives restarts.
 - **Any model, no lock-in** — one adapter for any OpenAI-compatible provider;
-  Kimi (Moonshot) is wired up, others are a catalog entry plus a key.
+  GPT (via socheap) and Kimi (Moonshot) are wired up, others are a catalog entry plus a key.
 - **Harnesses** — a chat loop with tool calling, and a sandbox-backed shell loop.
 - **Three-piece composition** with a compatibility check before launch.
 - **Unified cross-channel history** — one agent, one memory; replies go to the
@@ -61,7 +61,7 @@ npm run deploy    # deploy to your Cloudflare account
 Set the model key (required — agents cannot reply without it):
 
 ```bash
-npx wrangler secret put MOONSHOT_API_KEY
+npx wrangler secret put SOCHEAP_API_KEY
 ```
 
 ## API

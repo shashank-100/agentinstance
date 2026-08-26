@@ -49,7 +49,7 @@ switch (cmd) {
   case "launch": {
     const spec = {
       harness: flag("harness", "chat"),
-      model: flag("model", "kimi-k3"),
+      model: flag("model", "gpt-5.6-terra"),
       machine: flag("machine", "4gb"),
     };
     console.log(JSON.stringify(await api(`/agents/${id}/configure`, "POST", spec), null, 2));

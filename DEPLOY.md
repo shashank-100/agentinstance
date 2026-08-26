@@ -26,11 +26,11 @@ This publishes the Worker, creates the `AgentDO` Durable Object namespace (via t
 
 ## 4. Add secrets
 
-`MOONSHOT_API_KEY` is required — without it, `send` returns an error instead of
+`SOCHEAP_API_KEY` is required — without it, `send` returns an error instead of
 a reply. Channel and capability keys are optional.
 
 ```bash
-npx wrangler secret put MOONSHOT_API_KEY
+npx wrangler secret put SOCHEAP_API_KEY
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 # ...and any channel/capability keys you need (see .dev.vars.example)
 ```
@@ -40,7 +40,7 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 ```bash
 export AGENTINSTANCE_URL=https://agentinstance.<your-subdomain>.workers.dev
 
-node cli/agentinstance.mjs launch mybot --harness chat --model kimi-k3
+node cli/agentinstance.mjs launch mybot --harness chat --model gpt-5.6-terra
 node cli/agentinstance.mjs send mybot "hello"
 node cli/agentinstance.mjs status mybot
 ```

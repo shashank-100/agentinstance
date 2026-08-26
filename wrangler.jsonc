@@ -16,9 +16,9 @@
     { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] }
   ],
   "vars": {
-    "DEFAULT_MODEL": "kimi-k3",
+    "DEFAULT_MODEL": "gpt-5.6-terra",
     "DEFAULT_HARNESS": "chat"
   }
   // Secrets (set via `wrangler secret put`):
-  //   MOONSHOT_API_KEY, OPENAI_API_KEY (generate_image), TELEGRAM_BOT_TOKEN, ...
+  //   SOCHEAP_API_KEY, MOONSHOT_API_KEY, OPENAI_API_KEY (generate_image), TELEGRAM_BOT_TOKEN, ...
 }

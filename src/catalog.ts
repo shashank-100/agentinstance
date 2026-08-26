@@ -14,16 +14,22 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "moonshot";
+export type Provider = "socheap" | "moonshot";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
+  socheap: { baseUrl: "https://socheap.ai/v1", keyVar: "SOCHEAP_API_KEY" },
   moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
 };
 
-// Only models a configured provider can actually serve.
+// Only models a configured provider can actually serve. Prices are the
+// provider's list rates; socheap is a reseller, so verify before relying on
+// the cost estimate.
 export const MODELS: Record<string, ModelInfo> = {
+  "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, provider: "socheap" },
+  "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, provider: "socheap" },
+  "gpt-5.5": { id: "gpt-5.5", label: "GPT-5.5", priceIn: 2.5, priceOut: 15, provider: "socheap" },
+  "gpt-5.4": { id: "gpt-5.4", label: "GPT-5.4", priceIn: 2, priceOut: 12, provider: "socheap" },
+  "gpt-5.4-mini": { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 0.15, priceOut: 0.6, provider: "socheap" },
   "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshot" },
-  "kimi-k2.7-code": { id: "kimi-k2.7-code", label: "Kimi K2.7 Code", priceIn: 3, priceOut: 15, provider: "moonshot" },
-  "kimi-k2.6": { id: "kimi-k2.6", label: "Kimi K2.6", priceIn: 3, priceOut: 15, provider: "moonshot" },
 };
 
 /** `ready` marks what is actually implemented, so the builder can say so

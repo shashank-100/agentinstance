@@ -12,7 +12,7 @@ describe("builder API", () => {
       defaultMachine: string;
     };
     expect(cat.harnesses.some((h) => h.id === "shell")).toBe(true);
-    expect(cat.models.some((m) => m.id === "kimi-k3")).toBe(true);
+    expect(cat.models.some((m) => m.id === "gpt-5.6-terra")).toBe(true);
     expect(cat.capabilities.some((c) => c.id === "scrape_web")).toBe(true);
     expect(cat.machines.some((m) => m.id === "4gb")).toBe(true);
     expect(cat.defaultMachine).toBe("4gb");
@@ -24,7 +24,7 @@ describe("builder API", () => {
       body: JSON.stringify({
         id: "builtA",
         harness: "chat",
-        model: "kimi-k2.6",
+        model: "gpt-5.4-mini",
         capabilities: ["scrape_web"],
         machine: "4gb",
       }),
@@ -32,7 +32,7 @@ describe("builder API", () => {
     const data = (await res.json()) as { id: string; estMonthly: number; spec: { model: string } };
     expect(res.status).toBe(200);
     expect(data.id).toBe("builtA");
-    expect(data.spec.model).toBe("kimi-k2.6");
+    expect(data.spec.model).toBe("gpt-5.4-mini");
     expect(data.estMonthly).toBeGreaterThan(0);
   });
 
@@ -41,7 +41,7 @@ describe("builder API", () => {
       method: "POST",
       body: JSON.stringify({
         harness: "chat",
-        model: "kimi-k2.6",
+        model: "gpt-5.4-mini",
         capabilities: ["generate_video"],
         machine: "1gb", // heavy cap on tiny machine -> incompatible
       }),
@@ -53,7 +53,7 @@ describe("builder API", () => {
   it("launch auto-generates an id when omitted", async () => {
     const res = await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ harness: "chat", model: "kimi-k3" }),
+      body: JSON.stringify({ harness: "chat", model: "gpt-5.6-terra" }),
     });
     const data = (await res.json()) as { id: string };
     expect(data.id).toMatch(/^agent-/);
