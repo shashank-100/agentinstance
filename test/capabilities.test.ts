@@ -9,7 +9,7 @@ const fakeEnv = {} as Env;
 describe("capabilities", () => {
   it("registry resolves known capabilities", () => {
     expect(getCapability("scrape_web")?.name).toBe("scrape_web");
-    expect(getCapability("email")?.name).toBe("email");
+    expect(getCapability("search_serp")?.name).toBe("search_serp");
     expect(getCapability("nope")).toBeNull();
   });
 

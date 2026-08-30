@@ -100,36 +100,6 @@ export const generateImage: Capability = {
   },
 };
 
-export const sendEmail: Capability = {
-  name: "email",
-  describe:
-    "Send an email. This actually delivers to the recipient — only send when " +
-    "the user has asked for it, and never to an address they did not give you.",
-  parameters: {
-    type: "object",
-    properties: {
-      to: { type: "string", description: "Recipient email address." },
-      subject: { type: "string", description: "Subject line." },
-      body: { type: "string", description: "Plain-text body." },
-    },
-    required: ["to", "subject", "body"],
-  },
-  async run(env, input) {
-    const { to, subject, body } = input as { to?: string; subject?: string; body?: string };
-    if (!to || !subject || !body) throw new Error("email requires { to, subject, body }");
-    if (!env.RESEND_API_KEY) return { sent: false, note: "RESEND_API_KEY not set" };
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ from: env.EMAIL_FROM ?? "agentinstance@example.com", to, subject, text: body }),
-    });
-    return { sent: res.ok, status: res.status };
-  },
-};
-
 // Lightweight stubs for capabilities that need an external provider/config.
 // They return a clear "configure me" result rather than failing, so the whole
 // catalog is selectable and the wiring is testable without third-party keys.
@@ -156,7 +126,6 @@ const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
   search_serp: searchSerp,
   generate_image: generateImage,
-  email: sendEmail,
   generate_video: generateVideo,
   crm,
   social_listening: socialListening,

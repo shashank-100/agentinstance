@@ -14,8 +14,6 @@ WHATSAPP_PHONE_ID=
 # Capabilities
 OPENAI_API_KEY=
 SERP_API_KEY=
-RESEND_API_KEY=
-EMAIL_FROM=agentinstance@example.com
 
 # Self-hostable sandbox (agents run real commands)
 SANDBOX_URL=

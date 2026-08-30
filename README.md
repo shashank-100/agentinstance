@@ -112,7 +112,7 @@ when it's unset).
 ## Roadmap
 
 Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `agentinstance` CLI incl. `clone`,
-capabilities (scrape, image/video gen, transcribe, email), snapshot/restore with
+capabilities (scrape, image/video gen, transcribe), snapshot/restore with
 idempotency keys for outbound side-effects.
 
 ## License

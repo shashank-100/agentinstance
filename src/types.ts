@@ -34,8 +34,6 @@ export interface Env {
   WHATSAPP_TOKEN?: string;
   WHATSAPP_PHONE_ID?: string;
   SERP_API_KEY?: string;
-  RESEND_API_KEY?: string;
-  EMAIL_FROM?: string;
   SANDBOX_URL?: string;
   SANDBOX_TOKEN?: string;
 }
