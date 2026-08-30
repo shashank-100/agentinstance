@@ -33,6 +33,8 @@ export interface Env {
   WHATSAPP_TOKEN?: string;
   WHATSAPP_PHONE_ID?: string;
   TAVILY_API_KEY?: string;
+  /** Container-backed sandbox (Cloudflare Containers). */
+  SANDBOX?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
   SANDBOX_URL?: string;
   SANDBOX_TOKEN?: string;
 }

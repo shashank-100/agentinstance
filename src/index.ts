@@ -21,6 +21,7 @@ import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/inde
 import { toText } from "./parts.js";
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
+export { Sandbox } from "@cloudflare/sandbox";
 
 function registry(env: Env) {
   return env.REGISTRY.get(env.REGISTRY.idFromName("global")) as unknown as {

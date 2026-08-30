@@ -3,6 +3,10 @@
 // over a tiny HTTP API. This keeps agentinstance vendor-neutral: swap the backend
 // without touching agents/harnesses.
 import type { Env } from "../types.js";
+import {
+  getSandbox as getCloudflareSandbox,
+  type Sandbox as CfSandbox,
+} from "@cloudflare/sandbox";
 
 export interface ExecResult {
   stdout: string;
@@ -68,8 +72,44 @@ export class HttpSandbox implements Sandbox {
   }
 }
 
-/** Resolve the configured sandbox backend, or null if none is set. */
+/**
+ * ContainerSandbox — a Cloudflare Container attached to its own Durable Object.
+ * Unlike HttpSandbox there is no public endpoint: the Worker reaches the
+ * container through a binding, so nothing is addressable from the internet.
+ * One sandbox per agentId, matching how agent memory is addressed.
+ */
+export class ContainerSandbox implements Sandbox {
+  name = "container";
+  constructor(private ns: DurableObjectNamespace<CfSandbox>) {}
+
+  private box(agentId: string) {
+    return getCloudflareSandbox(this.ns, agentId);
+  }
+
+  async exec(agentId: string, command: string): Promise<ExecResult> {
+    const r = await this.box(agentId).exec(command);
+    return {
+      stdout: r.stdout ?? "",
+      stderr: r.stderr ?? "",
+      exitCode: r.exitCode ?? 0,
+      success: r.exitCode === 0,
+    };
+  }
+
+  async writeFile(agentId: string, path: string, content: string): Promise<void> {
+    await this.box(agentId).writeFile(path, content);
+  }
+
+  async readFile(agentId: string, path: string): Promise<string> {
+    const r = await this.box(agentId).readFile(path);
+    return typeof r === "string" ? r : (r?.content ?? "");
+  }
+}
+
+/** Resolve the configured sandbox backend, or null if none is set.
+ *  The container binding wins when present — it needs no URL or token. */
 export function getSandbox(env: Env): Sandbox | null {
+  if (env.SANDBOX) return new ContainerSandbox(env.SANDBOX);
   if (env.SANDBOX_URL) {
     return new HttpSandbox(env.SANDBOX_URL.replace(/\/$/, ""), env.SANDBOX_TOKEN);
   }

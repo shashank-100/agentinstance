@@ -6,14 +6,21 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "assets": { "directory": "./public", "binding": "ASSETS" },
+  // The sandbox runs as a container attached to its own Durable Object, so
+  // each agent gets an isolated workspace addressed the same way its memory is.
+  "containers": [
+    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "lite", "max_instances": 5 }
+  ],
   "durable_objects": {
     "bindings": [
       { "name": "AGENT", "class_name": "AgentInstance" },
-      { "name": "REGISTRY", "class_name": "RegistryDO" }
+      { "name": "REGISTRY", "class_name": "RegistryDO" },
+      { "name": "SANDBOX", "class_name": "Sandbox" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] }
+    { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] },
+    { "tag": "v2", "new_sqlite_classes": ["Sandbox"] }
   ],
   "vars": {
     "DEFAULT_MODEL": "gpt-5.6-terra",
