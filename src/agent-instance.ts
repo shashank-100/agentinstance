@@ -22,6 +22,12 @@ export class AgentInstance extends DurableObject<Env> {
           channel TEXT NOT NULL, ts INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        -- Durable notes the agent writes for itself, separate from the
+        -- transcript: a scheduled agent needs to recall what it already did
+        -- without re-reading (and re-paying for) its whole history.
+        CREATE TABLE IF NOT EXISTS notes (
+          key TEXT PRIMARY KEY, value TEXT NOT NULL, ts INTEGER NOT NULL
+        );
       `);
     });
   }
@@ -190,6 +196,29 @@ export class AgentInstance extends DurableObject<Env> {
     if (!this.spec.capabilities.includes(name)) {
       return { error: `capability '${name}' not enabled for this agent` };
     }
+    // memory lives in this agent's own SQLite, so it can't go through the
+    // env-only Capability contract.
+    if (name === "remember") {
+      const key = String(input.key ?? "").trim();
+      const value = String(input.value ?? "");
+      if (!key) return { error: "remember requires { key, value }" };
+      this.sql.exec(
+        "INSERT INTO notes (key,value,ts) VALUES (?,?,?) " +
+          "ON CONFLICT(key) DO UPDATE SET value=excluded.value, ts=excluded.ts",
+        key,
+        value,
+        Date.now(),
+      );
+      return { result: { saved: key } };
+    }
+    if (name === "recall") {
+      const key = input.key ? String(input.key).trim() : null;
+      const rows = key
+        ? this.sql.exec("SELECT key,value,ts FROM notes WHERE key = ?", key).toArray()
+        : this.sql.exec("SELECT key,value,ts FROM notes ORDER BY ts DESC LIMIT 50").toArray();
+      return { result: { notes: rows } };
+    }
+
     const { getCapability } = await import("./capabilities/index.js");
     const cap = getCapability(name);
     if (!cap) return { error: `capability '${name}' has no implementation` };

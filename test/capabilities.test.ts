@@ -59,5 +59,39 @@ describe("capabilities", () => {
       expect(getCapability(name), name).not.toBeNull();
     }
   });
+
+  it("remember and recall persist notes across calls", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({
+        id: "memo",
+        harness: "chat",
+        model: "gpt-5.6-terra",
+        capabilities: ["remember", "recall"],
+      }),
+    });
+
+    await SELF.fetch("https://x/agents/memo/tool/remember", {
+      method: "POST",
+      body: JSON.stringify({ key: "last-story", value: "Alibaba Accio Work" }),
+    });
+
+    const one = (await (
+      await SELF.fetch("https://x/agents/memo/tool/recall", {
+        method: "POST",
+        body: JSON.stringify({ key: "last-story" }),
+      })
+    ).json()) as { result: { notes: { key: string; value: string }[] } };
+    expect(one.result.notes[0].value).toBe("Alibaba Accio Work");
+
+    // Listing with no key returns recent notes.
+    const all = (await (
+      await SELF.fetch("https://x/agents/memo/tool/recall", {
+        method: "POST",
+        body: JSON.stringify({}),
+      })
+    ).json()) as { result: { notes: unknown[] } };
+    expect(all.result.notes.length).toBeGreaterThan(0);
+  });
 });
 
