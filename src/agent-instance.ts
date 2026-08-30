@@ -197,16 +197,51 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   // --- Feature #14: scheduled wakeups --------------------------------------
+  /** Set (or replace) the standing task. Pass cadenceMs to make it recurring. */
   async scheduleWakeup(atMs: number, prompt: string, cadenceMs?: number): Promise<void> {
     this.setKV("wakeup_prompt", prompt);
-    if (cadenceMs) this.setKV("expected_cadence_ms", cadenceMs);
+    this.setKV("expected_cadence_ms", cadenceMs ?? null);
+    this.setKV("next_wake", atMs);
     await this.ctx.storage.setAlarm(atMs);
+  }
+
+  /** Clear the standing task so the agent stops acting on its own. */
+  async unschedule(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    this.setKV("wakeup_prompt", null);
+    this.setKV("expected_cadence_ms", null);
+    this.setKV("next_wake", null);
+  }
+
+  /** What the agent will do on its own, and when. */
+  async getSchedule(): Promise<{
+    prompt: string | null;
+    cadenceMs: number | null;
+    nextWake: number | null;
+  }> {
+    return {
+      prompt: this.getKV<string | null>("wakeup_prompt", null),
+      cadenceMs: this.getKV<number | null>("expected_cadence_ms", null),
+      nextWake: this.getKV<number | null>("next_wake", null),
+    };
   }
 
   /** Public wakeup logic, callable over RPC (the reserved `alarm` delegates here). */
   async fireWakeup(): Promise<void> {
     await this.ctx.storage.deleteAlarm();
     const prompt = this.getKV<string | null>("wakeup_prompt", null);
+    const cadence = this.getKV<number | null>("expected_cadence_ms", null);
+
+    // Re-arm BEFORE running the task: if the model call throws, a recurring
+    // agent must still wake next cycle rather than silently stopping forever.
+    if (cadence && cadence > 0) {
+      const next = Date.now() + cadence;
+      this.setKV("next_wake", next);
+      await this.ctx.storage.setAlarm(next);
+    } else {
+      this.setKV("next_wake", null);
+    }
+
     if (prompt) {
       await this.send(prompt, "scheduler"); // no-op if parked
     }

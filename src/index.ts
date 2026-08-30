@@ -57,6 +57,8 @@ function agentStub(env: Env, id: string) {
     snapshot(): Promise<unknown>;
     restore(s: unknown): Promise<void>;
     scheduleWakeup(atMs: number, prompt: string, cadenceMs?: number): Promise<void>;
+    unschedule(): Promise<void>;
+    getSchedule(): Promise<{ prompt: string | null; cadenceMs: number | null; nextWake: number | null }>;
     fireWakeup(): Promise<void>;
     runTool(
       name: string,
@@ -201,13 +203,23 @@ export default {
           case "configure":
             return Response.json(await stub.configure(await request.json()));
           case "schedule": {
+            // GET reads the standing task; DELETE clears it; POST sets it.
+            if (request.method === "GET") return Response.json(await stub.getSchedule());
+            if (request.method === "DELETE") {
+              await stub.unschedule();
+              return Response.json({ ok: true });
+            }
             const { atMs, prompt, cadenceMs } = (await request.json()) as {
-              atMs: number;
-              prompt: string;
+              atMs?: number;
+              prompt?: string;
               cadenceMs?: number;
             };
-            await stub.scheduleWakeup(atMs, prompt, cadenceMs);
-            return Response.json({ ok: true });
+            if (!prompt) return Response.json({ error: "prompt required" }, { status: 400 });
+            // Default to firing one cadence from now, so callers can just send
+            // { prompt, cadenceMs } without computing a timestamp.
+            const at = atMs ?? Date.now() + (cadenceMs ?? 60_000);
+            await stub.scheduleWakeup(at, prompt, cadenceMs);
+            return Response.json(await stub.getSchedule());
           }
           case "wake":
             await stub.fireWakeup();
