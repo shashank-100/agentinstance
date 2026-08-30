@@ -51,4 +51,23 @@ describe("agent registry", () => {
     const hist = (await (await SELF.fetch("https://x/agents/reg-del/history")).json()) as unknown[];
     expect(hist).toHaveLength(0);
   });
+
+  it("DELETE on a sub-path clears that resource, not the whole agent", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "keep-me", harness: "chat", model: "gpt-5.6-terra" }),
+    });
+    await SELF.fetch("https://x/agents/keep-me/send", {
+      method: "POST",
+      body: JSON.stringify({ text: "remember this" }),
+    });
+
+    // Clearing the schedule must not wipe the agent's history or registry entry.
+    await SELF.fetch("https://x/agents/keep-me/schedule", { method: "DELETE" });
+
+    const hist = (await (await SELF.fetch("https://x/agents/keep-me/history")).json()) as unknown[];
+    expect(hist.length).toBeGreaterThan(0);
+    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as { id: string }[];
+    expect(list.some((a) => a.id === "keep-me")).toBe(true);
+  });
 });

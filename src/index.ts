@@ -161,7 +161,9 @@ export default {
     }
 
     // --- delete an agent: DELETE /agents/:id (wipe state + drop from registry) ---
-    if (parts[0] === "agents" && parts[1] && request.method === "DELETE") {
+    // parts.length === 2 matters: without it DELETE /agents/:id/schedule falls
+    // through to here and wipes the whole agent instead of clearing its task.
+    if (parts[0] === "agents" && parts[1] && parts.length === 2 && request.method === "DELETE") {
       await agentStub(env, parts[1]).wipe();
       await registry(env).remove(parts[1]);
       return Response.json({ ok: true, deleted: parts[1] });
