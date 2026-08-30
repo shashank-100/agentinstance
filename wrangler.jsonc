@@ -2,14 +2,17 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agentinstance",
   "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
+  "compatibility_date": "2026-03-24",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Headless Chrome for JS-heavy pages that scrape_web cannot read.
+  // A binding, not an image: no Chromium in the container.
+  "browser": { "binding": "BROWSER", "remote": true },
   "assets": { "directory": "./public", "binding": "ASSETS" },
   // The sandbox runs as a container attached to its own Durable Object, so
   // each agent gets an isolated workspace addressed the same way its memory is.
   "containers": [
-    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "basic", "max_instances": 5 }
+    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 }
   ],
   "durable_objects": {
     "bindings": [

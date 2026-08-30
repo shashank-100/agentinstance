@@ -93,20 +93,6 @@
   .stats .sep{color:var(--faint)}
   .stats .turns{margin-left:auto;color:var(--muted)}
 
-  .schedbar{display:flex;align-items:center;gap:8px;padding:10px 24px;
-    background:#fffbeb;border-bottom:1px solid #fde68a}
-  .schedbar input{flex:1;min-width:0;border:1px solid #fcd34d;border-radius:8px;
-    padding:7px 11px;font-family:var(--sans);font-size:.85rem;background:#fff;color:var(--ink)}
-  .schedbar input:focus{outline:none;border-color:#f59e0b}
-  .schedbar select{border:1px solid #fcd34d;border-radius:8px;padding:7px 9px;
-    font-family:var(--sans);font-size:.82rem;background:#fff;color:var(--ink-2)}
-  .sbtn{border:1px solid #fcd34d;background:#fff;border-radius:8px;padding:7px 13px;
-    font-family:var(--sans);font-size:.82rem;cursor:pointer;color:var(--ink-2)}
-  .sbtn.primary{background:var(--dark);border-color:var(--dark);color:#fff;font-weight:500}
-  .sbtn:hover{border-color:#f59e0b}
-  .schednote{font-size:.78rem;color:#92400e;white-space:nowrap}
-  .status.acting{background:#fffbeb;border-color:#fde68a;color:#b45309}
-  .status.acting .dot{background:#f59e0b}
   #log{flex:1;min-height:0;overflow-y:auto;padding:30px 26px 10px}
   .inner{max-width:920px;margin:0 auto}
   .msg{margin-bottom:18px;display:flex}
@@ -195,23 +181,8 @@
     <span class="meta" id="stCost" title="Estimated upstream rate">—</span>
     <span class="meta"><b id="stTurns">0</b> turns</span>
     <span class="status" id="agentStatus"><span class="dot"></span><span>Ready</span></span>
-    <button class="iconbtn" id="schedBtn" title="Standing task">⏱</button>
     <button class="iconbtn" id="openRaw" title="Open raw history">↗</button>
     <button class="iconbtn" id="parkBtn" title="Park agent">▤</button>
-  </section>
-
-  <section class="schedbar" id="schedBar" hidden>
-    <input id="schedPrompt" placeholder="What should it do on its own? e.g. Search for AI news and note anything new" />
-    <select id="schedEvery">
-      <option value="300000">every 5 min</option>
-      <option value="1800000">every 30 min</option>
-      <option value="3600000" selected>every hour</option>
-      <option value="21600000">every 6 hours</option>
-      <option value="86400000">every day</option>
-    </select>
-    <button class="sbtn primary" id="schedSave">Start</button>
-    <button class="sbtn" id="schedStop">Stop</button>
-    <span class="schednote" id="schedNote"></span>
   </section>
 
   <div id="log"><div class="inner" id="logInner"></div></div>
@@ -535,95 +506,12 @@ $("parkBtn").onclick = async () => {
   } catch { toast("Could not reach agent"); }
 };
 
-/* -------------------------------------------------------------- schedule */
-let schedule = { prompt: null, cadenceMs: null, nextWake: null };
-
-function fmtWhen(ms) {
-  if (!ms) return "";
-  const d = Math.round((ms - Date.now()) / 60000);
-  if (d <= 0) return "due now";
-  if (d < 60) return `in ${d} min`;
-  const h = Math.round(d / 60);
-  return h < 24 ? `in ${h}h` : `in ${Math.round(h / 24)}d`;
-}
-
-function renderSchedule() {
-  const on = !!schedule.prompt;
-  $("schedNote").textContent = on
-    ? `Running ${labelFor(schedule.cadenceMs)} · next ${fmtWhen(schedule.nextWake)}`
-    : "Not running on its own";
-  if (on) {
-    $("schedPrompt").value = schedule.prompt;
-    if (schedule.cadenceMs) $("schedEvery").value = String(schedule.cadenceMs);
-  }
-  // The status pill doubles as the always-on indicator.
-  const st = $("agentStatus");
-  if (on && !st.classList.contains("off")) {
-    st.classList.add("acting");
-    st.lastElementChild.textContent = "Acting";
-  } else {
-    st.classList.remove("acting");
-  }
-  $("schedBtn").style.color = on ? "#b45309" : "";
-}
-
-function labelFor(ms) {
-  const opt = [...$("schedEvery").options].find((o) => o.value === String(ms));
-  return opt ? opt.textContent : "on a schedule";
-}
-
-async function loadSchedule() {
-  try {
-    schedule = await (await fetch(`/agents/${agentId}/schedule`)).json();
-  } catch { schedule = { prompt: null, cadenceMs: null, nextWake: null }; }
-  renderSchedule();
-}
-
-$("schedBtn").onclick = () => {
-  const bar = $("schedBar");
-  bar.hidden = !bar.hidden;
-  if (!bar.hidden) $("schedPrompt").focus();
-};
-
-$("schedSave").onclick = async () => {
-  const prompt = $("schedPrompt").value.trim();
-  if (!prompt) return toast("Give it a task first");
-  const cadenceMs = Number($("schedEvery").value);
-  try {
-    schedule = await (await fetch(`/agents/${agentId}/schedule`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prompt, cadenceMs }),
-    })).json();
-    renderSchedule();
-    toast(`Agent will run ${labelFor(cadenceMs)}`);
-  } catch { toast("Could not save the schedule"); }
-};
-
-$("schedStop").onclick = async () => {
-  try {
-    await fetch(`/agents/${agentId}/schedule`, { method: "DELETE" });
-    schedule = { prompt: null, cadenceMs: null, nextWake: null };
-    $("schedPrompt").value = "";
-    renderSchedule();
-    toast("Stopped");
-  } catch { toast("Could not stop it"); }
-};
-
 /* ------------------------------------------------------------------ boot */
 (async function boot() {
   await loadCatalog();
   await loadAgents();
   await loadHistory();
   renderHead();
-  await loadSchedule();
-  // A scheduled agent writes to history on its own, so poll while it is armed.
-  setInterval(async () => {
-    if (!schedule.prompt || sending) return;
-    await loadSchedule();
-    const before = log.children.length;
-    await loadHistory();
-    if (log.children.length > before) toast("Agent did some work");
-  }, 30000);
 })();
 </script>
 </body>

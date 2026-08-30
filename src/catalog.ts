@@ -58,6 +58,7 @@ export const CAPABILITIES: Record<string, CatalogEntry> = {
   scrape_web: { desc: "Fetch and extract page text.", ready: true },
   search_web: { desc: "Web search via Tavily.", ready: true },
   fetch_json: { desc: "Call any JSON HTTP API.", ready: true },
+  browse_page: { desc: "Render a page in headless Chrome.", ready: true },
   remember: { desc: "Save a durable note for later sessions.", ready: true },
   recall: { desc: "Read notes saved in earlier sessions.", ready: true },
 };

@@ -142,6 +142,42 @@ export const fetchJson: Capability = {
   },
 };
 
+export const browsePage: Capability = {
+  name: "browse_page",
+  describe:
+    "Open a URL in a real headless browser and return the rendered page as " +
+    "markdown. Use this instead of scrape_web when a page needs JavaScript to " +
+    "show its content — dashboards, single-page apps, infinite-scroll feeds.",
+  parameters: {
+    type: "object",
+    properties: { url: { type: "string", description: "Absolute URL to open." } },
+    required: ["url"],
+  },
+  async run(env, input) {
+    const url = String(input.url ?? "");
+    if (!url) throw new Error("browse_page requires { url }");
+    if (!env.BROWSER) return { url, markdown: null, note: "browser binding not configured" };
+    // Quick Actions render the page and convert it server-side, so no
+    // Puppeteer dependency and no browser session to clean up.
+    const res = await env.BROWSER.quickAction("markdown", { url });
+    if (!res.ok) throw new Error(`browse_page ${res.status}: ${await res.text()}`);
+    // Quick Actions wrap the payload in { success, result, meta } — hand the
+    // model the markdown itself, not the envelope.
+    const body = (await res.json()) as {
+      success?: boolean;
+      result?: string;
+      errors?: unknown;
+      meta?: { status?: number; title?: string };
+    };
+    if (!body.success) throw new Error(`browse_page failed: ${JSON.stringify(body.errors)}`);
+    return {
+      url,
+      title: body.meta?.title,
+      markdown: (body.result ?? "").slice(0, 8000),
+    };
+  },
+};
+
 /**
  * remember / recall are declared here so the model sees their schemas, but they
  * are executed by AgentInstance.runTool — they need that agent's own SQLite,
@@ -184,6 +220,7 @@ const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
   search_web: searchWeb,
   fetch_json: fetchJson,
+  browse_page: browsePage,
   remember,
   recall,
 };
