@@ -20,9 +20,11 @@ export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = 
   moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
 };
 
-// Only models a configured provider can actually serve. Prices are the
-// provider's list rates; socheap is a reseller, so verify before relying on
-// the cost estimate.
+// Only models a configured provider can actually serve.
+//
+// socheap is a reseller and publishes no rate card (its /v1/models returns no
+// pricing), so these are the upstream OpenAI list prices for the equivalent
+// tier — an estimate, surfaced as "Est. rate" in the UI, not a billed figure.
 export const MODELS: Record<string, ModelInfo> = {
   "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, provider: "socheap" },
   "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, provider: "socheap" },

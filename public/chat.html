@@ -21,8 +21,49 @@
     font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
     /* One full-height row: without it the row sizes to content and both
        columns stop short of the viewport, leaving dead space below. */
-    display:grid;grid-template-columns:1fr;grid-template-rows:100%;
+    display:grid;grid-template-columns:272px 1fr;grid-template-rows:100%;
     height:100vh;overflow:hidden}
+
+  /* ---------- agent list ---------- */
+  .cols{border-right:1px solid var(--line);display:flex;flex-direction:column;
+    padding:16px 14px;gap:5px;overflow-y:auto;background:var(--rail)}
+  .cols .brand{display:flex;align-items:center;gap:9px;font-size:1.1rem;font-weight:700;
+    letter-spacing:-.02em;padding:2px 6px 16px}
+  .cols .brand svg{flex:none}
+  .cols h2{display:flex;align-items:center;gap:9px;font-size:.94rem;font-weight:600;
+    padding:4px 6px 12px;color:var(--ink)}
+  .cols .foot{display:flex;align-items:center;gap:14px;padding:12px 6px 4px;
+    margin-top:10px;border-top:1px solid var(--line-2);
+    font-size:.82rem;color:var(--muted)}
+  .cols .foot a{color:inherit;text-decoration:none}
+  .cols .foot a:hover{color:var(--ink)}
+  .cols .foot .grow{flex:1}
+  .col{display:flex;align-items:flex-start;gap:9px;border:1px solid var(--line);
+    border-radius:11px;padding:11px 12px;cursor:pointer;background:var(--bg)}
+  .col:hover{border-color:#d4d4d8}
+  .col.on{background:var(--rail-2);border-color:#d4d4d8}
+  .col .star{width:7px;height:7px;border-radius:50%;background:var(--ok);
+    flex:none;margin-top:6px}
+  .col .star.off{background:var(--faint)}
+  .col .body{flex:1;min-width:0}
+  .col .del{background:none;border:none;color:var(--faint);cursor:pointer;
+    font-size:1rem;line-height:1;padding:2px 4px;opacity:0;flex:none}
+  .col:hover .del{opacity:1}
+  .col .del:hover{color:#dc2626}
+  .col .nm{font-size:.88rem;font-weight:600;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  /* The upstream arrow makes this line long; wrap rather than truncate it. */
+  .col .mdl{font-family:var(--mono);font-size:.75rem;color:var(--muted);
+    overflow-wrap:anywhere;line-height:1.4}
+  .addnew{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:11px;
+    font-size:.88rem;color:var(--ink-2);cursor:pointer}
+  .addnew:hover{background:var(--rail-2)}
+  .addnew .ico{color:var(--muted)}
+  .newsession{margin-top:auto;background:var(--dark);color:#fff;border:none;
+    border-radius:12px;padding:13px;font-family:var(--sans);font-size:.9rem;
+    font-weight:600;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:8px}
+  .newsession:hover{background:#27272a}
 
   /* ---------- main ---------- */
   main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);min-height:0}
@@ -31,10 +72,9 @@
     color:var(--ink-2);cursor:pointer;margin-top:11px}
   .chip:hover{border-color:#d4d4d8}
 
-  .agenthead{padding:14px 26px;background:var(--rail);
-    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px}
-  .agenthead .stats{margin-top:0;flex:none;gap:14px}
-  .ahtop{display:flex;align-items:center;gap:11px;flex:1;min-width:0}
+  .agenthead{padding:18px 26px 0;background:var(--rail);
+    border-bottom:1px solid var(--line)}
+  .ahtop{display:flex;align-items:center;gap:11px}
   .ahtop .nm{font-weight:700;font-size:1rem}
   .ahtop .mdl{font-family:var(--mono);font-size:.88rem;color:var(--ink-2)}
   .ahtop .grow{flex:1}
@@ -50,7 +90,7 @@
   .stats{display:flex;align-items:center;gap:7px;margin-top:7px;
     font-size:.86rem;color:var(--ink-2)}
   .stats .sep{color:var(--faint)}
-  .stats .turns{color:var(--muted)}
+  .stats .turns{margin-left:auto;color:var(--muted)}
 
   #log{flex:1;min-height:0;overflow-y:auto;padding:30px 26px 10px}
   .inner{max-width:920px;margin:0 auto}
@@ -96,19 +136,43 @@
     font-size:.86rem;opacity:0;pointer-events:none;transition:opacity .18s}
   .toast.show{opacity:1}
 
-
+  @media (max-width:1100px){ body{grid-template-columns:232px 1fr} }
+  @media (max-width:760px){
+    body{grid-template-columns:1fr}
+    .cols{display:none}
+  }
 </style>
 </head>
 <body>
+
+<!-- ================= agent list ================= -->
+<aside class="cols">
+  <a class="brand" href="/agents/" style="text-decoration:none;color:inherit">
+    <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 15a4 4 0 014-4 5 5 0 019.6-1.4A3.5 3.5 0 1118 17H8a4 4 0 01-4-2z"
+            stroke="#2563eb" stroke-width="1.8" stroke-linejoin="round"/>
+    </svg>
+    agentinstance
+  </a>
+
+  <h2><span aria-hidden="true">◫</span> Agents <span id="cmpCount"
+      style="color:var(--muted);font-weight:400">0</span></h2>
+  <div id="colList"></div>
+  <div class="addnew" id="addNew"><span class="ico" aria-hidden="true">◫</span> Add new</div>
+  <button class="newsession" id="newSession">＋ New session</button>
+
+  <div class="foot">
+    <a href="/agents/">My Agents <span id="agentCount">—</span></a>
+    <span class="grow"></span>
+    <a href="https://github.com/shashank-100/agentinstance#readme"
+       target="_blank" rel="noopener">Docs</a>
+  </div>
+</aside>
 
 <!-- ================= main ================= -->
 <main>
   <section class="agenthead">
     <div class="ahtop">
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 15a4 4 0 014-4 5 5 0 019.6-1.4A3.5 3.5 0 1118 17H8a4 4 0 01-4-2z"
-              stroke="#2563eb" stroke-width="1.8" stroke-linejoin="round"/>
-      </svg>
       <span class="nm" id="agentName">—</span>
       <span class="mdl" id="agentModel">—</span>
       <span class="grow"></span>
@@ -117,6 +181,8 @@
       <button class="iconbtn" id="parkBtn" title="Park agent">▤</button>
     </div>
     <div class="stats">
+      <!-- Reseller publishes no rates; these are the upstream list prices. -->
+      <span>Est. rate <b id="stCost">—</b></span><span class="sep">·</span>
       <span>Last reply <b id="stDur">—</b></span>
       <span class="turns"><b id="stTurns">0</b> turns</span>
     </div>
@@ -238,10 +304,52 @@ function pending() {
   return wrap;
 }
 
+/* --------------------------------------------------------------- columns */
+function renderColumns() {
+  const list = $("colList");
+  list.innerHTML = "";
+  // The active agent always shows, even before the registry has caught up.
+  const rows = agents.length ? agents : [{ id: agentId, model: "—", harness: "chat" }];
+  for (const a of rows) {
+    const el = document.createElement("div");
+    el.className = "col" + (a.id === agentId ? " on" : "");
+    el.innerHTML =
+      `<span class="star"></span>
+       <div class="body">
+         <div class="nm"></div>
+         <div class="mdl"></div>
+       </div>
+       <button class="del" title="Delete agent">×</button>`;
+    // The agent's own id names it; the harness/model pair is what it runs on.
+    el.querySelector(".star").className = "star" + (a.parked ? " off" : "");
+    el.querySelector(".nm").textContent = a.id;
+    el.querySelector(".mdl").textContent =
+      [a.harness, a.model ? modelLabel(a.model) : null].filter(Boolean).join(" · ") || "—";
+    el.onclick = () => switchAgent(a.id);
+    el.querySelector(".del").onclick = (e) => {
+      e.stopPropagation(); // don't also switch to the agent we're deleting
+      removeAgent(a.id);
+    };
+    list.appendChild(el);
+  }
+  $("cmpCount").textContent = rows.length;
+  $("agentCount").textContent = agents.length || "—";
+}
+
+/* A catalog id can resolve to a different name upstream; show what the
+   provider actually receives when the two differ. */
+function modelLabel(id) {
+  const info = catalog?.models?.find((m) => m.id === id);
+  if (!info) return id;
+  return info.upstreamId && info.upstreamId !== info.id
+    ? `${info.id} → ${info.upstreamId}`
+    : info.id;
+}
+
 function renderHead() {
   const rec = agents.find((a) => a.id === agentId);
   const model = rec?.model || catalog?.models?.[0]?.id || "—";
-  const runs = [rec?.harness, model].filter(Boolean).join(" · ");
+  const runs = [rec?.harness, modelLabel(model)].filter(Boolean).join(" · ");
   $("agentName").textContent = agentId;
   $("agentModel").textContent = runs;
   $("composerModel").textContent = runs;
@@ -251,6 +359,10 @@ function renderHead() {
   st.className = "status" + (parked ? " off" : "");
   st.lastElementChild.textContent = parked ? "Parked" : "Ready";
   $("parkBtn").title = parked ? "Unpark agent" : "Park agent";
+
+  // Cost is estimable only once we know the model's per-token price.
+  const info = catalog?.models?.find((m) => m.id === model);
+  $("stCost").textContent = info ? `$${info.priceIn}/${info.priceOut} per 1M` : "—";
   $("stTurns").textContent = turns;
 }
 
@@ -266,6 +378,7 @@ async function loadAgents() {
   } catch { agents = []; }
   // Keep the URL's agent selected; otherwise fall back to the first known one.
   if (!agents.some((a) => a.id === agentId) && agents.length) agentId = agents[0].id;
+  renderColumns();
   renderHead();
 }
 
@@ -287,6 +400,38 @@ async function loadHistory() {
        Demo mode uses a mock model; add an API key for a real one.</div>`;
   }
   $("stTurns").textContent = turns;
+}
+
+/* Wipes the agent's state and drops it from the registry. Not undoable, so it
+   asks first — and never leaves the page pointed at a deleted agent. */
+async function removeAgent(id) {
+  if (!confirm(`Delete agent "${id}"? Its history and state are wiped.`)) return;
+  try {
+    const res = await fetch(`/agents/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    toast(`Could not delete: ${String(e)}`);
+    return;
+  }
+  toast(`Deleted ${id}`);
+  const wasCurrent = id === agentId;
+  await loadAgents();
+  if (wasCurrent) {
+    // Fall back to whatever agent remains; loadAgents already repointed agentId
+    // if the old one is gone, so just re-read the conversation.
+    history.replaceState(null, "", `?id=${encodeURIComponent(agentId)}`);
+    renderHead();
+    await loadHistory();
+  }
+}
+
+async function switchAgent(id) {
+  if (id === agentId) return;
+  agentId = id;
+  history.replaceState(null, "", `?id=${encodeURIComponent(id)}`);
+  renderColumns();
+  renderHead();
+  await loadHistory();
 }
 
 /* --------------------------------------------------------------- sending */
@@ -341,6 +486,19 @@ $("send").onclick = () => {
   send(t);
 };
 
+$("newSession").onclick = async () => {
+  if (!confirm("Clear this session's history?")) return;
+  try {
+    await fetch(`/agents/${agentId}/configure`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+  } catch {}
+  await loadHistory();
+  toast("New session started");
+};
+
+$("addNew").onclick = () => { location.href = "/agents/new.html"; };
 $("openRaw").onclick = () => window.open(`/agents/${agentId}/history`, "_blank");
 
 $("parkBtn").onclick = async () => {
@@ -352,7 +510,6 @@ $("parkBtn").onclick = async () => {
     await loadAgents();
   } catch { toast("Could not reach agent"); }
 };
-
 
 $("connectApps2").onclick = () =>
   toast("Capabilities are set when you launch an agent");
