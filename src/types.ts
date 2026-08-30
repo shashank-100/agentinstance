@@ -33,7 +33,7 @@ export interface Env {
   SLACK_BOT_TOKEN?: string;
   WHATSAPP_TOKEN?: string;
   WHATSAPP_PHONE_ID?: string;
-  SERP_API_KEY?: string;
+  TAVILY_API_KEY?: string;
   SANDBOX_URL?: string;
   SANDBOX_TOKEN?: string;
 }

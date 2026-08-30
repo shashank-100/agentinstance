@@ -35,10 +35,10 @@ export const scrapeWeb: Capability = {
   },
 };
 
-export const searchSerp: Capability = {
-  name: "search_serp",
+export const searchWeb: Capability = {
+  name: "search_web",
   describe:
-    "Search the web and return the top results (title, link, snippet). " +
+    "Search the web and return the top results (title, url, snippet). " +
     "Use for current facts, companies, people, or anything not in your training data.",
   parameters: {
     type: "object",
@@ -47,26 +47,31 @@ export const searchSerp: Capability = {
   },
   async run(env, input) {
     const q = String(input.query ?? "");
-    if (!q) throw new Error("search_serp requires { query }");
-    if (!env.SERP_API_KEY) return { query: q, results: [], note: "SERP_API_KEY not set" };
-    const res = await fetch(
-      `https://serpapi.com/search.json?q=${encodeURIComponent(q)}&api_key=${env.SERP_API_KEY}`,
-    );
-    if (!res.ok) throw new Error(`serpapi ${res.status}: ${await res.text()}`);
+    if (!q) throw new Error("search_web requires { query }");
+    if (!env.TAVILY_API_KEY) return { query: q, results: [], note: "TAVILY_API_KEY not set" };
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        api_key: env.TAVILY_API_KEY,
+        query: q,
+        max_results: 5,
+        include_answer: true,
+      }),
+    });
+    if (!res.ok) throw new Error(`tavily ${res.status}: ${await res.text()}`);
     const data = (await res.json()) as {
-      error?: string;
-      answer_box?: { answer?: string; snippet?: string };
-      organic_results?: { title?: string; link?: string; snippet?: string }[];
+      answer?: string | null;
+      results?: { title?: string; url?: string; content?: string }[];
     };
-    if (data.error) throw new Error(`serpapi: ${data.error}`);
-    // Keep only the fields a model needs — raw SERP payloads are enormous.
+    // Keep only what a model needs — raw search payloads are enormous.
     return {
       query: q,
-      answer: data.answer_box?.answer ?? data.answer_box?.snippet ?? null,
-      results: (data.organic_results ?? []).slice(0, 5).map((r) => ({
+      answer: data.answer ?? null,
+      results: (data.results ?? []).slice(0, 5).map((r) => ({
         title: r.title,
-        link: r.link,
-        snippet: r.snippet,
+        url: r.url,
+        snippet: r.content?.slice(0, 400),
       })),
     };
   },
@@ -124,7 +129,7 @@ export const transcribeVoice = stub("transcribe_voice", "Speech-to-text transcri
 
 const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
-  search_serp: searchSerp,
+  search_web: searchWeb,
   generate_image: generateImage,
   generate_video: generateVideo,
   crm,

@@ -9,7 +9,7 @@ const fakeEnv = {} as Env;
 describe("capabilities", () => {
   it("registry resolves known capabilities", () => {
     expect(getCapability("scrape_web")?.name).toBe("scrape_web");
-    expect(getCapability("search_serp")?.name).toBe("search_serp");
+    expect(getCapability("search_web")?.name).toBe("search_web");
     expect(getCapability("nope")).toBeNull();
   });
 
@@ -25,20 +25,20 @@ describe("capabilities", () => {
     await expect(runCapability(fakeEnv, [], "scrape_web", {})).rejects.toThrow(/not enabled/);
   });
 
-  it("search_serp degrades gracefully without a key", async () => {
-    const out = (await runCapability(fakeEnv, ["search_serp"], "search_serp", {
+  it("search_web degrades gracefully without a key", async () => {
+    const out = (await runCapability(fakeEnv, ["search_web"], "search_web", {
       query: "cats",
     })) as { note?: string };
     expect(out.note).toMatch(/not set/);
   });
 
   it("tool route respects the agent's configured capabilities", async () => {
-    // configure an agent WITH search_serp enabled
+    // configure an agent WITH search_web enabled
     await SELF.fetch("https://x/agents/toolA/configure", {
       method: "POST",
-      body: JSON.stringify({ capabilities: ["search_serp"] }),
+      body: JSON.stringify({ capabilities: ["search_web"] }),
     });
-    const ok = await SELF.fetch("https://x/agents/toolA/tool/search_serp", {
+    const ok = await SELF.fetch("https://x/agents/toolA/tool/search_web", {
       method: "POST",
       body: JSON.stringify({ query: "hi" }),
     });

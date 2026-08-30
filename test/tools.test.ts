@@ -10,7 +10,7 @@ const history: Message[] = [
 ];
 
 const searchTool: ToolDef = {
-  name: "search_serp",
+  name: "search_web",
   description: "Search the web.",
   parameters: { type: "object", properties: { query: { type: "string" } } },
 };
@@ -32,7 +32,7 @@ function scriptedModel(turns: Turn[]): Model & { calls: number } {
 describe("ChatHarness tool loop", () => {
   it("runs a requested tool and feeds the result back", async () => {
     const model = scriptedModel([
-      { text: "", toolCalls: [{ id: "c1", name: "search_serp", input: { query: "result.dev" } }] },
+      { text: "", toolCalls: [{ id: "c1", name: "search_web", input: { query: "result.dev" } }] },
       { text: "result.dev is a YC company.", toolCalls: [] },
     ]);
     const ran: { name: string; input: Record<string, unknown> }[] = [];
@@ -45,7 +45,7 @@ describe("ChatHarness tool loop", () => {
       },
     });
 
-    expect(ran).toEqual([{ name: "search_serp", input: { query: "result.dev" } }]);
+    expect(ran).toEqual([{ name: "search_web", input: { query: "result.dev" } }]);
     expect(reply).toBe("result.dev is a YC company.");
   });
 
@@ -60,7 +60,7 @@ describe("ChatHarness tool loop", () => {
 
   it("surfaces a failing tool as an observation instead of throwing", async () => {
     const model = scriptedModel([
-      { text: "", toolCalls: [{ id: "c1", name: "search_serp", input: {} }] },
+      { text: "", toolCalls: [{ id: "c1", name: "search_web", input: {} }] },
       { text: "Search failed, sorry.", toolCalls: [] },
     ]);
     const reply = await new ChatHarness().run(model, history, "sys", {
@@ -75,7 +75,7 @@ describe("ChatHarness tool loop", () => {
   it("stops after the step cap instead of looping forever", async () => {
     // Always asks for a tool — the loop must bail out and still answer.
     const model = scriptedModel([
-      { text: "", toolCalls: [{ id: "c", name: "search_serp", input: {} }] },
+      { text: "", toolCalls: [{ id: "c", name: "search_web", input: {} }] },
     ]);
     const reply = await new ChatHarness().run(model, history, "sys", {
       tools: [searchTool],
