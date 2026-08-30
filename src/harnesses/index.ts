@@ -162,9 +162,4 @@ export function checkCompatible(spec: AgentSpec): void {
   for (const cap of spec.capabilities) {
     if (!(cap in CAPABILITIES)) throw new IncompatibleSpec(`unknown capability '${cap}'`);
   }
-  const heavy = new Set(["generate_video", "image_to_video", "browser_use"]);
-  const usesHeavy = spec.capabilities.some((c) => heavy.has(c));
-  if (usesHeavy && spec.machine === "1gb") {
-    throw new IncompatibleSpec("video/browser capabilities require at least the 2gb machine");
-  }
 }

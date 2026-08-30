@@ -51,19 +51,10 @@ export const MACHINES: Record<string, MachineTier> = {
 };
 export const DEFAULT_MACHINE = "4gb";
 
-// ready:false entries are stubs — selectable, but they return a "configure a
-// provider" note instead of doing the work. See src/capabilities/index.ts.
+// Every capability here is implemented and works with the configured keys.
 export const CAPABILITIES: Record<string, CatalogEntry> = {
   scrape_web: { desc: "Fetch and extract page text.", ready: true },
   search_web: { desc: "Web search via Tavily.", ready: true },
-  browser_use: { desc: "Drive a real browser.", ready: false },
-  remove_image_bg: { desc: "Remove image background.", ready: false },
-  generate_video: { desc: "Text-to-video generation.", ready: false },
-  image_to_video: { desc: "Animate an image into video.", ready: false },
-  transcribe_voice: { desc: "Speech-to-text transcription.", ready: false },
-  crm: { desc: "Read/write CRM records.", ready: false },
-  social_listening: { desc: "Monitor social mentions.", ready: false },
-  file_management: { desc: "Store, list, fetch agent files.", ready: false },
 };
 
 export function estimateMonthCost(machine = DEFAULT_MACHINE): number {

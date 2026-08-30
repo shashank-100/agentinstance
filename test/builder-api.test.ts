@@ -42,12 +42,12 @@ describe("builder API", () => {
       body: JSON.stringify({
         harness: "chat",
         model: "gpt-5.4-mini",
-        capabilities: ["generate_video"],
-        machine: "1gb", // heavy cap on tiny machine -> incompatible
+        capabilities: ["not_a_capability"],
+        machine: "1gb",
       }),
     });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toMatch(/2gb/);
+    expect(((await res.json()) as { error: string }).error).toMatch(/unknown capability/);
   });
 
   it("launch auto-generates an id when omitted", async () => {

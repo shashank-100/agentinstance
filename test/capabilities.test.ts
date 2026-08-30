@@ -13,11 +13,11 @@ describe("capabilities", () => {
     expect(getCapability("nope")).toBeNull();
   });
 
-  it("new capability stubs are registered and runnable", async () => {
-    for (const name of ["generate_video", "crm", "social_listening", "file_management"]) {
-      expect(getCapability(name)?.name).toBe(name);
-      const out = (await runCapability(fakeEnv, [name], name, {})) as { note: string };
-      expect(out.note).toMatch(/stub/);
+  it("only implemented capabilities are registered", () => {
+    // Removed stubs must not linger in the registry — the catalog claims
+    // everything it lists actually works.
+    for (const name of ["generate_video", "crm", "browser_use", "email", "generate_image"]) {
+      expect(getCapability(name)).toBeNull();
     }
   });
 
