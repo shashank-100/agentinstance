@@ -1,6 +1,8 @@
-// Features #7-#11 — channel adapters. Every channel normalizes an inbound
-// webhook into { agentId, text, channel } and sends the reply back out. History
-// is unified at the agent level; a channel only replies where the request came.
+// Channel adapters. Each one normalizes an inbound webhook into
+// { agentId, text, channel } and sends the reply back the way it came.
+//
+// History is unified at the agent level: a Telegram message and a web message
+// land in the same table, so the agent has one memory across all of them.
 //
 // Idempotency: outbound sends carry a stable key generated before the attempt,
 // so a resumed/retried agent never double-sends (see design insights).

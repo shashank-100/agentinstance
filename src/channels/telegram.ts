@@ -1,4 +1,4 @@
-// Feature #8 — Telegram. Webhook: setWebhook to /channels/telegram/:agentId.
+// Telegram. Point setWebhook at /channels/telegram/:agentId.
 import type { Env } from "../types.js";
 import type { ChannelAdapter, Inbound } from "./index.js";
 

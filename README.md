@@ -102,14 +102,14 @@ push a local agent (spec + history) into the cloud.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for what every file does and why.
 
-## Self-hostable sandbox
+## Sandbox
 
-Agents can run **real shell commands / code** via a pluggable sandbox. The
-default backend is a small **self-hosted** HTTP service (Docker container you
-run anywhere) — no proprietary sandbox cloud. See
-[`sandbox-service/`](./sandbox-service/). Set `SANDBOX_URL` to enable it; the
-`shell` harness then executes commands (and falls back to a plain model call
-when it's unset).
+Agents run **real shell commands** in a container attached to their own Durable
+Object — a Firecracker micro-VM with bash, python3 and git. It has no public
+endpoint: the Worker reaches it through a binding, so nothing that executes
+arbitrary commands is addressable from the internet.
+
+Use it by giving an agent the `shell` harness. See `Dockerfile` for the image.
 
 ## Roadmap
 

@@ -1,4 +1,7 @@
-// Feature #4 — pluggable harnesses + 3-piece AgentSpec with compatibility check.
+// A harness is the agent's loop: what it does between receiving a message and
+// producing a reply. ChatHarness asks the model and runs any tools it calls;
+// CliHarness gives the model a shell. The spec (harness + model + capabilities)
+// is checked for coherence before an agent is created.
 import type { Message } from "../types.js";
 import type { Model, ToolDef } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";

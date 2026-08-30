@@ -1,6 +1,8 @@
-// Feature #13 — built-in capabilities ("the hands that reach").
-// Each capability is a callable tool. Only capabilities enabled in the agent's
-// spec are exposed. Implementations use plain fetch so they run on Workers.
+// The tools an agent can call. A capability with a `parameters` schema is
+// offered to the model; without one it is only reachable over the REST API.
+//
+// Everything here uses plain fetch, because it runs inside a Worker — no Node
+// APIs, no filesystem. Anything needing those belongs in the sandbox instead.
 import type { Env } from "../types.js";
 
 export interface Capability {

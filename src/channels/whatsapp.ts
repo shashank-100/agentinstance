@@ -1,4 +1,4 @@
-// Feature #11 — WhatsApp (Meta Cloud API).
+// WhatsApp, via the Meta Cloud API.
 import type { Env } from "../types.js";
 import type { ChannelAdapter, Inbound } from "./index.js";
 

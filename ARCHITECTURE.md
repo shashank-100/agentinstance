@@ -103,14 +103,12 @@ routed back to wherever the request came from.
 
 | File | What it does |
 |---|---|
-| `index.ts` | The `Sandbox` interface (`exec`, `readFile`, `writeFile`) and `HttpSandbox`, which calls a self-hosted service over a tiny HTTP API. |
+| `index.ts` | The `Sandbox` interface (`exec`, `readFile`, `writeFile`) and `ContainerSandbox`, which reaches a Cloudflare Container through a binding. |
 
-Workers cannot spawn processes, so code execution has to happen elsewhere. The
-interface keeps that swappable; `HttpSandbox` points at whatever `SANDBOX_URL`
-you set, one workspace per agent id.
-
-> Written but not deployed — `SANDBOX_URL` is unset, so `CliHarness` currently
-> falls back to a plain model call.
+Workers cannot spawn processes, so code execution happens in a container
+attached to the agent's own Durable Object — a Firecracker micro-VM with bash,
+python3 and git, one workspace per agent. It has no public endpoint: the Worker
+reaches it through a binding.
 
 ---
 
@@ -125,7 +123,6 @@ plain HTML with a `<script>` block, so the deploy is a file upload.
 | `agents/index.html` | Dashboard listing every agent, with park/delete/chat links. |
 | `agents/new.html` | The builder: pick harness + model + capabilities + machine, check compatibility, launch. |
 | `agents/builder.js` | The builder's state machine, kept separate so it can be unit-tested in Node without a browser (see `test/ui/builder.test.ts`). |
-| `channels/index.html` | Setup instructions for the channel webhooks. |
 
 ---
 
@@ -157,7 +154,7 @@ Two suites, two runners, because they need different environments:
 | Path | What it does |
 |---|---|
 | `cli/agentinstance.mjs` | A thin wrapper over the REST API — `launch`, `send`, `clone`. Zero dependencies; just `fetch`. |
-| `sandbox-service/` | The self-hosted code-execution service: `server.mjs` (HTTP API), `Dockerfile`, `fly.toml`. Runs anywhere that runs a container. |
+| `Dockerfile` | The sandbox image: Cloudflare's base plus python3 and git. |
 
 ---
 

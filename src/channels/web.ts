@@ -1,4 +1,4 @@
-// Feature #7 — Web chat. The reply is returned in the HTTP response (no outbound
+// Web chat. The reply rides the HTTP response (no outbound
 // push needed), so `send` is a no-op and the pipeline returns { reply }.
 import type { Env } from "../types.js";
 import type { ChannelAdapter, Inbound } from "./index.js";

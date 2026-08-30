@@ -1,6 +1,9 @@
-// Features #1 (runtime+loop), #2 (persistent memory), #14 (alarm/wakeup),
-// and the health!=progress signal from the AgentSky PH thread — all in the
-// per-agent Durable Object. One DO instance == one always-on agent.
+// One agent = one Durable Object. It owns that agent's conversation, its
+// notes, its configuration and its alarm, all in the DO's own SQLite.
+//
+// A DO is single-threaded and addressed by name, so two requests to the same
+// agent queue automatically — there are no locks or transactions here, and
+// none are needed.
 import { DurableObject } from "cloudflare:workers";
 import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
@@ -84,7 +87,7 @@ export class AgentInstance extends DurableObject<Env> {
     );
   }
 
-  // --- public RPC ----------------------------------------------------------
+  // --- the conversation -----------------------------------------------------
   async configure(spec: Partial<AgentSpec>): Promise<AgentSpec> {
     const merged = { ...this.spec, ...spec };
     this.setKV("spec", merged);
@@ -131,7 +134,7 @@ export class AgentInstance extends DurableObject<Env> {
     return this.history();
   }
 
-  // --- Feature #5: snapshot / restore --------------------------------------
+  // --- backup ---------------------------------------------------------------
   /** Export full agent state (spec + history + kv) for backup. */
   async snapshot(): Promise<{ spec: AgentSpec; history: Message[]; kv: Record<string, unknown> }> {
     const kv: Record<string, unknown> = {};
@@ -186,46 +189,66 @@ export class AgentInstance extends DurableObject<Env> {
     return { parked, lastProgress, expectedCadenceMs: cadence, stalled };
   }
 
-  // --- Feature #13: capabilities -------------------------------------------
-  /** Run one of this agent's enabled capabilities.
-   * Returns { error } for expected failures instead of throwing across RPC. */
+  // --- tools ----------------------------------------------------------------
+  /**
+   * Run one of this agent's enabled capabilities.
+   * Returns { error } for expected failures rather than throwing across RPC,
+   * so the harness can hand the model an observation and let it recover.
+   */
   async runTool(
     name: string,
     input: Record<string, unknown>,
-  ): Promise<{ result?: unknown; error?: string }> {
+  ): Promise<{ result?: Record<string, unknown>; error?: string }> {
     if (!this.spec.capabilities.includes(name)) {
       return { error: `capability '${name}' not enabled for this agent` };
     }
-    // memory lives in this agent's own SQLite, so it can't go through the
-    // env-only Capability contract.
+    try {
+      const memo = this.runMemoryTool(name, input);
+      if (memo) return { result: memo };
+
+      const { getCapability } = await import("./capabilities/index.js");
+      const cap = getCapability(name);
+      if (!cap) return { error: `capability '${name}' has no implementation` };
+      return { result: (await cap.run(this.env, input)) as Record<string, unknown> };
+    } catch (e) {
+      return { error: String(e) };
+    }
+  }
+
+  /**
+   * remember / recall, which the ordinary Capability contract cannot serve:
+   * they need this agent's own SQLite, and a capability only receives `env`.
+   * Returns null for any other tool name so the caller falls through.
+   */
+  private runMemoryTool(
+    name: string,
+    input: Record<string, unknown>,
+  ): Record<string, unknown> | null {
     if (name === "remember") {
       const key = String(input.key ?? "").trim();
-      const value = String(input.value ?? "");
-      if (!key) return { error: "remember requires { key, value }" };
+      if (!key) throw new Error("remember requires { key, value }");
       this.sql.exec(
         "INSERT INTO notes (key,value,ts) VALUES (?,?,?) " +
           "ON CONFLICT(key) DO UPDATE SET value=excluded.value, ts=excluded.ts",
         key,
-        value,
+        String(input.value ?? ""),
         Date.now(),
       );
-      return { result: { saved: key } };
+      return { saved: key };
     }
+
     if (name === "recall") {
       const key = input.key ? String(input.key).trim() : null;
       const rows = key
         ? this.sql.exec("SELECT key,value,ts FROM notes WHERE key = ?", key).toArray()
         : this.sql.exec("SELECT key,value,ts FROM notes ORDER BY ts DESC LIMIT 50").toArray();
-      return { result: { notes: rows } };
+      return { notes: rows };
     }
 
-    const { getCapability } = await import("./capabilities/index.js");
-    const cap = getCapability(name);
-    if (!cap) return { error: `capability '${name}' has no implementation` };
-    return { result: await cap.run(this.env, input) };
+    return null;
   }
 
-  // --- Feature #14: scheduled wakeups --------------------------------------
+  // --- acting on its own ----------------------------------------------------
   /** Set (or replace) the standing task. Pass cadenceMs to make it recurring. */
   async scheduleWakeup(atMs: number, prompt: string, cadenceMs?: number): Promise<void> {
     this.setKV("wakeup_prompt", prompt);

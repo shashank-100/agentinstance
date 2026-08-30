@@ -1,4 +1,4 @@
-// Feature #9 — Discord (interaction webhook shape).
+// Discord, via the interaction webhook.
 import type { Env } from "../types.js";
 import type { ChannelAdapter, Inbound } from "./index.js";
 

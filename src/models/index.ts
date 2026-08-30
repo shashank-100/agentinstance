@@ -1,4 +1,4 @@
-// Feature #3 — pluggable model adapters. OpenAICompatModel talks to any
+// Model adapters. OpenAICompatModel talks to any
 // OpenAI-shaped /chat/completions endpoint (Moonshot, DeepSeek, Z.ai, OpenAI
 // itself) by swapping base_url, so adding a provider is a catalog entry plus a
 // key. EchoModel needs no key and exists for offline tests.

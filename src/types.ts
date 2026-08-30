@@ -37,6 +37,4 @@ export interface Env {
   BROWSER?: { quickAction(action: string, opts: Record<string, unknown>): Promise<Response> };
   /** Container-backed sandbox (Cloudflare Containers). */
   SANDBOX?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
-  SANDBOX_URL?: string;
-  SANDBOX_TOKEN?: string;
 }

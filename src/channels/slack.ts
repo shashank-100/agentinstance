@@ -1,4 +1,4 @@
-// Feature #10 — Slack (Events API).
+// Slack, via the Events API.
 import type { Env } from "../types.js";
 import type { ChannelAdapter, Inbound } from "./index.js";
 
