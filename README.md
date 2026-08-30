@@ -100,6 +100,8 @@ push a local agent (spec + history) into the cloud.
 | Harnesses + spec + compatibility | `src/harnesses/` |
 | Catalog (models/pricing/machines/capabilities) | `src/catalog.ts` |
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for what every file does and why.
+
 ## Self-hostable sandbox
 
 Agents can run **real shell commands / code** via a pluggable sandbox. The
