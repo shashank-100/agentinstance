@@ -77,34 +77,6 @@ export const searchWeb: Capability = {
   },
 };
 
-export const generateImage: Capability = {
-  name: "generate_image",
-  describe:
-    "Generate an image from a text prompt and return its URL. " +
-    "Describe the desired image in full; the prompt is not rewritten.",
-  parameters: {
-    type: "object",
-    properties: {
-      prompt: { type: "string", description: "What the image should depict." },
-    },
-    required: ["prompt"],
-  },
-  async run(env, input) {
-    const prompt = String(input.prompt ?? "");
-    if (!env.OPENAI_API_KEY) return { prompt, url: null, note: "OPENAI_API_KEY not set" };
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ model: "gpt-image-1", prompt, n: 1 }),
-    });
-    const data = (await res.json()) as { data?: { url?: string }[] };
-    return { prompt, url: data.data?.[0]?.url ?? null };
-  },
-};
-
 // Lightweight stubs for capabilities that need an external provider/config.
 // They return a clear "configure me" result rather than failing, so the whole
 // catalog is selectable and the wiring is testable without third-party keys.
@@ -130,7 +102,6 @@ export const transcribeVoice = stub("transcribe_voice", "Speech-to-text transcri
 const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
   search_web: searchWeb,
-  generate_image: generateImage,
   generate_video: generateVideo,
   crm,
   social_listening: socialListening,

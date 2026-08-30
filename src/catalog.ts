@@ -56,7 +56,6 @@ export const DEFAULT_MACHINE = "4gb";
 export const CAPABILITIES: Record<string, CatalogEntry> = {
   scrape_web: { desc: "Fetch and extract page text.", ready: true },
   search_web: { desc: "Web search via Tavily.", ready: true },
-  generate_image: { desc: "Text-to-image (needs OPENAI_API_KEY).", ready: true },
   browser_use: { desc: "Drive a real browser.", ready: false },
   remove_image_bg: { desc: "Remove image background.", ready: false },
   generate_video: { desc: "Text-to-video generation.", ready: false },

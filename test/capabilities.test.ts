@@ -45,7 +45,7 @@ describe("capabilities", () => {
     expect(ok.status).toBe(200);
 
     // a capability NOT enabled is rejected
-    const denied = await SELF.fetch("https://x/agents/toolA/tool/generate_image", {
+    const denied = await SELF.fetch("https://x/agents/toolA/tool/crm", {
       method: "POST",
       body: JSON.stringify({ prompt: "x" }),
     });

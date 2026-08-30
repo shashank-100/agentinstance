@@ -27,7 +27,6 @@ export interface Env {
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;
   // Capability keys.
-  OPENAI_API_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
   DISCORD_BOT_TOKEN?: string;
   SLACK_BOT_TOKEN?: string;

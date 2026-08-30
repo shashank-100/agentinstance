@@ -12,7 +12,6 @@ WHATSAPP_TOKEN=
 WHATSAPP_PHONE_ID=
 
 # Capabilities
-OPENAI_API_KEY=
 TAVILY_API_KEY=
 
 # Self-hostable sandbox (agents run real commands)
