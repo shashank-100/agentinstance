@@ -9,9 +9,6 @@ import type { Env } from "./types.js";
 import {
   handleChannel,
   TelegramAdapter,
-  DiscordAdapter,
-  SlackAdapter,
-  WhatsAppAdapter,
   WebAdapter,
   type ChannelAdapter,
 } from "./channels/index.js";
@@ -32,9 +29,6 @@ export { Sandbox } from "@cloudflare/sandbox";
 
 const CHANNELS: Record<string, ChannelAdapter> = {
   telegram: new TelegramAdapter(),
-  discord: new DiscordAdapter(),
-  slack: new SlackAdapter(),
-  whatsapp: new WhatsAppAdapter(),
   web: new WebAdapter(),
 };
 
@@ -160,16 +154,6 @@ async function deleteAgentRoute(env: Env, id: string): Promise<Response> {
 async function channelRoute(request: Request, env: Env, name: string): Promise<Response> {
   const adapter = CHANNELS[name];
   if (!adapter) return new Response("unknown channel", { status: 404 });
-
-  // Verification handshakes have to answer before any normal parsing.
-  if (name === "slack") {
-    const body = await bodyOf<{ type?: string; challenge?: string }>(request.clone());
-    if (body.type === "url_verification") return json({ challenge: body.challenge });
-  }
-  if (name === "discord") {
-    const body = await bodyOf<{ type?: number }>(request.clone());
-    if (body.type === 1) return json({ type: 1 }); // PONG
-  }
 
   try {
     return await handleChannel(adapter, request, env);

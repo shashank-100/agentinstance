@@ -32,21 +32,7 @@ describe("worker gateway", () => {
     expect(hist[0].channel).toBe("telegram");
   });
 
-  it("slack url_verification echoes the challenge", async () => {
-    const res = await SELF.fetch("https://x/channels/slack/a", {
-      method: "POST",
-      body: JSON.stringify({ type: "url_verification", challenge: "abc123" }),
-    });
-    expect(await res.json()).toEqual({ challenge: "abc123" });
-  });
 
-  it("discord PING returns PONG", async () => {
-    const res = await SELF.fetch("https://x/channels/discord/a", {
-      method: "POST",
-      body: JSON.stringify({ type: 1 }),
-    });
-    expect(await res.json()).toEqual({ type: 1 });
-  });
 
   it("REST send + configure works", async () => {
     await SELF.fetch("https://x/agents/agentR/configure", {

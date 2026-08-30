@@ -28,10 +28,6 @@ export interface Env {
   USE_ECHO_MODEL?: string;
   // Capability keys.
   TELEGRAM_BOT_TOKEN?: string;
-  DISCORD_BOT_TOKEN?: string;
-  SLACK_BOT_TOKEN?: string;
-  WHATSAPP_TOKEN?: string;
-  WHATSAPP_PHONE_ID?: string;
   TAVILY_API_KEY?: string;
   /** Headless Chrome via Browser Rendering Quick Actions. */
   BROWSER?: { quickAction(action: string, opts: Record<string, unknown>): Promise<Response> };

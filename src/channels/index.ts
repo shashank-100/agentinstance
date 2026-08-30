@@ -49,7 +49,4 @@ export async function handleChannel(
 }
 
 export { TelegramAdapter } from "./telegram.js";
-export { DiscordAdapter } from "./discord.js";
-export { SlackAdapter } from "./slack.js";
-export { WhatsAppAdapter } from "./whatsapp.js";
 export { WebAdapter } from "./web.js";
