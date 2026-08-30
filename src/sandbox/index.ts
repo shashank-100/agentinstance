@@ -83,7 +83,10 @@ export class ContainerSandbox implements Sandbox {
   constructor(private ns: DurableObjectNamespace<CfSandbox>) {}
 
   private box(agentId: string) {
-    return getCloudflareSandbox(this.ns, agentId);
+    // A DO id stringifies to 64 hex chars, one over the SDK's 63-char cap.
+    // Trim rather than hash: the id is already unique well inside 63 chars,
+    // and keeping the prefix stable keeps one workspace per agent.
+    return getCloudflareSandbox(this.ns, agentId.slice(0, 63));
   }
 
   async exec(agentId: string, command: string): Promise<ExecResult> {

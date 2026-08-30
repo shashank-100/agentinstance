@@ -9,7 +9,7 @@
   // The sandbox runs as a container attached to its own Durable Object, so
   // each agent gets an isolated workspace addressed the same way its memory is.
   "containers": [
-    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "lite", "max_instances": 5 }
+    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "basic", "max_instances": 5 }
   ],
   "durable_objects": {
     "bindings": [
