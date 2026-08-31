@@ -12,6 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # The agent CLIs a harness can run. Each authenticates with its own key, passed
 # into the command's environment at run time — never baked into the image.
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code @earendil-works/pi-coding-agent
 
 EXPOSE 3000

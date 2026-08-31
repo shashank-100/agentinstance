@@ -133,7 +133,12 @@ export class AgentInstance extends DurableObject<Env> {
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
       ...(() => {
         const p = this.provider();
-        return { cliKey: p.key, cliBaseUrl: p.baseUrl, cliModel: p.model };
+        return {
+          cliKey: p.key,
+          cliBaseUrl: p.baseUrl,
+          cliModel: p.model,
+          oauthToken: this.env.CLAUDE_CODE_OAUTH_TOKEN,
+        };
       })(),
       tools,
       runTool: async (name, input) => {

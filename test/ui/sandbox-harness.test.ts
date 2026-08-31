@@ -67,6 +67,6 @@ describe("agent CLI harnesses", () => {
         sandbox: fakeSandbox({}),
         agentId: "a1",
       }),
-    ).rejects.toThrow(/no provider key/);
+    ).rejects.toThrow(/no credentials/);
   });
 });

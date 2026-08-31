@@ -17,6 +17,8 @@ export interface HarnessContext {
   cliKey?: string;
   cliBaseUrl?: string;
   cliModel?: string;
+  /** Subscription token for CLIs that accept one instead of a provider key. */
+  oauthToken?: string;
   /** Tools the model may call this turn, with a runner for each. */
   tools?: ToolDef[];
   runTool?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -97,6 +99,11 @@ export class AgentCliHarness implements Harness {
     private template: string,
     /** Env vars the CLI reads: its key, and the endpoint to talk to. */
     private env: { key: string; baseUrl: string; model: string },
+    private oauthVar?: string,
+    private configFile?: {
+      path: string;
+      build: (baseUrl: string, key: string, model: string) => string;
+    },
   ) {}
 
   async run(
@@ -109,10 +116,13 @@ export class AgentCliHarness implements Harness {
     if (!sandbox || !agentId) {
       throw new Error(`${this.name} needs a sandbox — no container is bound`);
     }
-    const { cliKey, cliBaseUrl, cliModel } = ctx ?? {};
-    if (!cliKey) {
+    const { cliKey, cliBaseUrl, cliModel, oauthToken } = ctx ?? {};
+    // An OAuth token authenticates against the CLI's own vendor, so it wins:
+    // the agent's provider may not speak that CLI's API format at all.
+    const useOauth = !!(this.oauthVar && oauthToken);
+    if (!useOauth && !cliKey) {
       throw new Error(
-        `${this.name} has no provider key — set the secret for this agent's model`,
+        `${this.name} has no credentials — set its OAuth token, or a key for this agent's model`,
       );
     }
 
@@ -125,26 +135,50 @@ export class AgentCliHarness implements Harness {
     const task = lastUserText(history);
     if (!task) return "(nothing to do)";
 
+    // A CLI that reads its provider from disk needs that file written first —
+    // and rewritten every session, since the VM's filesystem is not durable.
+    if (this.configFile && cliKey && cliBaseUrl && cliModel) {
+      await sandbox.exec(agentId, "id -u agent >/dev/null 2>&1 || useradd -m agent");
+      // The CLI runs as `agent`, so this must land in that user's home — not
+      // root's, where the sandbox writes by default.
+      await sandbox
+        .writeFile(
+          agentId,
+          `/home/agent/${this.configFile.path}`,
+          this.configFile.build(cliBaseUrl, cliKey, cliModel),
+        )
+        .catch(() => {});
+    }
+
     // These CLIs default to their vendor's endpoint. Pointing them at the
     // agent's own provider is what lets Claude Code run on any OpenAI-compatible
     // model rather than requiring an Anthropic subscription.
     //
     // Keys go in the command's environment, never the prompt: a prompt is echoed
     // back in the CLI's own logs.
-    const envs = [
-      `${this.env.key}=${shellQuote(cliKey)}`,
-      cliBaseUrl ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}` : "",
-      cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
-    ]
+    const envs = (
+      useOauth
+        ? [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
+        : [
+            this.env.key ? `${this.env.key}=${shellQuote(cliKey as string)}` : "",
+            this.env.baseUrl && cliBaseUrl
+              ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}`
+              : "",
+            this.env.model && cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
+          ]
+    )
       .filter(Boolean)
       .join(" ");
     // Claude Code refuses to skip permission prompts while running as root.
     // The VM is already an isolated sandbox, so drop to an unprivileged user
     // rather than leaving the CLI blocked on prompts it cannot answer.
-    const inner = `${envs} ` + this.template.replace("{task}", shellQuote(task));
+    const inner =
+      `${envs} ` +
+      this.template.replace("{task}", shellQuote(task)).replace("{model}", shellQuote(cliModel ?? ""));
     const cmd =
       `cd /workspace && (id -u agent >/dev/null 2>&1 || useradd -m agent) && ` +
-      `chown -R agent /workspace && runuser -u agent -- sh -c ${shellQuote(inner)}`;
+      `chown -R agent /workspace /home/agent && ` +
+      `runuser -u agent -- sh -c ${shellQuote(inner)}`;
 
     const out = await sandbox.exec(agentId, cmd);
     if (out.exitCode !== 0) {
@@ -175,7 +209,17 @@ function shellQuote(s: string): string {
  */
 const CLI_HARNESSES: Record<
   string,
-  { template: string; env: { key: string; baseUrl: string; model: string } }
+  {
+    template: string;
+    env: { key: string; baseUrl: string; model: string };
+    /** Set when the CLI accepts a subscription token instead of a provider key. */
+    oauthVar?: string;
+    /** Set when the CLI reads its provider from a config file, not the env. */
+    configFile?: {
+      path: string;
+      build: (baseUrl: string, key: string, model: string) => string;
+    };
+  }
 > = {
   "claude-code": {
     template: "claude --dangerously-skip-permissions -p {task}",
@@ -184,10 +228,30 @@ const CLI_HARNESSES: Record<
       baseUrl: "ANTHROPIC_BASE_URL",
       model: "ANTHROPIC_MODEL",
     },
+    // Claude Code speaks Anthropic's /v1/messages, which OpenAI-compatible
+    // providers do not serve. A subscription OAuth token bypasses that: it
+    // authenticates against Anthropic directly, so no base URL is passed.
+    oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
   },
   pi: {
-    template: "pi -p {task}",
-    env: { key: "OPENAI_API_KEY", baseUrl: "OPENAI_BASE_URL", model: "OPENAI_MODEL" },
+    // Pi resolves providers from ~/.pi/agent/models.json rather than env vars,
+    // so the harness writes that file before invoking it.
+    template: "pi --provider agentinstance --model {model} -p {task}",
+    env: { key: "", baseUrl: "", model: "" },
+    configFile: {
+      path: ".pi/agent/models.json",
+      build: (baseUrl, key, model) =>
+        JSON.stringify({
+          providers: {
+            agentinstance: {
+              baseUrl,
+              api: "openai-completions",
+              apiKey: key,
+              models: [{ id: model, name: model }],
+            },
+          },
+        }),
+    },
   },
 };
 
@@ -196,7 +260,9 @@ export function getHarness(name: string, offline = false): Harness {
   if (!cli) throw new Error(`unknown harness '${name}'`);
   // Tests have no sandbox and no CLI key, so they answer from the model alone.
   // Gated on an explicit flag so this can never be reached in production.
-  return offline ? new EchoHarness(name) : new AgentCliHarness(name, cli.template, cli.env);
+  return offline
+    ? new EchoHarness(name)
+    : new AgentCliHarness(name, cli.template, cli.env, cli.oauthVar, cli.configFile);
 }
 
 /** Offline stand-in: replies from the model, skipping the CLI entirely. */

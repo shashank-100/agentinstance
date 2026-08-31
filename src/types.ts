@@ -24,6 +24,8 @@ export interface Env {
   DEFAULT_HARNESS: string;
   /** Keys the agent CLIs authenticate with, forwarded into the VM. */
   ANTHROPIC_API_KEY?: string;
+  /** Claude subscription token — lets claude-code skip a provider key. */
+  CLAUDE_CODE_OAUTH_TOKEN?: string;
   PI_API_KEY?: string;
   SOCHEAP_API_KEY?: string;
   MOONSHOT_API_KEY?: string;
