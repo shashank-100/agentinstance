@@ -135,6 +135,13 @@ export class AgentInstance extends DurableObject<Env> {
       sandbox: getSandbox(this.env, this.spec.machine),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
+      capabilities: this.spec.capabilities,
+      // The VM's tools call back in over the public URL: a container has no
+      // route to a Durable Object except through the Worker's own front door.
+      agentUrl:
+        this.env.WORKER_URL && this.spec.name
+          ? `${this.env.WORKER_URL}/agents/${this.spec.name}`
+          : undefined,
       ...(() => {
         const p = this.provider();
         return {

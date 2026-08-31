@@ -39,10 +39,11 @@
     { "tag": "v3", "deleted_classes": ["Sandbox"],
       "new_sqlite_classes": ["SandboxSmall", "SandboxMedium", "SandboxLarge"] }
   ],
+  // The agent's VM calls its own tools back over this URL, so the Worker has
+  // to know its own public address — nothing inside a container can infer it.
   "vars": {
-    "DEFAULT_MODEL": "gpt-5.6-terra",
-    "DEFAULT_HARNESS": "claude-code"
-  }
+    "WORKER_URL": "https://agentinstance.shashank-telkhade.workers.dev"
+  },
   // Secrets (set via `wrangler secret put`):
   //   CLAUDE_CODE_OAUTH_TOKEN (claude-code), SOCHEAP_API_KEY, TAVILY_API_KEY (search_web)
 }

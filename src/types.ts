@@ -20,13 +20,11 @@ export interface Env {
   AGENT: DurableObjectNamespace;
   REGISTRY: DurableObjectNamespace;
   ASSETS: { fetch(request: Request): Promise<Response> };
-  DEFAULT_MODEL: string;
-  DEFAULT_HARNESS: string;
-  /** Keys the agent CLIs authenticate with, forwarded into the VM. */
-  ANTHROPIC_API_KEY?: string;
+  /** Public base URL of this Worker, so tools inside a VM can call back in. */
+  WORKER_URL?: string;
   /** Claude subscription token — lets claude-code skip a provider key. */
   CLAUDE_CODE_OAUTH_TOKEN?: string;
-  PI_API_KEY?: string;
+  /** Provider key, forwarded into the VM for models served over HTTP. */
   SOCHEAP_API_KEY?: string;
   MOONSHOT_API_KEY?: string;
   /** Test-only: serve replies from the offline EchoModel. */

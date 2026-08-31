@@ -6,6 +6,7 @@ import type { Message } from "../types.js";
 import type { Model, ToolDef } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";
 import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
+import { installVmTools, toolInstructions } from "./vm-tools.js";
 
 /** Optional execution context passed to harnesses that can run code. */
 export interface HarnessContext {
@@ -13,6 +14,10 @@ export interface HarnessContext {
   agentId?: string;
   /** Standing instructions for this agent, written into its VM as AGENTS.md. */
   agentsMd?: string;
+  /** Capabilities to install as commands in the VM. */
+  capabilities?: string[];
+  /** This agent's own REST base, so tools in the VM can call back to it. */
+  agentUrl?: string;
   /** Provider credentials for the CLI: taken from the agent's own model. */
   cliKey?: string;
   cliBaseUrl?: string;
@@ -130,10 +135,26 @@ export class AgentCliHarness implements Harness {
       );
     }
 
-    // The VM's filesystem is discarded when it sleeps, so AGENTS.md is written
-    // in at the start of every session rather than once.
-    if (ctx?.agentsMd) {
-      await sandbox.writeFile(agentId, "/workspace/AGENTS.md", ctx.agentsMd).catch(() => {});
+    // The CLI cannot see capabilities that live in the Worker, so install them
+    // as commands it can run, and tell it in AGENTS.md when to reach for each.
+    // Both are redone every session: a container's filesystem does not survive
+    // sleeping, so nothing written here is still present next message.
+    const capabilities = ctx?.capabilities ?? [];
+    if (ctx?.agentUrl && capabilities.length) {
+      await installVmTools(sandbox, agentId, ctx.agentUrl, capabilities);
+    }
+    const guidance = [ctx?.agentsMd, ctx?.agentUrl ? toolInstructions(capabilities) : ""]
+      .filter(Boolean)
+      .join("\n\n");
+    if (guidance) {
+      // Both names: AGENTS.md is the cross-vendor convention, but Claude Code
+      // reads CLAUDE.md, and instructions it never loads are instructions that
+      // do not exist — it looked for a memory directory rather than running
+      // the recall command sitting on its PATH.
+      await Promise.all([
+        sandbox.writeFile(agentId, "/workspace/AGENTS.md", guidance).catch(() => {}),
+        sandbox.writeFile(agentId, "/workspace/CLAUDE.md", guidance).catch(() => {}),
+      ]);
     }
 
     const task = lastUserText(history);
@@ -293,6 +314,9 @@ export function isHarness(name: string): boolean {
 }
 
 export interface AgentSpec {
+  /** The name this agent is addressed by — `/agents/<name>`. Recorded because
+   *  a DO id is a one-way hash: the agent cannot derive its own URL without it. */
+  name?: string;
   harness: string;
   model: string;
   capabilities: string[];
@@ -307,7 +331,7 @@ export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
   );
   return {
     harness: "claude-code",
-    model: "gpt-5.6-terra",
+    model: "claude-opus-4.8",
     capabilities: [],
     machine: DEFAULT_MACHINE,
     system: "You are a helpful always-on agent.",

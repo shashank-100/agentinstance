@@ -149,7 +149,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   }
 
   const id = body.id || `agent-${crypto.randomUUID().slice(0, 8)}`;
-  await agentStub(env, id).configure(spec);
+  await agentStub(env, id).configure({ ...spec, name: id });
   await registry(env).register({
     id,
     model: spec.model,
