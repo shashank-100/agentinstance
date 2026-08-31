@@ -64,6 +64,11 @@ export class AgentInstance extends DurableObject<Env> {
     return this.configured;
   }
 
+  /** This agent's spec, for callers that need to register or display it. */
+  async getSpec(): Promise<AgentSpec> {
+    return this.spec;
+  }
+
   private buildModel(): Model {
     // Tests run offline; USE_ECHO_MODEL must be set explicitly so a real
     // deployment can never silently fall back to a canned responder.
@@ -117,10 +122,23 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   // --- the conversation -----------------------------------------------------
-  async configure(spec: Partial<AgentSpec>): Promise<AgentSpec> {
+  /**
+   * Write this agent's spec.
+   *
+   * `create` distinguishes launching from editing. Without it, configure was
+   * the way around every other guard: one POST to an arbitrary name wrote a
+   * full default spec, so the agent then "existed" — schedulable, able to boot
+   * a VM and spend quota — while never entering the registry or the dashboard,
+   * and `launch` refused that name forever with nothing able to clear it.
+   */
+  async configure(
+    spec: Partial<AgentSpec>,
+    create = false,
+  ): Promise<{ spec?: AgentSpec; missing?: boolean }> {
+    if (!create && !this.configured) return { missing: true };
     const merged = { ...this.spec, ...spec };
     this.setKV("spec", merged);
-    return merged;
+    return { spec: merged };
   }
 
   /** Core message loop: unified across channels (history is per-agent). */
@@ -384,7 +402,8 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   /** Public wakeup logic, callable over RPC (the reserved `alarm` delegates here). */
-  async fireWakeup(): Promise<void> {
+  async fireWakeup(): Promise<{ missing?: boolean } | void> {
+    if (!this.configured) return { missing: true };
     await this.ctx.storage.deleteAlarm();
     const prompt = this.getKV<string | null>("wakeup_prompt", null);
     const cadence = this.getKV<number | null>("expected_cadence_ms", null);

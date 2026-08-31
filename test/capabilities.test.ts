@@ -6,6 +6,14 @@ import type { Env } from "../src/types.js";
 
 const fakeEnv = {} as Env;
 
+/** Agents are created by /api/launch; configure only edits an existing one. */
+async function launch(id: string, spec: Record<string, unknown> = {}): Promise<void> {
+  await SELF.fetch("https://x/api/launch", {
+    method: "POST",
+    body: JSON.stringify({ id, harness: "claude-code", model: "claude-opus-4.8", ...spec }),
+  });
+}
+
 describe("capabilities", () => {
   it("registry resolves known capabilities", () => {
     expect(getCapability("scrape_web")?.name).toBe("scrape_web");
@@ -34,6 +42,7 @@ describe("capabilities", () => {
 
   it("tool route respects the agent's configured capabilities", async () => {
     // configure an agent WITH search_web enabled
+    await launch("toolA");
     await SELF.fetch("https://x/agents/toolA/configure", {
       method: "POST",
       body: JSON.stringify({ capabilities: ["search_web"] }),

@@ -93,7 +93,20 @@ const parsedBody = async <T>(request: Request): Promise<T | null> => {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const [first, second, third, fourth] = url.pathname.split("/").filter(Boolean);
+    // Decode each segment: `url.pathname` keeps percent-encoding, so an agent
+    // whose name needs escaping could never be addressed again — a DELETE would
+    // match the literal "%3C..." string, hit a different (empty) object, and
+    // report success while the real agent stayed put.
+    const [first, second, third, fourth] = url.pathname
+      .split("/")
+      .filter(Boolean)
+      .map((seg) => {
+        try {
+          return decodeURIComponent(seg);
+        } catch {
+          return seg; // malformed escape: treat it as literal rather than 500
+        }
+      });
 
     if (url.pathname === "/") {
       // No landing page, so the agent list is the front door.
@@ -170,7 +183,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   if (body.id && (await agentStub(env, id).exists())) {
     return json({ error: `agent '${id}' already exists` }, 409);
   }
-  await agentStub(env, id).configure({ ...spec, name: id });
+  await agentStub(env, id).configure({ ...spec, name: id }, true);
   await registry(env).register({
     id,
     model: spec.model,
@@ -248,15 +261,32 @@ async function agentRoute(
         if (route.action === "status") return json(await agent.status());
         return json(await agent.snapshot());
       }
-      case "configure":
-        return json(await agent.configure(await bodyOf(request)));
+      case "configure": {
+        const out = await agent.configure(await bodyOf(request));
+        if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
+        return json(out.spec);
+      }
 
-      case "restore":
+      case "restore": {
+        // Restore may create: putting a backup under a fresh name is the point
+        // of having one. It registers the result, so a restored agent is a
+        // listed, deletable agent rather than one only its creator can find.
         await agent.restore(await bodyOf(request));
+        const spec = await agent.getSpec();
+        await registry(env).register({
+          id: route.id,
+          model: spec.model,
+          harness: spec.harness,
+          machine: spec.machine,
+          createdAt: Date.now(),
+        });
         return json({ ok: true });
-      case "wake":
-        await agent.fireWakeup();
+      }
+      case "wake": {
+        const out = await agent.fireWakeup();
+        if (out?.missing) return json({ error: `no agent '${route.id}'` }, 404);
         return json({ ok: true });
+      }
 
       // A standing task on an agent that was never launched is a recurring
       // alarm nothing owns: it does not appear in the dashboard, so nothing

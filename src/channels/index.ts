@@ -42,10 +42,15 @@ export async function handleChannel(
   if (!inbound) return new Response("ignored", { status: 200 });
   const out = await agentReply(env, inbound);
   // A webhook naming an agent that was never launched used to answer
-  // { ok: true, reply: "" } — success, with the reason hidden. Say what
-  // happened instead: a misconfigured webhook is otherwise invisible.
+  // { ok: true, reply: "" } — success, with the reason hidden.
+  //
+  // Say so in the body, but keep the status 2xx: a webhook platform reads a
+  // non-2xx as failed delivery and retries with backoff until it suspends the
+  // hook. An agent deleted while its webhook is still registered would turn
+  // every later message into a retry storm against a permanent 404.
   if (out.missing) {
-    return Response.json({ error: `no agent '${inbound.agentId}'` }, { status: 404 });
+    console.log(`channel ${adapter.name}: no agent '${inbound.agentId}'`);
+    return Response.json({ ok: false, error: `no agent '${inbound.agentId}'` });
   }
   if (inbound.replyTo) {
     const key = inbound.idempotencyKey ?? crypto.randomUUID();
