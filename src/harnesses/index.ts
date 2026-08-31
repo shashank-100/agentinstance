@@ -137,17 +137,25 @@ export class AgentCliHarness implements Harness {
 
     // A CLI that reads its provider from disk needs that file written first —
     // and rewritten every session, since the VM's filesystem is not durable.
+    //
+    // Written through `exec` rather than `writeFile`: the file has to land in
+    // the CLI user's home with that user owning it, and its parent directories
+    // may not exist yet. A failure here is reported rather than swallowed —
+    // silently skipping it leaves the CLI to fail later with a confusing
+    // "unknown provider", pointing at the flag instead of the missing file.
     if (this.configFile && cliKey && cliBaseUrl && cliModel) {
-      await sandbox.exec(agentId, "id -u agent >/dev/null 2>&1 || useradd -m agent");
-      // The CLI runs as `agent`, so this must land in that user's home — not
-      // root's, where the sandbox writes by default.
-      await sandbox
-        .writeFile(
-          agentId,
-          `/home/agent/${this.configFile.path}`,
-          this.configFile.build(cliBaseUrl, cliKey, cliModel),
-        )
-        .catch(() => {});
+      const dest = `/home/agent/${this.configFile.path}`;
+      const body = this.configFile.build(cliBaseUrl, cliKey, cliModel);
+      const write = await sandbox.exec(
+        agentId,
+        `(id -u agent >/dev/null 2>&1 || useradd -m agent) && ` +
+          `mkdir -p ${shellQuote(dirname(dest))} && ` +
+          `cat > ${shellQuote(dest)} <<'AGENTINSTANCE_EOF'\n${body}\nAGENTINSTANCE_EOF\n` +
+          `chown -R agent /home/agent`,
+      );
+      if (write.exitCode !== 0) {
+        return `${this.name} could not write its provider config:\n${write.stderr.slice(0, 1000)}`;
+      }
     }
 
     // These CLIs default to their vendor's endpoint. Pointing them at the
@@ -198,6 +206,12 @@ function lastUserText(history: Message[]): string | null {
 /** Single-quote for POSIX sh, so a prompt cannot break out of the command. */
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Parent directory of a POSIX path, so it can be created before writing. */
+function dirname(path: string): string {
+  const cut = path.lastIndexOf("/");
+  return cut <= 0 ? "/" : path.slice(0, cut);
 }
 
 /**

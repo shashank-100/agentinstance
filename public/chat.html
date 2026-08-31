@@ -391,8 +391,7 @@ async function loadHistory() {
   }
   if (!hist.length) {
     log.innerHTML =
-      `<div class="empty">No messages yet — send one above to start this session.<br>
-       Demo mode uses a mock model; add an API key for a real one.</div>`;
+      `<div class="empty">No messages yet — send one above to start this session.</div>`;
   }
   $("stTurns").textContent = turns;
 }

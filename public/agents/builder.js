@@ -8,7 +8,9 @@ export function createState(catalog, { preselect = true } = {}) {
     catalog,
     harness: preselect ? (catalog.harnesses[0]?.id ?? null) : null,
     model: preselect ? (catalog.models[0]?.id ?? null) : null,
-    capabilities: new Set(),
+    // Every tool on by default: an agent that cannot reach the web or its own
+    // shell is the surprising case, not the useful one. They stay togglable.
+    capabilities: new Set(preselect ? catalog.capabilities.map((c) => c.id) : []),
     machine: catalog.defaultMachine,
   };
 }
