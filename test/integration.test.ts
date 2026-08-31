@@ -2,8 +2,19 @@
 import { env, SELF } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
+
+/** Agents must be launched before they answer: a DO exists for every name, so
+ *  `send` refuses one that was never configured. */
+async function launch(id: string): Promise<void> {
+  await SELF.fetch("https://x/api/launch", {
+    method: "POST",
+    body: JSON.stringify({ id, harness: "claude-code", model: "claude-opus-4.8" }),
+  });
+}
+
 describe("worker gateway", () => {
   it("web channel round-trips through the agent", async () => {
+    await launch("agentW");
     const res = await SELF.fetch("https://x/channels/web/agentW", {
       method: "POST",
       body: JSON.stringify({ text: "hello there" }),
@@ -13,6 +24,7 @@ describe("worker gateway", () => {
   });
 
   it("send accepts AgentSky-style parts[] body", async () => {
+    await launch("agentParts");
     const res = await SELF.fetch("https://x/agents/agentParts/send", {
       method: "POST",
       body: JSON.stringify({ parts: [{ type: "text", index: 0, text: "via parts" }] }),
@@ -22,6 +34,7 @@ describe("worker gateway", () => {
   });
 
   it("telegram webhook drives the agent (unified history)", async () => {
+    await launch("agentT");
     await SELF.fetch("https://x/channels/telegram/agentT", {
       method: "POST",
       body: JSON.stringify({ message: { text: "tg hi", chat: { id: 1 }, message_id: 1 } }),
@@ -47,6 +60,7 @@ describe("worker gateway", () => {
   });
 
   it("snapshot then restore recovers history", async () => {
+    await launch("snapA");
     await SELF.fetch("https://x/agents/snapA/send", {
       method: "POST",
       body: JSON.stringify({ text: "keep me" }),

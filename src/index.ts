@@ -77,6 +77,19 @@ const registry = (env: Env): RegistryStub =>
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const bodyOf = <T>(request: Request) => request.json().catch(() => ({})) as Promise<T>;
 
+/** Like bodyOf, but tells the caller the body was unparseable rather than
+ *  quietly handing back an empty object — launching on defaults because JSON
+ *  failed to parse creates an agent nobody asked for. */
+const parsedBody = async <T>(request: Request): Promise<T | null> => {
+  const text = await request.text();
+  if (!text.trim()) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+};
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -126,7 +139,7 @@ function catalogRoute(env: Env): Response {
 
 // --- create an agent from a spec, after checking the pieces fit --------------
 async function launchRoute(request: Request, env: Env): Promise<Response> {
-  const body = await bodyOf<{
+  const body = await parsedBody<{
     id?: string;
     harness?: string;
     model?: string;
@@ -134,6 +147,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
     machine?: string;
     system?: string;
   }>(request);
+  if (!body) return json({ error: "body is not valid JSON" }, 400);
 
   const spec = defaultSpec({
     harness: body.harness,
@@ -206,6 +220,7 @@ async function agentRoute(
         const body = await bodyOf<{ text?: string; parts?: Part[]; channel?: string }>(request);
         const text = body.parts ? toText(body.parts) : (body.text ?? "");
         const out = await agent.send(text, body.channel);
+        if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
         return json({ reply: out.reply });
       }
 
@@ -239,6 +254,7 @@ async function agentRoute(
         // Agent-to-agent: `from` sends `text` to this agent.
         const { from, text } = await bodyOf<{ from: string; text: string }>(request);
         const out = await agent.send(`[from agent ${from}] ${text}`, "a2a");
+        if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
         return json({ from, to: route.id, reply: out.reply });
       }
 

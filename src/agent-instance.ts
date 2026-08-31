@@ -54,6 +54,11 @@ export class AgentInstance extends DurableObject<Env> {
     return this.getKV<AgentSpec>("spec", defaultSpec());
   }
 
+  /** Has this agent been created? A DO exists for every name ever addressed. */
+  private get configured(): boolean {
+    return this.getKV<AgentSpec | null>("spec", null) !== null;
+  }
+
   private buildModel(): Model {
     // Tests run offline; USE_ECHO_MODEL must be set explicitly so a real
     // deployment can never silently fall back to a canned responder.
@@ -114,7 +119,12 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   /** Core message loop: unified across channels (history is per-agent). */
-  async send(text: string, channel = "core"): Promise<{ reply?: string }> {
+  async send(text: string, channel = "core"): Promise<{ reply?: string; missing?: boolean }> {
+    // Cloudflare routes any name to a Durable Object, so an agent that was
+    // never launched is indistinguishable from one that was — it just has no
+    // spec. Without this check a typo in the URL boots a VM, spends the
+    // subscription quota, and produces an agent no dashboard ever lists.
+    if (!this.configured) return { missing: true };
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
@@ -162,8 +172,13 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   // --- backup ---------------------------------------------------------------
-  /** Export full agent state (spec + history + kv) for backup. */
-  async snapshot(): Promise<{ spec: AgentSpec; history: Message[]; kv: Record<string, unknown> }> {
+  /** Export full agent state (spec + history + kv + notes) for backup. */
+  async snapshot(): Promise<{
+    spec: AgentSpec;
+    history: Message[];
+    kv: Record<string, unknown>;
+    notes: { key: string; value: string; ts: number }[];
+  }> {
     const kv: Record<string, unknown> = {};
     for (const r of this.sql.exec("SELECT key,value FROM kv").toArray() as {
       key: string;
@@ -171,7 +186,13 @@ export class AgentInstance extends DurableObject<Env> {
     }[]) {
       kv[r.key] = JSON.parse(r.value);
     }
-    return { spec: this.spec, history: this.history(), kv };
+    // Notes are the part of an agent that outlives its sessions, so a snapshot
+    // without them restores an agent that has forgotten everything it chose to
+    // keep — the opposite of what a backup is for.
+    const notes = this.sql
+      .exec("SELECT key,value,ts FROM notes ORDER BY ts DESC")
+      .toArray() as unknown as { key: string; value: string; ts: number }[];
+    return { spec: this.spec, history: this.history(), kv, notes };
   }
 
   /** Restore from a snapshot (best-effort recovery — replaces current state). */
@@ -179,12 +200,17 @@ export class AgentInstance extends DurableObject<Env> {
     spec?: AgentSpec;
     history?: Message[];
     kv?: Record<string, unknown>;
+    notes?: { key: string; value: string; ts: number }[];
   }): Promise<void> {
     this.sql.exec("DELETE FROM messages");
     this.sql.exec("DELETE FROM kv");
+    this.sql.exec("DELETE FROM notes");
     if (snap.spec) this.setKV("spec", snap.spec);
     for (const [k, v] of Object.entries(snap.kv ?? {})) this.setKV(k, v);
     for (const m of snap.history ?? []) this.record(m);
+    for (const n of snap.notes ?? []) {
+      this.sql.exec("INSERT INTO notes (key,value,ts) VALUES (?,?,?)", n.key, n.value, n.ts);
+    }
   }
 
 
@@ -216,10 +242,18 @@ export class AgentInstance extends DurableObject<Env> {
     }
   }
 
-  /** Permanently erase this agent's history + state. */
+  /**
+   * Permanently erase this agent's history + state.
+   *
+   * `notes` has to go too. A Durable Object is addressed by name, so recreating
+   * an agent with a name used before lands on the same object — and notes left
+   * behind would be readable by whoever creates that name next. Deleting an
+   * agent has to mean its memory is gone, not dormant.
+   */
   async wipe(): Promise<void> {
     this.sql.exec("DELETE FROM messages");
     this.sql.exec("DELETE FROM kv");
+    this.sql.exec("DELETE FROM notes");
     await this.ctx.storage.deleteAlarm();
   }
 

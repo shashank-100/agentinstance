@@ -2,7 +2,26 @@
 import { SELF } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
+/** Agents must be launched before they answer: a DO exists for every name, so
+ *  `send` refuses one that was never configured. Launching is idempotent, so
+ *  doing it here keeps each test to the behaviour it is actually about. */
+const launched = new Set<string>();
+async function launch(id: string) {
+  if (launched.has(id)) return;
+  launched.add(id);
+  await SELF.fetch("https://x/api/launch", {
+    method: "POST",
+    body: JSON.stringify({
+      id,
+      harness: "claude-code",
+      model: "claude-opus-4.8",
+      capabilities: ["remember", "recall"],
+    }),
+  });
+}
+
 async function send(id: string, text: string, channel?: string) {
+  await launch(id);
   const res = await SELF.fetch(`https://x/agents/${id}/send`, {
     method: "POST",
     body: JSON.stringify({ text, channel }),
@@ -63,6 +82,9 @@ describe("AgentInstance runtime + memory", () => {
   });
 
   it("scheduled wakeup fires and advances history", async () => {
+    // A scheduled agent still has to exist: the alarm calls send(), which
+    // refuses an agent that was never launched.
+    await launch("wake1");
     await SELF.fetch("https://x/agents/wake1/schedule", {
       method: "POST",
       body: JSON.stringify({ atMs: Date.now() + 1000, prompt: "tick", cadenceMs: 60000 }),
@@ -70,5 +92,40 @@ describe("AgentInstance runtime + memory", () => {
     await SELF.fetch("https://x/agents/wake1/wake", { method: "POST" });
     const hist = await history("wake1");
     expect(hist.some((m) => m.content === "tick")).toBe(true);
+  });
+
+  it("wipe clears notes, so a reused name cannot read the old agent's memory", async () => {
+    // A DO is addressed by name: recreating a deleted agent lands on the same
+    // object, so anything wipe() misses is readable by whoever takes that name.
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({
+        id: "wipe-notes",
+        harness: "claude-code",
+        model: "claude-opus-4.8",
+        capabilities: ["remember", "recall"],
+      }),
+    });
+    await SELF.fetch("https://x/agents/wipe-notes/tool/remember", {
+      method: "POST",
+      body: JSON.stringify({ key: "secret", value: "private" }),
+    });
+    await SELF.fetch("https://x/agents/wipe-notes", { method: "DELETE" });
+
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({
+        id: "wipe-notes",
+        harness: "claude-code",
+        model: "claude-opus-4.8",
+        capabilities: ["remember", "recall"],
+      }),
+    });
+    const res = await SELF.fetch("https://x/agents/wipe-notes/tool/recall", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const out = (await res.json()) as { result: { notes: unknown[] } };
+    expect(out.result.notes).toEqual([]);
   });
 });
