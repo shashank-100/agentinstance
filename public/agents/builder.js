@@ -136,7 +136,9 @@ if (typeof document !== "undefined") {
     // The ones this harness cannot drive are shown disabled, with the reason.
     for (const m of state.catalog.models) {
       const ok = supportsModel(state.catalog, state.harness, m.id);
-      const rate = m.oauth ? "included with your subscription" : `$${m.priceIn}/$${m.priceOut} per 1M`;
+      // An OAuth model has no per-token rate to quote — leave the line blank
+      // rather than printing $0, which would read as free.
+      const rate = m.oauth ? "" : `$${m.priceIn}/$${m.priceOut} per 1M`;
       const el = card(m.id, m.label, ok ? rate : `needs a different harness`, state.model === m.id);
       el.disabled = !ok;
       if (!ok) {
