@@ -93,5 +93,28 @@ describe("capabilities", () => {
     ).json()) as { result: { notes: unknown[] } };
     expect(all.result.notes.length).toBeGreaterThan(0);
   });
+
+  it("AGENTS.md is stored on the agent and survives a VM restart", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "md1", harness: "shell", model: "gpt-5.6-terra" }),
+    });
+
+    await SELF.fetch("https://x/agents/md1/agents-md", {
+      method: "POST",
+      body: JSON.stringify({ content: "# Notes\nAlways run tests first." }),
+    });
+
+    const got = (await (await SELF.fetch("https://x/agents/md1/agents-md")).json()) as {
+      content: string | null;
+    };
+    expect(got.content).toContain("Always run tests first");
+
+    await SELF.fetch("https://x/agents/md1/agents-md", { method: "DELETE" });
+    const cleared = (await (await SELF.fetch("https://x/agents/md1/agents-md")).json()) as {
+      content: string | null;
+    };
+    expect(cleared.content).toBeNull();
+  });
 });
 

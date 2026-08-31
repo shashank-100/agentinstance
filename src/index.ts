@@ -205,6 +205,13 @@ async function agentRoute(
       case "schedule":
         return scheduleRoute(request, agent);
 
+      case "agents-md": {
+        if (request.method === "GET") return json(await agent.getAgentsMd());
+        if (request.method === "DELETE") return json(await agent.setAgentsMd(null));
+        const { content } = await bodyOf<{ content?: string }>(request);
+        return json(await agent.setAgentsMd(content ?? null));
+      }
+
       case "a2a": {
         // Agent-to-agent: `from` sends `text` to this agent.
         const { from, text } = await bodyOf<{ from: string; text: string }>(request);

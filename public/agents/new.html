@@ -52,6 +52,10 @@
   .cost .free{color:var(--ember-soft)}
   .free-row{display:flex;justify-content:space-between;color:var(--muted);font-size:.8rem;margin-top:4px}
   #compat{font-size:.78rem;color:var(--muted);margin:14px 0}
+  #agents-md{width:100%;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    font-family:var(--mono);font-size:.82rem;line-height:1.6;color:var(--ink);
+    background:var(--paper);resize:vertical}
+  #agents-md:focus{outline:none;border-color:var(--ember)}
   #launch{width:100%;background:var(--ember);color:#fff;border:none;border-radius:10px;padding:13px;
     font-family:var(--mono);font-weight:600;cursor:pointer;transition:.18s}
   #launch:hover:not(:disabled){transform:translateY(-2px)}
@@ -86,6 +90,12 @@
     <div class="step">
       <div class="step-h"><span class="n">4</span><h2>Machine</h2><span class="hint">compute tier</span></div>
       <div class="cards" id="machines"></div>
+    </div>
+
+    <div class="step">
+      <div class="step-h"><span class="n">5</span><h2>AGENTS.md</h2>
+        <span class="hint">standing instructions · optional</span></div>
+      <textarea id="agents-md" rows="7" placeholder="# Notes for this agent&#10;&#10;What it is for, conventions to follow, anything it should know every session.&#10;&#10;Written into its VM at /workspace/AGENTS.md and included in its prompt."></textarea>
     </div>
   </div>
 

@@ -11,6 +11,8 @@ import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../c
 export interface HarnessContext {
   sandbox?: Sandbox | null;
   agentId?: string;
+  /** Standing instructions for this agent, written into its VM as AGENTS.md. */
+  agentsMd?: string;
   /** Tools the model may call this turn, with a runner for each. */
   tools?: ToolDef[];
   runTool?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -93,10 +95,19 @@ export class CliHarness implements Harness {
     const agentId = ctx?.agentId;
     if (!sandbox || !agentId) return model.complete(history, system);
 
+    // The VM's filesystem is discarded when it sleeps, so AGENTS.md is stored
+    // durably on the agent and written in at the start of every session.
+    if (ctx.agentsMd) {
+      await sandbox.writeFile(agentId, "/workspace/AGENTS.md", ctx.agentsMd).catch(() => {});
+    }
+
     const toolSystem =
       system +
       "\n\nYou can run shell commands. To run one, reply with a single fenced " +
-      "```sh code block containing the command. I will run it and give you the output.";
+      "```sh code block containing the command. I will run it and give you the output." +
+      (ctx.agentsMd
+        ? "\n\nYour workspace notes (also at /workspace/AGENTS.md):\n\n" + ctx.agentsMd
+        : "");
     const first = await model.complete(history, toolSystem);
 
     const cmd = extractShell(first);

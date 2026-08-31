@@ -117,6 +117,7 @@ export class AgentInstance extends DurableObject<Env> {
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
       sandbox: getSandbox(this.env),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
+      agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
       tools,
       runTool: async (name, input) => {
         const out = await this.runTool(name, input);
@@ -132,6 +133,16 @@ export class AgentInstance extends DurableObject<Env> {
 
   async getHistory(): Promise<Message[]> {
     return this.history();
+  }
+
+  /** Standing instructions for this agent, written into its VM as AGENTS.md. */
+  async getAgentsMd(): Promise<{ content: string | null }> {
+    return { content: this.getKV<string | null>("agents_md", null) };
+  }
+
+  async setAgentsMd(content: string | null): Promise<{ ok: true }> {
+    this.setKV("agents_md", content && content.trim() ? content : null);
+    return { ok: true };
   }
 
   // --- backup ---------------------------------------------------------------
