@@ -7,7 +7,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
-import { getHarness, harnessEnvVar, type AgentSpec, defaultSpec } from "./harnesses/index.js";
+import { getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
 import { MODELS, PROVIDERS } from "./catalog.js";
 import { EchoModel, OpenAICompatModel, type Model } from "./models/index.js";
 
@@ -87,11 +87,17 @@ export class AgentInstance extends DurableObject<Env> {
     );
   }
 
-  /** The API key the configured harness's CLI authenticates with. */
-  private cliKey(): string | undefined {
-    const v = harnessEnvVar(this.spec.harness);
-    if (!v) return undefined;
-    return (this.env as unknown as Record<string, string | undefined>)[v];
+  /**
+   * The provider behind this agent's model. The CLI harness points its agent
+   * program at this, so Claude Code runs on whatever model the agent is
+   * configured with rather than requiring an Anthropic subscription.
+   */
+  private provider(): { key?: string; baseUrl?: string; model?: string } {
+    const info = MODELS[this.spec.model];
+    if (!info) return {};
+    const { baseUrl, keyVar } = PROVIDERS[info.provider];
+    const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
+    return { key, baseUrl, model: info.upstreamId ?? info.id };
   }
 
   // --- the conversation -----------------------------------------------------
@@ -125,7 +131,10 @@ export class AgentInstance extends DurableObject<Env> {
       sandbox: getSandbox(this.env),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
-      cliKey: this.cliKey(),
+      ...(() => {
+        const p = this.provider();
+        return { cliKey: p.key, cliBaseUrl: p.baseUrl, cliModel: p.model };
+      })(),
       tools,
       runTool: async (name, input) => {
         const out = await this.runTool(name, input);

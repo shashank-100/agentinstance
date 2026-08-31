@@ -1,6 +1,6 @@
 // AgentCliHarness runs a real agent CLI inside the agent's VM.
 import { describe, it, expect } from "vitest";
-import { getHarness, harnessEnvVar } from "../../src/harnesses/index.js";
+import { getHarness, isHarness } from "../../src/harnesses/index.js";
 import type { Message } from "../../src/types.js";
 import type { Model } from "../../src/models/index.js";
 
@@ -22,10 +22,10 @@ function fakeSandbox(capture: { cmd?: string }) {
 }
 
 describe("agent CLI harnesses", () => {
-  it("each harness names the env var its CLI authenticates with", () => {
-    expect(harnessEnvVar("claude-code")).toBe("ANTHROPIC_API_KEY");
-    expect(harnessEnvVar("pi")).toBe("PI_API_KEY");
-    expect(harnessEnvVar("nope")).toBeNull();
+  it("knows which harnesses it can run", () => {
+    expect(isHarness("claude-code")).toBe(true);
+    expect(isHarness("pi")).toBe(true);
+    expect(isHarness("nope")).toBe(false);
   });
 
   it("passes the task to the CLI and returns its output", async () => {
@@ -34,12 +34,17 @@ describe("agent CLI harnesses", () => {
       sandbox: fakeSandbox(capture),
       agentId: "a1",
       cliKey: "sk-test",
+      cliBaseUrl: "https://socheap.ai/v1",
+      cliModel: "gpt-5.6-terra",
     });
     expect(out).toBe("done");
-    expect(capture.cmd).toContain("claude -p");
+    expect(capture.cmd).toContain("claude");
     expect(capture.cmd).toContain("fix the bug");
-    // The key rides the command's environment, never the prompt.
-    expect(capture.cmd).toContain("ANTHROPIC_API_KEY=");
+    // Credentials ride the command's environment, never the prompt. Pointing
+    // the CLI at the agent's own provider is what makes it model-agnostic.
+    expect(capture.cmd).toContain("ANTHROPIC_AUTH_TOKEN=");
+    expect(capture.cmd).toContain("ANTHROPIC_BASE_URL='https://socheap.ai/v1'");
+    expect(capture.cmd).toContain("ANTHROPIC_MODEL='gpt-5.6-terra'");
   });
 
   it("quotes the task so a prompt cannot break out of the command", async () => {
@@ -58,6 +63,6 @@ describe("agent CLI harnesses", () => {
         sandbox: fakeSandbox({}),
         agentId: "a1",
       }),
-    ).rejects.toThrow(/ANTHROPIC_API_KEY/);
+    ).rejects.toThrow(/no provider key/);
   });
 });
