@@ -148,14 +148,25 @@ if (typeof document !== "undefined") {
 
   let launching = false;
 
-  async function launch() {
-    // Without this guard a second click creates a second agent: the request
-    // takes a moment and the button stays live the whole time.
-    if (launching) return;
+  /**
+   * Claim the right to launch, synchronously.
+   *
+   * The guard has to flip before any `await`: a burst of clicks all run to
+   * completion before the first one yields, so an async check lets the second
+   * and third through and creates duplicate agents.
+   */
+  function claimLaunch() {
+    if (launching) return false;
     launching = true;
     const btn = $("#launch");
     btn.disabled = true;
     btn.textContent = "Launching…";
+    return true;
+  }
+
+  async function launch() {
+    if (!claimLaunch()) return;
+    const btn = $("#launch");
 
     try {
       const res = await fetch("/api/launch", {
@@ -186,10 +197,10 @@ if (typeof document !== "undefined") {
 
   window.addEventListener("DOMContentLoaded", () => {
     boot();
-    $("#launch").addEventListener("click", launch);
+    $("#launch").addEventListener("click", () => void launch());
     // One-key launch: ⌘↵ / Ctrl+↵
     window.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !$("#launch").disabled) launch();
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") void launch();
     });
   });
 }
