@@ -33,9 +33,9 @@ describe("agent registry", () => {
     expect(res.status).toBe(200);
     const list = (await (await SELF.fetch("https://x/api/agents")).json()) as { id: string }[];
     expect(list.find((a) => a.id === "reg-del")).toBeUndefined();
-    // history wiped
-    const hist = (await (await SELF.fetch("https://x/agents/reg-del/history")).json()) as unknown[];
-    expect(hist).toHaveLength(0);
+    // Deleted means gone: reading it is a 404, not an empty history.
+    const hist = await SELF.fetch("https://x/agents/reg-del/history");
+    expect(hist.status).toBe(404);
   });
 
   it("DELETE releases the agent's container before erasing its state", async () => {

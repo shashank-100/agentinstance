@@ -163,6 +163,13 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   }
 
   const id = body.id || `agent-${crypto.randomUUID().slice(0, 8)}`;
+  // Launching a name that already exists used to reconfigure that agent in
+  // place: its capabilities and machine were replaced by the new spec's, with
+  // no warning and no way to tell it had happened. Creating is not editing —
+  // `POST /agents/:id/configure` is the route for changing an agent.
+  if (body.id && (await agentStub(env, id).exists())) {
+    return json({ error: `agent '${id}' already exists` }, 409);
+  }
   await agentStub(env, id).configure({ ...spec, name: id });
   await registry(env).register({
     id,
@@ -213,6 +220,13 @@ async function agentRoute(
   route: { id: string; action: string; arg?: string },
 ): Promise<Response> {
   const agent = agentStub(env, route.id);
+  // Actions that change something must not run on GET. A GET that boots a VM
+  // and spends the model quota is triggered by anything that follows links —
+  // a crawler, a prefetch, a chat client generating a preview.
+  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure"]);
+  if (WRITES.has(route.action) && request.method === "GET") {
+    return json({ error: `${route.action} requires POST` }, 405);
+  }
   try {
     switch (route.action) {
       case "send": {
@@ -224,12 +238,16 @@ async function agentRoute(
         return json({ reply: out.reply });
       }
 
+      // Reading an agent that was never launched should say so, rather than
+      // describing the empty Durable Object that exists for every name.
       case "history":
-        return json(await agent.getHistory());
       case "status":
-        return json(await agent.status());
-      case "snapshot":
+      case "snapshot": {
+        if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
+        if (route.action === "history") return json(await agent.getHistory());
+        if (route.action === "status") return json(await agent.status());
         return json(await agent.snapshot());
+      }
       case "configure":
         return json(await agent.configure(await bodyOf(request)));
 

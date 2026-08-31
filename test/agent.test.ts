@@ -58,7 +58,12 @@ describe("AgentInstance runtime + memory", () => {
 
   it("keeps agents isolated", async () => {
     await send("iso-a", "secret");
+    // A launched neighbour sees none of it, and an unlaunched name is not an
+    // agent at all — reading it is a 404, not an empty conversation.
+    await launch("iso-b");
     expect(await history("iso-b")).toHaveLength(0);
+    const ghost = await SELF.fetch("https://x/agents/iso-never/history");
+    expect(ghost.status).toBe(404);
   });
 
   it("shares one history across channels (unified per-agent)", async () => {

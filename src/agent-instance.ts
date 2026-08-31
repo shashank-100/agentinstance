@@ -59,6 +59,11 @@ export class AgentInstance extends DurableObject<Env> {
     return this.getKV<AgentSpec | null>("spec", null) !== null;
   }
 
+  /** Public form of `configured`, so launch can refuse to clobber an agent. */
+  async exists(): Promise<boolean> {
+    return this.configured;
+  }
+
   private buildModel(): Model {
     // Tests run offline; USE_ECHO_MODEL must be set explicitly so a real
     // deployment can never silently fall back to a canned responder.
@@ -228,11 +233,13 @@ export class AgentInstance extends DurableObject<Env> {
    * raced against a timeout rather than awaited indefinitely.
    */
   async releaseSandbox(): Promise<void> {
-    const { getSandbox } = await import("./sandbox/index.js");
-    const sandbox = getSandbox(this.env, this.spec.machine);
-    if (!sandbox) return;
     const agentId = this.ctx.id.toString();
     try {
+      const { getSandbox } = await import("./sandbox/index.js");
+      const sandbox = getSandbox(this.env, this.spec.machine);
+      if (!sandbox) return;
+      // Resolving the binding can throw too — a test environment has no
+      // containers at all — so it sits inside the try rather than beside it.
       await Promise.race([
         sandbox.destroy(agentId),
         new Promise((resolve) => setTimeout(resolve, 10_000)),
