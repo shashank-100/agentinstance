@@ -16,10 +16,20 @@
   // class — it cannot be chosen per request. Three classes over the same image
   // is what makes the builder's machine picker mean anything; with a single
   // class every tier booted identical hardware whatever the UI charged.
+  // Containers are placed in the nearest available datacenter, which made the
+  // agent's success depend on where its VM happened to boot: one in Hong Kong
+  // got `403 Request not allowed` from Anthropic, one in Tokyo worked, with no
+  // difference in code or credentials. APAC cannot be narrowed — it covers both
+  // — so placement is pinned to North America and Europe, every part of which
+  // Anthropic serves. The cost is latency from Asia; the alternative is agents
+  // that fail at random.
   "containers": [
-    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 },
-    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 5 },
-    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-3", "max_instances": 5 }
+    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5,
+      "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } },
+    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 5,
+      "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } },
+    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-3", "max_instances": 5,
+      "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } }
   ],
   "durable_objects": {
     "bindings": [

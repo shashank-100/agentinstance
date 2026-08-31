@@ -103,7 +103,7 @@ export class AgentCliHarness implements Harness {
       ]);
     }
 
-    const task = lastUserText(history);
+    const task = buildPrompt(history);
     if (!task) return "(nothing to do)";
 
     // A CLI that reads its provider from disk needs that file written first —
@@ -183,11 +183,51 @@ export class AgentCliHarness implements Harness {
   }
 }
 
-function lastUserText(history: Message[]): string | null {
+/**
+ * The prompt for this turn: the new message, preceded by the conversation so
+ * far.
+ *
+ * Each CLI invocation is a fresh process with no knowledge of the last one, so
+ * passing only the newest message made the agent amnesiac between turns — it
+ * would answer "what colour did I just say?" with "you haven't mentioned a
+ * colour". The history is already in SQLite and was already being loaded; it
+ * simply never reached the CLI.
+ *
+ * Older turns are dropped once the transcript grows past `maxChars`, keeping
+ * the most recent ones: a long-running agent would otherwise send an
+ * ever-growing prompt and pay for it on every message.
+ */
+function buildPrompt(history: Message[], maxChars = 24_000): string | null {
+  let latest: string | null = null;
   for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].role === "user") return history[i].content;
+    if (history[i].role === "user") {
+      latest = history[i].content;
+      break;
+    }
   }
-  return null;
+  if (latest === null) return null;
+
+  // Everything before the message being answered.
+  const prior = history.slice(0, history.length - 1).filter(
+    (m) => m.role === "user" || m.role === "assistant",
+  );
+  if (!prior.length) return latest;
+
+  const lines: string[] = [];
+  let used = 0;
+  for (let i = prior.length - 1; i >= 0; i--) {
+    const m = prior[i];
+    const line = `${m.role === "user" ? "User" : "You"}: ${m.content}`;
+    if (used + line.length > maxChars) break;
+    lines.unshift(line);
+    used += line.length;
+  }
+  if (!lines.length) return latest;
+
+  return (
+    `Here is the conversation so far, for context:\n\n${lines.join("\n\n")}\n\n` +
+    `---\n\nThe user now says:\n\n${latest}`
+  );
 }
 
 /** Single-quote for POSIX sh, so a prompt cannot break out of the command. */
