@@ -41,7 +41,7 @@ POST /agents/live/send   { text: "..." }
 
 | File | What it does |
 |---|---|
-| `index.ts` | `Model` interface (`complete` for plain text, `turn` for tool calling), `OpenAICompatModel`, `EchoModel`, and `UnusedModel`. |
+| `index.ts` | `Model` interface (`complete`), `OpenAICompatModel`, `EchoModel`, and `UnusedModel`. |
 
 **Why one adapter:** every provider we use speaks OpenAI's `/chat/completions`
 shape, so the only difference between Moonshot and socheap is a base URL.
@@ -81,9 +81,12 @@ protection answers urllib's default with a 403. Instructions are written as both
 `AGENTS.md` and `CLAUDE.md` — Claude Code reads the latter, and with only the
 former it ignored the tools entirely.
 
-`ChatHarness` is also in this file: the model-driven tool loop, kept for the
-tests and for whenever an OpenAI-compatible harness lands. It is not reachable
-in production — `getHarness` never returns it.
+There used to be a second harness here — a model-driven tool loop — on the
+theory that agent styles differ in how they decide what to do next. Nothing
+ever selected it: the CLI brings its own loop, so it was two abstractions where
+one was used, and the model layer carried a `turn()` method beside `complete()`
+that nobody called. Both are gone. An OpenAI-compatible harness will need that
+loop rebuilt, which is the honest cost of not keeping untested code alive.
 
 ### `src/capabilities/` — the tools
 
@@ -171,7 +174,6 @@ Two suites, two runners, because they need different environments:
 | `capabilities.test.ts` | The registry, the enabled-capability gate, and that deleted stubs stay deleted. |
 | `channels.test.ts` | Webhook parsing and unified history. |
 | `a2a.test.ts` | Agent-to-agent messaging. |
-| `tools.test.ts` | The tool loop: multiple calls, failures as observations, the step cap. |
 | `ui/*.test.ts` | Builder state machine, parts helpers, sandbox harness. |
 
 ---

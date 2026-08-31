@@ -1,9 +1,13 @@
-// A harness is the agent's loop: what it does between receiving a message and
-// producing a reply. ChatHarness asks the model and runs any tools it calls;
-// CliHarness gives the model a shell. The spec (harness + model + capabilities)
-// is checked for coherence before an agent is created.
+// A harness runs the agent: it takes a message and produces a reply. There is
+// one, AgentCliHarness, which runs a real agent CLI inside the agent's VM.
+//
+// An earlier version also had a model-driven tool loop here, on the theory that
+// agent styles differ in how they decide what to do next. Nothing ever selected
+// it — the CLI brings its own loop — so it was two abstractions where one was
+// used. The spec (harness + model + capabilities) is still checked for coherence
+// before an agent is created.
 import type { Message } from "../types.js";
-import type { Model, ToolDef } from "../models/index.js";
+import type { Model } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";
 import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
 import { installVmTools, toolInstructions } from "./vm-tools.js";
@@ -24,9 +28,6 @@ export interface HarnessContext {
   cliModel?: string;
   /** Subscription token for CLIs that accept one instead of a provider key. */
   oauthToken?: string;
-  /** Tools the model may call this turn, with a runner for each. */
-  tools?: ToolDef[];
-  runTool?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
 }
 
 export interface Harness {
@@ -34,64 +35,9 @@ export interface Harness {
   run(model: Model, history: Message[], system: string, ctx?: HarnessContext): Promise<string>;
 }
 
-/** Cap on model<->tool round trips, so a looping model can't run forever. */
-const MAX_TOOL_STEPS = 5;
-
 /** How long a CLI harness may run before it is killed. Comfortably above a
  *  normal run (a few seconds) and safely inside the request's own lifetime. */
 const CLI_TIMEOUT_SECONDS = 120;
-
-// Default: one model completion per turn — unless capabilities are enabled and
-// the model supports tool calls, in which case run a bounded tool loop.
-export class ChatHarness implements Harness {
-  name = "chat";
-
-  async run(
-    model: Model,
-    history: Message[],
-    system: string,
-    ctx?: HarnessContext,
-  ): Promise<string> {
-    const tools = ctx?.tools ?? [];
-    if (!tools.length || !model.turn || !ctx?.runTool) {
-      return model.complete(history, system);
-    }
-
-    const priorTurns: unknown[] = [];
-    for (let step = 0; step < MAX_TOOL_STEPS; step++) {
-      const turn = await model.turn(history, system, tools, priorTurns);
-      if (!turn.toolCalls.length) {
-        return turn.text || "(no reply)";
-      }
-      priorTurns.push(turn.raw);
-      for (const call of turn.toolCalls) {
-        // A failing tool must come back as an observation, not blow up the
-        // turn — the model can then apologise or try something else.
-        let result: unknown;
-        try {
-          result = await ctx.runTool(call.name, call.input);
-        } catch (e) {
-          result = { error: String(e) };
-        }
-        priorTurns.push(toolResultMessage(model, call.id, call.name, result));
-      }
-    }
-    // Out of steps: ask for a final answer with no tools offered.
-    const final = await model.turn(history, system, [], priorTurns);
-    return final.text || "(stopped after too many tool steps)";
-  }
-}
-
-/** Tool results use different shapes on Claude vs OpenAI-compatible APIs. */
-function toolResultMessage(
-  model: Model,
-  id: string,
-  name: string,
-  result: unknown,
-): unknown {
-  const content = JSON.stringify(result).slice(0, 8000);
-  return { role: "tool", tool_call_id: id, name, content };
-}
 
 /**
  * Runs a real agent CLI inside the agent's VM — Claude Code — rather than

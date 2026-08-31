@@ -4,42 +4,9 @@
 // key. EchoModel needs no key and exists for offline tests.
 import type { Message } from "../types.js";
 
-/** A tool the model may call, in provider-neutral form. */
-export interface ToolDef {
-  name: string;
-  description: string;
-  /** JSON Schema for the tool's input object. */
-  parameters: Record<string, unknown>;
-}
-
-/** One tool invocation requested by the model. */
-export interface ToolCall {
-  id: string;
-  name: string;
-  input: Record<string, unknown>;
-}
-
-/** A turn's result: either final text, or tool calls the caller must run. */
-export interface Turn {
-  text: string;
-  toolCalls: ToolCall[];
-  /** Provider-native assistant message, echoed back verbatim on the next turn. */
-  raw?: unknown;
-}
-
 export interface Model {
   name: string;
   complete(messages: Message[], system?: string): Promise<string>;
-  /**
-   * Tool-aware turn. Models that cannot call tools may leave this undefined;
-   * callers fall back to complete().
-   */
-  turn?(
-    messages: Message[],
-    system: string | undefined,
-    tools: ToolDef[],
-    priorTurns?: unknown[],
-  ): Promise<Turn>;
 }
 
 export class EchoModel implements Model {
@@ -96,10 +63,7 @@ export class OpenAICompatModel implements Model {
   private async post(body: object): Promise<{
     choices: {
       finish_reason?: string;
-      message: {
-        content?: string;
-        tool_calls?: { id: string; function: { name: string; arguments: string } }[];
-      };
+      message: { content?: string };
     }[];
   }> {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -129,47 +93,5 @@ export class OpenAICompatModel implements Model {
     return "";
   }
 
-  async turn(
-    messages: Message[],
-    system: string | undefined,
-    tools: ToolDef[],
-    priorTurns: unknown[] = [],
-  ): Promise<Turn> {
-    const base = this.body(messages, system) as { messages: unknown[] };
-    // Assistant tool-call messages and their tool results, in order.
-    base.messages.push(...priorTurns);
-
-    const data = await this.post({
-      ...base,
-      ...(tools.length
-        ? {
-            tools: tools.map((t) => ({
-              type: "function",
-              function: { name: t.name, description: t.description, parameters: t.parameters },
-            })),
-          }
-        : {}),
-    });
-    const choice = data.choices[0];
-    const calls = choice?.message?.tool_calls ?? [];
-    return {
-      text: choice?.message?.content ?? "",
-      toolCalls: calls.map((c) => ({
-        id: c.id,
-        name: c.function.name,
-        input: safeParse(c.function.arguments),
-      })),
-      raw: choice?.message,
-    };
-  }
 }
 
-/** Tool arguments arrive as a JSON string; a malformed one must not throw. */
-function safeParse(s: string): Record<string, unknown> {
-  try {
-    const v = JSON.parse(s || "{}");
-    return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
