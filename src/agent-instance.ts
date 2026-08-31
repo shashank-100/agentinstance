@@ -205,6 +205,34 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
 
+  /**
+   * Stop this agent's container and give its slot back.
+   *
+   * Only the agent knows which machine tier it runs on, and the tier decides
+   * which container class holds it — so this has to happen before wipe() erases
+   * the spec, or the container becomes unreachable and lingers until it times
+   * out on its own.
+   *
+   * A failure here is logged and swallowed: the container will expire by itself,
+   * and refusing to delete an agent because its VM would not stop is worse than
+   * leaving one idle machine behind. The SDK notes teardown can hang, so this is
+   * raced against a timeout rather than awaited indefinitely.
+   */
+  async releaseSandbox(): Promise<void> {
+    const { getSandbox } = await import("./sandbox/index.js");
+    const sandbox = getSandbox(this.env, this.spec.machine);
+    if (!sandbox) return;
+    const agentId = this.ctx.id.toString();
+    try {
+      await Promise.race([
+        sandbox.destroy(agentId),
+        new Promise((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+    } catch (e) {
+      console.log(`releaseSandbox failed for ${agentId}: ${e}`);
+    }
+  }
+
   /** Permanently erase this agent's history + state. */
   async wipe(): Promise<void> {
     this.sql.exec("DELETE FROM messages");

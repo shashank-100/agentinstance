@@ -18,6 +18,7 @@ function fakeSandbox(capture: { cmd?: string }) {
     },
     async writeFile() {},
     async readFile() { return ""; },
+    async destroy() {},
   };
 }
 

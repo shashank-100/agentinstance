@@ -170,6 +170,11 @@ async function listAgentsRoute(env: Env): Promise<Response> {
 }
 
 async function deleteAgentRoute(env: Env, id: string): Promise<Response> {
+  // Ask the agent to release its container before its own state is erased:
+  // afterwards nothing knows which machine tier it was on, so nothing can find
+  // the container to stop. Left alone it keeps its slot against max_instances
+  // until the idle timer expires, long after the agent is gone from the UI.
+  await agentStub(env, id).releaseSandbox();
   await agentStub(env, id).wipe();
   await registry(env).remove(id);
   return json({ ok: true, deleted: id });

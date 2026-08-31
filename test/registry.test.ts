@@ -38,6 +38,21 @@ describe("agent registry", () => {
     expect(hist).toHaveLength(0);
   });
 
+  it("DELETE releases the agent's container before erasing its state", async () => {
+    // The tier lives in the spec, and the tier is what says which container
+    // class holds this agent — so the release has to happen while the spec is
+    // still readable. Deleting an agent whose sandbox cannot be reached must
+    // still succeed: an undeleteable agent is worse than an idle machine.
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "reg-vm", harness: "claude-code", model: "claude-opus-4.8" }),
+    });
+    const res = await SELF.fetch("https://x/agents/reg-vm", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as { id: string }[];
+    expect(list.find((a) => a.id === "reg-vm")).toBeUndefined();
+  });
+
   it("DELETE on a sub-path clears that resource, not the whole agent", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",

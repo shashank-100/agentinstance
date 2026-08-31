@@ -23,6 +23,8 @@ export interface Sandbox {
   exec(agentId: string, command: string): Promise<ExecResult>;
   writeFile(agentId: string, path: string, content: string): Promise<void>;
   readFile(agentId: string, path: string): Promise<string>;
+  /** Shut the container down and release its slot. */
+  destroy(agentId: string): Promise<void>;
 }
 
 /**
@@ -59,6 +61,10 @@ export class ContainerSandbox implements Sandbox {
   async readFile(agentId: string, path: string): Promise<string> {
     const r = await this.box(agentId).readFile(path);
     return typeof r === "string" ? r : (r?.content ?? "");
+  }
+
+  async destroy(agentId: string): Promise<void> {
+    await this.box(agentId).destroy();
   }
 }
 
