@@ -1,55 +1,63 @@
-// Sandbox-wired CLI harness (pure logic, node env).
+// AgentCliHarness runs a real agent CLI inside the agent's VM.
 import { describe, it, expect } from "vitest";
-import { CliHarness, extractShell } from "../../src/harnesses/index.js";
+import { getHarness, harnessEnvVar } from "../../src/harnesses/index.js";
 import type { Message } from "../../src/types.js";
-import type { Sandbox, ExecResult } from "../../src/sandbox/index.js";
+import type { Model } from "../../src/models/index.js";
 
-const hist = (content: string): Message[] => [
-  { id: "1", role: "user", content, channel: "core", ts: 1 },
-];
-
-describe("extractShell", () => {
-  it("pulls a command from a ```sh block", () => {
-    expect(extractShell("sure:\n```sh\nls -la\n```")).toBe("ls -la");
-  });
-  it("returns null when there is no block", () => {
-    expect(extractShell("just an answer")).toBeNull();
-  });
+const model = { name: "unused", async complete() { return ""; } } as unknown as Model;
+const msg = (content: string): Message => ({
+  id: "1", role: "user", content, channel: "core", ts: 0,
 });
 
-describe("CliHarness with sandbox", () => {
-  it("falls back to a plain model call when no sandbox", async () => {
-    const model = { name: "m", complete: async () => "plain answer" };
-    const h = new CliHarness("shell");
-    expect(await h.run(model, hist("hi"), "sys")).toBe("plain answer");
+function fakeSandbox(capture: { cmd?: string }) {
+  return {
+    name: "fake",
+    async exec(_id: string, command: string) {
+      capture.cmd = command;
+      return { stdout: "done", stderr: "", exitCode: 0, success: true };
+    },
+    async writeFile() {},
+    async readFile() { return ""; },
+  };
+}
+
+describe("agent CLI harnesses", () => {
+  it("each harness names the env var its CLI authenticates with", () => {
+    expect(harnessEnvVar("claude-code")).toBe("ANTHROPIC_API_KEY");
+    expect(harnessEnvVar("pi")).toBe("PI_API_KEY");
+    expect(harnessEnvVar("nope")).toBeNull();
   });
 
-  it("runs the emitted command in the sandbox and answers from output", async () => {
-    const calls: string[] = [];
-    const model = {
-      name: "m",
-      complete: async (_msgs: Message[]) => {
-        calls.push("call");
-        // first call: emit a command; second call: final answer using output
-        return calls.length === 1 ? "```sh\necho hi\n```" : "the command printed hi";
-      },
-    };
-    const ran: string[] = [];
-    const sandbox: Sandbox = {
-      name: "fake",
-      async exec(_id, cmd): Promise<ExecResult> {
-        ran.push(cmd);
-        return { stdout: "hi\n", stderr: "", exitCode: 0, success: true };
-      },
-      async writeFile() {},
-      async readFile() {
-        return "";
-      },
-    };
-    const h = new CliHarness("shell");
-    const out = await h.run(model, hist("say hi via shell"), "sys", { sandbox, agentId: "a1" });
-    expect(ran).toEqual(["echo hi"]);
-    expect(out).toBe("the command printed hi");
-    expect(calls).toHaveLength(2); // emit + finalize
+  it("passes the task to the CLI and returns its output", async () => {
+    const capture: { cmd?: string } = {};
+    const out = await getHarness("claude-code").run(model, [msg("fix the bug")], "sys", {
+      sandbox: fakeSandbox(capture),
+      agentId: "a1",
+      cliKey: "sk-test",
+    });
+    expect(out).toBe("done");
+    expect(capture.cmd).toContain("claude -p");
+    expect(capture.cmd).toContain("fix the bug");
+    // The key rides the command's environment, never the prompt.
+    expect(capture.cmd).toContain("ANTHROPIC_API_KEY=");
+  });
+
+  it("quotes the task so a prompt cannot break out of the command", async () => {
+    const capture: { cmd?: string } = {};
+    await getHarness("pi").run(model, [msg("rm -rf /; echo pwned")], "sys", {
+      sandbox: fakeSandbox(capture),
+      agentId: "a1",
+      cliKey: "k",
+    });
+    expect(capture.cmd).toContain("'rm -rf /; echo pwned'");
+  });
+
+  it("fails loudly when the CLI has no key", async () => {
+    await expect(
+      getHarness("claude-code").run(model, [msg("hi")], "sys", {
+        sandbox: fakeSandbox({}),
+        agentId: "a1",
+      }),
+    ).rejects.toThrow(/ANTHROPIC_API_KEY/);
   });
 });

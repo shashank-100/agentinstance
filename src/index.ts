@@ -20,7 +20,12 @@ import {
   DEFAULT_MACHINE,
   estimateMonthCost,
 } from "./catalog.js";
-import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
+import {
+  checkCompatible,
+  defaultSpec,
+  harnessEnvVar,
+  IncompatibleSpec,
+} from "./harnesses/index.js";
 import { toText, type Part } from "./parts.js";
 
 export { AgentInstance } from "./agent-instance.js";
@@ -64,7 +69,7 @@ export default {
       // No landing page, so the agent list is the front door.
       return Response.redirect(new URL("/agents/", url).toString(), 302);
     }
-    if (first === "catalog") return catalogRoute();
+    if (first === "catalog") return catalogRoute(env);
     if (first === "api" && second === "launch" && request.method === "POST") {
       return launchRoute(request, env);
     }
@@ -87,11 +92,16 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 // --- what an agent can be built from -----------------------------------------
-function catalogRoute(): Response {
+function catalogRoute(env: Env): Response {
   const entries = (m: Record<string, { desc: string; ready: boolean }>) =>
     Object.entries(m).map(([id, v]) => ({ id, ...v }));
+  const secrets = env as unknown as Record<string, string | undefined>;
   return json({
-    harnesses: entries(HARNESSES),
+    // `ready` is whether that CLI's key is actually set, not a static flag.
+    harnesses: Object.entries(HARNESSES).map(([id, h]) => {
+      const v = harnessEnvVar(id);
+      return { id, ...h, ready: !!(v && secrets[v]) };
+    }),
     models: Object.values(MODELS),
     capabilities: entries(CAPABILITIES),
     machines: Object.entries(MACHINES).map(([id, m]) => ({ id, ...m })),

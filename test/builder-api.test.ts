@@ -11,7 +11,7 @@ describe("builder API", () => {
       machines: { id: string }[];
       defaultMachine: string;
     };
-    expect(cat.harnesses.some((h) => h.id === "shell")).toBe(true);
+    expect(cat.harnesses.some((h) => h.id === "pi")).toBe(true);
     expect(cat.models.some((m) => m.id === "gpt-5.6-terra")).toBe(true);
     expect(cat.capabilities.some((c) => c.id === "scrape_web")).toBe(true);
     expect(cat.machines.some((m) => m.id === "4gb")).toBe(true);
@@ -23,7 +23,7 @@ describe("builder API", () => {
       method: "POST",
       body: JSON.stringify({
         id: "builtA",
-        harness: "chat",
+        harness: "claude-code",
         model: "gpt-5.4-mini",
         capabilities: ["scrape_web"],
         machine: "4gb",
@@ -40,7 +40,7 @@ describe("builder API", () => {
     const res = await SELF.fetch("https://x/api/launch", {
       method: "POST",
       body: JSON.stringify({
-        harness: "chat",
+        harness: "claude-code",
         model: "gpt-5.4-mini",
         capabilities: ["not_a_capability"],
         machine: "1gb",
@@ -53,7 +53,7 @@ describe("builder API", () => {
   it("launch auto-generates an id when omitted", async () => {
     const res = await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ harness: "chat", model: "gpt-5.6-terra" }),
+      body: JSON.stringify({ harness: "claude-code", model: "gpt-5.6-terra" }),
     });
     const data = (await res.json()) as { id: string };
     expect(data.id).toMatch(/^agent-/);

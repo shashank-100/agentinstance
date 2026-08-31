@@ -7,7 +7,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
-import { ChatHarness, getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
+import { getHarness, harnessEnvVar, type AgentSpec, defaultSpec } from "./harnesses/index.js";
 import { MODELS, PROVIDERS } from "./catalog.js";
 import { EchoModel, OpenAICompatModel, type Model } from "./models/index.js";
 
@@ -87,6 +87,13 @@ export class AgentInstance extends DurableObject<Env> {
     );
   }
 
+  /** The API key the configured harness's CLI authenticates with. */
+  private cliKey(): string | undefined {
+    const v = harnessEnvVar(this.spec.harness);
+    if (!v) return undefined;
+    return (this.env as unknown as Record<string, string | undefined>)[v];
+  }
+
   // --- the conversation -----------------------------------------------------
   async configure(spec: Partial<AgentSpec>): Promise<AgentSpec> {
     const merged = { ...this.spec, ...spec };
@@ -99,7 +106,7 @@ export class AgentInstance extends DurableObject<Env> {
   async send(text: string, channel = "core"): Promise<{ reply?: string; parked?: boolean }> {
     if (this.getKV("parked", false)) return { parked: true };
     this.record(makeMessage("user", text, channel));
-    const harness = getHarness(this.spec.harness) ?? new ChatHarness();
+    const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
     const { getCapability } = await import("./capabilities/index.js");
 
@@ -118,6 +125,7 @@ export class AgentInstance extends DurableObject<Env> {
       sandbox: getSandbox(this.env),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
+      cliKey: this.cliKey(),
       tools,
       runTool: async (name, input) => {
         const out = await this.runTool(name, input);
@@ -214,6 +222,22 @@ export class AgentInstance extends DurableObject<Env> {
       return { error: `capability '${name}' not enabled for this agent` };
     }
     try {
+      if (name === "run_shell") {
+        const { getSandbox } = await import("./sandbox/index.js");
+        const sandbox = getSandbox(this.env);
+        if (!sandbox) return { error: "no sandbox is configured for this agent" };
+        const command = String(input.command ?? "").trim();
+        if (!command) return { error: "run_shell requires { command }" };
+        const out = await sandbox.exec(this.ctx.id.toString(), command);
+        return {
+          result: {
+            stdout: out.stdout.slice(0, 8000),
+            stderr: out.stderr.slice(0, 4000),
+            exitCode: out.exitCode,
+          },
+        };
+      }
+
       const memo = this.runMemoryTool(name, input);
       if (memo) return { result: memo };
 

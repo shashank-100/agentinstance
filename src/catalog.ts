@@ -38,11 +38,11 @@ export const MODELS: Record<string, ModelInfo> = {
  *  rather than presenting stubs and real code as equal choices. */
 export interface CatalogEntry { desc: string; ready: boolean }
 
-// Only harnesses that actually exist. `shell` is the sandbox-backed
-// command loop (CliHarness); it needs a sandbox configured to do anything.
+// A harness is the agent program that runs in the agent's VM. Each needs its
+// own API key set as a Worker secret; `ready` says whether that key is present.
 export const HARNESSES: Record<string, CatalogEntry> = {
-  chat: { desc: "Single-loop chat with tool calling.", ready: true },
-  shell: { desc: "Runs shell commands in a sandbox.", ready: false },
+  "claude-code": { desc: "Anthropic's Claude Code CLI.", ready: false },
+  pi: { desc: "The Pi agent CLI.", ready: false },
 };
 
 export interface MachineTier { label: string; ramGb: number; usdPerHour: number; }
@@ -58,6 +58,7 @@ export const CAPABILITIES: Record<string, CatalogEntry> = {
   scrape_web: { desc: "Fetch and extract page text.", ready: true },
   search_web: { desc: "Web search via Tavily.", ready: true },
   fetch_json: { desc: "Call any JSON HTTP API.", ready: true },
+  run_shell: { desc: "Run shell commands in the agent's VM.", ready: true },
   browse_page: { desc: "Render a page in headless Chrome.", ready: true },
   remember: { desc: "Save a durable note for later sessions.", ready: true },
   recall: { desc: "Read notes saved in earlier sessions.", ready: true },

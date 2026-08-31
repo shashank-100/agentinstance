@@ -13,6 +13,8 @@ export interface HarnessContext {
   agentId?: string;
   /** Standing instructions for this agent, written into its VM as AGENTS.md. */
   agentsMd?: string;
+  /** API key for the CLI this harness runs, read from the Worker's secrets. */
+  cliKey?: string;
   /** Tools the model may call this turn, with a runner for each. */
   tools?: ToolDef[];
   runTool?: (name: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -78,12 +80,22 @@ function toolResultMessage(
   return { role: "tool", tool_call_id: id, name, content };
 }
 
-// CLI-wrapping harness. If a sandbox is available, the
-// model can act: it may emit a fenced ```sh block, which the harness runs in the
-// sandbox and feeds the output back for a final answer. Without a sandbox it
-// falls back to a single model call — so it always works, just less capable.
-export class CliHarness implements Harness {
-  constructor(public name: string) {}
+/**
+ * Runs a real agent CLI inside the agent's VM — Claude Code, Pi — rather than
+ * driving the model directly. The CLI owns its own loop, prompt and tools; this
+ * class only starts it, gives it the task, and returns what it printed.
+ *
+ * Each CLI needs its own key in the VM's environment, which is why `envVar`
+ * exists: without it the binary starts and immediately fails to authenticate.
+ */
+export class AgentCliHarness implements Harness {
+  constructor(
+    public name: string,
+    /** How to invoke it. `{task}` is replaced with the shell-quoted prompt. */
+    private template: string,
+    /** Env var the CLI authenticates with, forwarded from the Worker's secrets. */
+    private envVar: string,
+  ) {}
 
   async run(
     model: Model,
@@ -91,57 +103,74 @@ export class CliHarness implements Harness {
     system: string,
     ctx?: HarnessContext,
   ): Promise<string> {
-    const sandbox = ctx?.sandbox;
-    const agentId = ctx?.agentId;
-    if (!sandbox || !agentId) return model.complete(history, system);
+    const { sandbox, agentId } = ctx ?? {};
+    if (!sandbox || !agentId) {
+      throw new Error(`${this.name} needs a sandbox — no container is bound`);
+    }
+    const key = ctx?.cliKey;
+    if (!key) {
+      throw new Error(`${this.name} needs ${this.envVar} set as a Worker secret`);
+    }
 
-    // The VM's filesystem is discarded when it sleeps, so AGENTS.md is stored
-    // durably on the agent and written in at the start of every session.
+    // The VM's filesystem is discarded when it sleeps, so AGENTS.md is written
+    // in at the start of every session rather than once.
     if (ctx.agentsMd) {
       await sandbox.writeFile(agentId, "/workspace/AGENTS.md", ctx.agentsMd).catch(() => {});
     }
 
-    const toolSystem =
-      system +
-      "\n\nYou can run shell commands. To run one, reply with a single fenced " +
-      "```sh code block containing the command. I will run it and give you the output." +
-      (ctx.agentsMd
-        ? "\n\nYour workspace notes (also at /workspace/AGENTS.md):\n\n" + ctx.agentsMd
-        : "");
-    const first = await model.complete(history, toolSystem);
+    const task = lastUserText(history);
+    if (!task) return "(nothing to do)";
 
-    const cmd = extractShell(first);
-    if (!cmd) return first; // model chose to just answer
+    // The key goes in the command's environment, not the prompt: anything in the
+    // prompt is echoed back in the CLI's own logs.
+    const cmd =
+      `cd /workspace && ${this.envVar}=${shellQuote(key)} ` +
+      this.template.replace("{task}", shellQuote(task));
 
-    const result = await sandbox.exec(agentId, cmd);
-    const observation: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content:
-        `Command output (exit ${result.exitCode}):\n` +
-        `stdout:\n${result.stdout}\nstderr:\n${result.stderr}\n` +
-        `Now give the user a final answer.`,
-      channel: "sandbox",
-      ts: Date.now(),
-    };
-    return model.complete([...history, { ...msgFrom("assistant", first) }, observation], system);
+    const out = await sandbox.exec(agentId, cmd);
+    if (out.exitCode !== 0) {
+      return `${this.name} exited ${out.exitCode}:\n${out.stderr.slice(0, 2000) || out.stdout.slice(0, 2000)}`;
+    }
+    return out.stdout.trim() || "(no output)";
   }
 }
 
-function msgFrom(role: "assistant" | "user", content: string): Message {
-  return { id: crypto.randomUUID(), role, content, channel: "core", ts: Date.now() };
+function lastUserText(history: Message[]): string | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === "user") return history[i].content;
+  }
+  return null;
 }
 
-/** Pull the command out of the first ```sh / ```bash / ```shell fenced block. */
-export function extractShell(text: string): string | null {
-  const m = text.match(/```(?:sh|bash|shell)\s*\n([\s\S]*?)```/);
-  return m ? m[1].trim() : null;
+/** Single-quote for POSIX sh, so a prompt cannot break out of the command. */
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-export function getHarness(name: string): Harness {
-  if (name === "chat") return new ChatHarness();
-  if (name in HARNESSES) return new CliHarness(name);
-  throw new Error(`unknown harness '${name}'`);
+/** Every harness is a real agent CLI running in the agent's own VM. */
+const CLI_HARNESSES: Record<string, { template: string; envVar: string }> = {
+  "claude-code": { template: 'claude -p {task}', envVar: "ANTHROPIC_API_KEY" },
+  pi: { template: 'pi -p {task}', envVar: "PI_API_KEY" },
+};
+
+export function getHarness(name: string, offline = false): Harness {
+  const cli = CLI_HARNESSES[name];
+  if (!cli) throw new Error(`unknown harness '${name}'`);
+  // Tests have no sandbox and no CLI key, so they answer from the model alone.
+  // Gated on an explicit flag so this can never be reached in production.
+  return offline ? new EchoHarness(name) : new AgentCliHarness(name, cli.template, cli.envVar);
+}
+
+/** Offline stand-in: replies from the model, skipping the CLI entirely. */
+class EchoHarness implements Harness {
+  constructor(public name: string) {}
+  run(model: Model, history: Message[], system: string): Promise<string> {
+    return model.complete(history, system);
+  }
+}
+
+export function harnessEnvVar(name: string): string | null {
+  return CLI_HARNESSES[name]?.envVar ?? null;
 }
 
 export interface AgentSpec {
@@ -158,7 +187,7 @@ export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
     Object.entries(partial).filter(([, v]) => v !== undefined),
   );
   return {
-    harness: "chat",
+    harness: "claude-code",
     model: "gpt-5.6-terra",
     capabilities: [],
     machine: DEFAULT_MACHINE,

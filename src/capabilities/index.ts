@@ -181,6 +181,29 @@ export const browsePage: Capability = {
 };
 
 /**
+ * run_shell, remember and recall are declared here so the model sees their
+ * schemas, but they execute in AgentInstance.runTool: they need the agent's own
+ * sandbox and SQLite, which the env-only Capability contract cannot reach.
+ */
+export const runShell: Capability = {
+  name: "run_shell",
+  describe:
+    "Run a shell command in your own Linux VM and return its output. bash, " +
+    "python3 and git are installed. The filesystem is scratch space — it is " +
+    "discarded when the VM sleeps, so do not rely on files between sessions.",
+  parameters: {
+    type: "object",
+    properties: {
+      command: { type: "string", description: "The shell command to run." },
+    },
+    required: ["command"],
+  },
+  async run() {
+    throw new Error("run_shell is handled by the agent runtime");
+  },
+};
+
+/**
  * remember / recall are declared here so the model sees their schemas, but they
  * are executed by AgentInstance.runTool — they need that agent's own SQLite,
  * which the env-only Capability contract cannot reach.
@@ -222,6 +245,7 @@ const REGISTRY: Record<string, Capability> = {
   scrape_web: scrapeWeb,
   search_web: searchWeb,
   fetch_json: fetchJson,
+  run_shell: runShell,
   browse_page: browsePage,
   remember,
   recall,

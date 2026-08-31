@@ -65,7 +65,7 @@ describe("capabilities", () => {
       method: "POST",
       body: JSON.stringify({
         id: "memo",
-        harness: "chat",
+        harness: "claude-code",
         model: "gpt-5.6-terra",
         capabilities: ["remember", "recall"],
       }),
@@ -97,7 +97,7 @@ describe("capabilities", () => {
   it("AGENTS.md is stored on the agent and survives a VM restart", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "md1", harness: "shell", model: "gpt-5.6-terra" }),
+      body: JSON.stringify({ id: "md1", harness: "claude-code", model: "gpt-5.6-terra" }),
     });
 
     await SELF.fetch("https://x/agents/md1/agents-md", {
