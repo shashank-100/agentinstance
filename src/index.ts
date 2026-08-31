@@ -258,10 +258,16 @@ async function agentRoute(
         await agent.fireWakeup();
         return json({ ok: true });
 
-      case "schedule":
+      // A standing task on an agent that was never launched is a recurring
+      // alarm nothing owns: it does not appear in the dashboard, so nothing
+      // will ever delete it, and it wakes forever.
+      case "schedule": {
+        if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
         return scheduleRoute(request, agent);
+      }
 
       case "agents-md": {
+        if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
         if (request.method === "GET") return json(await agent.getAgentsMd());
         if (request.method === "DELETE") return json(await agent.setAgentsMd(null));
         const { content } = await bodyOf<{ content?: string }>(request);
@@ -278,6 +284,7 @@ async function agentRoute(
 
       case "tool": {
         if (!route.arg) return new Response("tool name required", { status: 400 });
+        if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
         const out = await agent.runTool(route.arg, await bodyOf(request));
         return out.error ? json({ error: out.error }, 400) : json({ result: out.result });
       }

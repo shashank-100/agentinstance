@@ -24,12 +24,12 @@ export interface ChannelAdapter {
   send(env: Env, to: string, text: string, idempotencyKey: string): Promise<void>;
 }
 
-async function agentReply(env: Env, msg: Inbound): Promise<string> {
+async function agentReply(env: Env, msg: Inbound): Promise<{ reply: string; missing?: boolean }> {
   const stub = env.AGENT.get(env.AGENT.idFromName(msg.agentId)) as unknown as {
-    send(t: string, c?: string): Promise<{ reply?: string }>;
+    send(t: string, c?: string): Promise<{ reply?: string; missing?: boolean }>;
   };
   const res = await stub.send(msg.text, msg.channel);
-  return res.reply ?? "";
+  return { reply: res.reply ?? "", missing: res.missing };
 }
 
 /** Shared pipeline: parse -> run agent -> reply back. Used by every channel. */
@@ -40,12 +40,18 @@ export async function handleChannel(
 ): Promise<Response> {
   const inbound = await adapter.parse(request);
   if (!inbound) return new Response("ignored", { status: 200 });
-  const reply = await agentReply(env, inbound);
+  const out = await agentReply(env, inbound);
+  // A webhook naming an agent that was never launched used to answer
+  // { ok: true, reply: "" } — success, with the reason hidden. Say what
+  // happened instead: a misconfigured webhook is otherwise invisible.
+  if (out.missing) {
+    return Response.json({ error: `no agent '${inbound.agentId}'` }, { status: 404 });
+  }
   if (inbound.replyTo) {
     const key = inbound.idempotencyKey ?? crypto.randomUUID();
-    await adapter.send(env, inbound.replyTo, reply, key);
+    await adapter.send(env, inbound.replyTo, out.reply, key);
   }
-  return Response.json({ ok: true, reply });
+  return Response.json({ ok: true, reply: out.reply });
 }
 
 export { TelegramAdapter } from "./telegram.js";
