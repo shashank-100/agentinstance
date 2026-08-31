@@ -157,15 +157,6 @@ if (typeof document !== "undefined") {
       $("#result").textContent = `Error: ${data.error}`;
       return;
     }
-    // AGENTS.md is stored on the agent, so it survives the VM sleeping.
-    const notes = $("#agents-md")?.value.trim();
-    if (notes) {
-      await fetch(`/agents/${data.id}/agents-md`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ content: notes }),
-      }).catch(() => {});
-    }
     $("#result").textContent =
       `Launched ${data.id} · est ~$${data.estMonthly}/mo (parked = free)`;
   }
