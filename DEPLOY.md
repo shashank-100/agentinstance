@@ -43,7 +43,7 @@ Open `/agents/new.html` to build one in the browser, or use the API:
 export AGENTINSTANCE_URL=https://agentinstance.<your-subdomain>.workers.dev
 
 curl -X POST "$AGENTINSTANCE_URL/api/launch" -H 'content-type: application/json' \
-  -d '{"id":"mybot","harness":"chat","model":"gpt-5.6-terra","capabilities":["search_web"]}'
+  -d '{"id":"mybot","harness":"claude-code","model":"claude-opus-4.8","capabilities":["search_web","remember","recall"]}'
 
 curl -X POST "$AGENTINSTANCE_URL/agents/mybot/send" -H 'content-type: application/json' \
   -d '{"text":"hello"}'

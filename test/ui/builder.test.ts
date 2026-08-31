@@ -7,7 +7,7 @@ import {
   modelsFor,
   supportsModel,
   selectMachine,
-  estimateMonthly,
+  hourlyRate,
   compatibility,
   toSpec,
   summary,
@@ -108,10 +108,10 @@ describe("section 3 — capabilities", () => {
 });
 
 describe("section 4 — machine", () => {
-  it("selects a machine and recomputes cost", () => {
+  it("selects a machine and reports its hourly rate", () => {
     const s = selectMachine(fresh(), "two-cpu");
     expect(s.machine).toBe("two-cpu");
-    expect(estimateMonthly(s)).toBe(Math.round(0.104 * 24 * 30 * 100) / 100);
+    expect(hourlyRate(s)).toBe(0.104);
   });
   it("defaults to half a vCPU", () => {
     expect(fresh().machine).toBe("half-cpu");
@@ -125,7 +125,7 @@ describe("section 5 — summary + cost", () => {
     const sum = summary(s);
     expect(sum.ready).toBe(true);
     expect(sum.capabilities).toEqual(["scrape_web", "run_shell"]);
-    expect(sum.estMonthly).toBeGreaterThan(0);
+    expect(sum.hourly).toBeGreaterThan(0);
   });
 });
 

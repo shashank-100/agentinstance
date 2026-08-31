@@ -122,7 +122,13 @@ export const CAPABILITIES: Record<string, CatalogEntry> = {
   recall: { desc: "Read notes saved in earlier sessions.", ready: true },
 };
 
-export function estimateMonthCost(machine = DEFAULT_MACHINE): number {
-  const tier = MACHINES[machine];
-  return Math.round(tier.usdPerHour * 24 * 30 * 100) / 100;
+/**
+ * What the machine costs per hour while it is running.
+ *
+ * Not a monthly figure: containers sleep when idle and bill per 10ms of active
+ * time, so a 24×30 projection describes the one case that never happens and
+ * overstates a typical agent by orders of magnitude.
+ */
+export function hourlyCost(machine = DEFAULT_MACHINE): number {
+  return MACHINES[machine]?.usdPerHour ?? 0;
 }

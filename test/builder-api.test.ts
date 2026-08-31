@@ -29,11 +29,11 @@ describe("builder API", () => {
         machine: "half-cpu",
       }),
     });
-    const data = (await res.json()) as { id: string; estMonthly: number; spec: { model: string } };
+    const data = (await res.json()) as { id: string; usdPerHour: number; spec: { model: string } };
     expect(res.status).toBe(200);
     expect(data.id).toBe("builtA");
     expect(data.spec.model).toBe("gpt-5.4-mini");
-    expect(data.estMonthly).toBeGreaterThan(0);
+    expect(data.usdPerHour).toBeGreaterThan(0);
   });
 
   it("launch rejects an incompatible spec", async () => {

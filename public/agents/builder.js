@@ -63,11 +63,17 @@ export function selectMachine(state, id) {
   return state;
 }
 
-// Mirrors server-side estimateMonthCost: usdPerHour * 24 * 30.
-export function estimateMonthly(state) {
+/**
+ * The machine's hourly rate while it is actually running.
+ *
+ * Deliberately not a monthly projection: the container sleeps after a few idle
+ * minutes and bills per 10ms of active time, so multiplying by 24×30 describes
+ * a machine that never stops — which is the one case that does not happen. The
+ * old estimate quoted ~$27/mo for an agent whose real cost is a few cents.
+ */
+export function hourlyRate(state) {
   const m = state.catalog.machines.find((x) => x.id === state.machine);
-  if (!m) return 0;
-  return Math.round(m.usdPerHour * 24 * 30 * 100) / 100;
+  return m ? m.usdPerHour : 0;
 }
 
 // Mirrors server-side checkCompatible: returns null if OK, else a message.
@@ -94,7 +100,7 @@ export function summary(state) {
     model: model?.label ?? "—",
     capabilities: [...state.capabilities],
     machine: machine ? machine.label : "—",
-    estMonthly: estimateMonthly(state),
+    hourly: hourlyRate(state),
     ready: compatibility(state) === null,
   };
 }
@@ -187,7 +193,7 @@ if (typeof document !== "undefined") {
     $("#s-model").textContent = s.model;
     $("#s-caps").textContent = s.capabilities.length ? s.capabilities.join(", ") : "none";
     $("#s-machine").textContent = s.machine;
-    $("#s-cost").textContent = `~$${s.estMonthly}/mo`;
+    $("#s-cost").textContent = `$${s.hourly}/hr`;
     const msg = compatibility(state);
     const btn = $("#launch");
     btn.disabled = !s.ready;

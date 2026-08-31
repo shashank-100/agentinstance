@@ -20,7 +20,7 @@ import {
   CAPABILITIES,
   DEFAULT_MACHINE,
   HARNESS_MODELS,
-  estimateMonthCost,
+  hourlyCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
 import { toText, type Part } from "./parts.js";
@@ -157,7 +157,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
     machine: spec.machine,
     createdAt: Date.now(),
   });
-  return json({ id, spec, estMonthly: estimateMonthCost(spec.machine) });
+  return json({ id, spec, usdPerHour: hourlyCost(spec.machine) });
 }
 
 // --- dashboard listing: registry records plus each agent's live status -------

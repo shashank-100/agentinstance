@@ -22,7 +22,7 @@ See [DEPLOY.md](./DEPLOY.md).
 
 Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
 agent with persistent memory, reachable on every channel your users already use.
-Park it when idle; you pay nothing while it sleeps.
+It sleeps when idle and you pay nothing while it does.
 
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
@@ -38,16 +38,20 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 
 ## Features
 
-- **Persistent memory** — full history + state in Durable Object SQLite, survives restarts.
-- **Any model, no lock-in** — one adapter for any OpenAI-compatible provider;
-  GPT (via socheap) and Kimi (Moonshot) are wired up, others are a catalog entry plus a key.
-- **Harnesses** — a chat loop with tool calling, and a sandbox-backed shell loop.
-- **Three-piece composition** with a compatibility check before launch.
-- **Unified cross-channel history** — one agent, one memory; replies go to the
-  channel that messaged, context is shared across all of them.
+- **A real agent CLI, not a chat loop** — every agent runs Claude Code inside
+  its own micro-VM, with its own shell, filesystem, and editing tools.
+- **Capabilities the CLI can actually reach** — `search_web`, `browse_page`,
+  `remember` and `recall` are installed into the VM as commands that call back
+  into the Worker, so the agent uses them like any other program.
+- **Persistent memory** — history and notes in Durable Object SQLite. The VM's
+  filesystem is discarded between sessions; what the agent chose to `remember`
+  is not.
+- **Machine tiers that mean something** — ½, 1, or 2 vCPU, each a separate
+  container class, because CPU is what limits real work in the VM.
 - **Scheduled wakeups** via alarms, with a declared cadence so *stalled* ≠ *idle*
   (health ≠ progress).
-- **Park = free** — pay only while actively working.
+- **Idle is free** — containers sleep after five idle minutes and bill per 10ms
+  of active time.
 
 ## Quick start
 
@@ -79,9 +83,6 @@ POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capab
 
 # channel webhooks
 POST /channels/telegram/:id
-POST /channels/discord/:id
-POST /channels/slack/:id
-POST /channels/whatsapp/:id
 POST /channels/web/:id       { text }              -> { reply }
 ```
 
@@ -94,24 +95,35 @@ See [DEPLOY.md](./DEPLOY.md) for Cloudflare deployment and setup.
 | Per-agent runtime + memory + alarms | `src/agent-instance.ts` |
 | Worker gateway (REST) | `src/index.ts` |
 | Model adapters | `src/models/` |
-| Harnesses + spec + compatibility | `src/harnesses/` |
+| Agent CLI runner + VM tool bridge | `src/harnesses/` |
 | Catalog (models/pricing/machines/capabilities) | `src/catalog.ts` |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for what every file does and why.
 
-## Sandbox
+## The VM
 
-Agents run **real shell commands** in a container attached to their own Durable
-Object — a Firecracker micro-VM with bash, python3 and git. It has no public
+Every agent gets a container attached to its own Durable Object — a Firecracker
+micro-VM with bash, python3, git and the Claude Code CLI. It has no public
 endpoint: the Worker reaches it through a binding, so nothing that executes
 arbitrary commands is addressable from the internet.
 
-Use it by giving an agent the `shell` harness. See `Dockerfile` for the image.
+This is where the agent actually runs. A Worker cannot spawn processes, which
+is why the VM exists at all.
+
+Capabilities that live in the Worker — web search, page rendering, the agent's
+notes — are installed into the VM as small scripts on `PATH` that post back to
+`/agents/:id/tool/:name`. The CLI calls `search_web "..."` like any other
+command, and the endpoint enforces the same per-agent capability gate the REST
+API does.
+
+Deleting an agent stops its container immediately rather than leaving it to
+time out. See `Dockerfile` for the image.
 
 ## Roadmap
 
-Channels (Telegram), capabilities (scrape, search), snapshot/restore with
-idempotency keys for outbound side-effects.
+An OpenAI-compatible harness: pi and opencode both worked locally and failed
+inside the VM, so the GPT models are in the catalog but unselectable until one
+of them (or a replacement) runs there.
 
 ## License
 
