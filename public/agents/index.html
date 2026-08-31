@@ -82,6 +82,15 @@ async function load() {
 }
 
 load();
+
+// Agents can be created or deleted from another tab, the API, or the builder,
+// and a dashboard left open otherwise keeps showing whatever was true when it
+// loaded. Refresh when the tab is looked at again rather than polling: the
+// list only matters while someone is reading it.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) load();
+});
+window.addEventListener("focus", () => load());
 </script>
 </body>
 </html>
