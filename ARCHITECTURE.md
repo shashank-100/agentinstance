@@ -205,5 +205,5 @@ plausible-looking replies and appeared to work. Errors that surface as
 
 **Idle = free.** A Durable Object with no traffic costs nothing and its
 container sleeps after a few idle minutes, so an agent nobody is talking to
-genuinely costs nothing. There is no park switch: idling is the default, not
-something to opt into.
+genuinely costs nothing — no switch to flip, and nothing to remember to turn
+off.
