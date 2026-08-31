@@ -42,9 +42,13 @@ describe("agent CLI harnesses", () => {
     expect(capture.cmd).toContain("fix the bug");
     // Credentials ride the command's environment, never the prompt. Pointing
     // the CLI at the agent's own provider is what makes it model-agnostic.
+    // Nested inside runuser's quoting, so match the names and values loosely.
     expect(capture.cmd).toContain("ANTHROPIC_AUTH_TOKEN=");
-    expect(capture.cmd).toContain("ANTHROPIC_BASE_URL='https://socheap.ai/v1'");
-    expect(capture.cmd).toContain("ANTHROPIC_MODEL='gpt-5.6-terra'");
+    expect(capture.cmd).toContain("ANTHROPIC_BASE_URL=");
+    expect(capture.cmd).toContain("https://socheap.ai/v1");
+    expect(capture.cmd).toContain("gpt-5.6-terra");
+    // The CLI must not run as root — it refuses to skip permission prompts.
+    expect(capture.cmd).toContain("runuser -u agent");
   });
 
   it("quotes the task so a prompt cannot break out of the command", async () => {
