@@ -62,11 +62,6 @@ export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
 };
 
-/** The model a harness starts on. */
-export function defaultModelFor(harness: string): string {
-  return HARNESS_MODELS[harness]?.[0] ?? "claude-opus-4.8";
-}
-
 /** `ready` marks what is actually implemented, so the builder can say so
  *  rather than presenting stubs and real code as equal choices. */
 export interface CatalogEntry { desc: string; ready: boolean }

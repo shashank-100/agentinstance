@@ -58,11 +58,6 @@ export function selectModel(state, id) {
   state.model = id;
   return state;
 }
-export function toggleCapability(state, id) {
-  if (state.capabilities.has(id)) state.capabilities.delete(id);
-  else state.capabilities.add(id);
-  return state;
-}
 export function selectMachine(state, id) {
   state.machine = id;
   return state;
