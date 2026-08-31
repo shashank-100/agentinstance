@@ -29,19 +29,25 @@ export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
 
 /**
- * The agent's container, with a short idle timeout.
+ * The agent's container, one class per machine tier.
  *
- * Containers are capped per account (`max_instances` in wrangler.jsonc) and a
- * running one holds its slot whether or not the agent still exists — deleting
- * an agent does not reclaim it. The SDK's default keeps them alive long enough
- * that a handful of short-lived agents can exhaust the pool, at which point
- * every new request waits for a slot and is cancelled with no error to explain
- * it. Sleeping after a few idle minutes returns the slot on its own; the next
- * message pays a cold start instead of hanging.
+ * A container class carries a fixed `instance_type`, so offering real hardware
+ * choices means one class per tier rather than one class configured per
+ * request. They differ only in which wrangler.jsonc entry names them; the
+ * image and behaviour are identical.
+ *
+ * `sleepAfter` is short because a running container holds a slot against
+ * `max_instances` whether or not its agent is still in use, and deleting an
+ * agent does not reclaim it. Sleeping when idle returns the slot on its own;
+ * the next message pays a cold start instead of waiting for a free slot.
  */
-export class Sandbox extends CloudflareSandbox {
+class TieredSandbox extends CloudflareSandbox {
   sleepAfter = "5m";
 }
+
+export class SandboxSmall extends TieredSandbox {}
+export class SandboxMedium extends TieredSandbox {}
+export class SandboxLarge extends TieredSandbox {}
 
 const CHANNELS: Record<string, ChannelAdapter> = {
   telegram: new TelegramAdapter(),

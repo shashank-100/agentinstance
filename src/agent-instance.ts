@@ -132,7 +132,7 @@ export class AgentInstance extends DurableObject<Env> {
       .filter((t): t is NonNullable<typeof t> => t !== null);
 
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
-      sandbox: getSandbox(this.env),
+      sandbox: getSandbox(this.env, this.spec.machine),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
       ...(() => {
@@ -235,7 +235,7 @@ export class AgentInstance extends DurableObject<Env> {
     try {
       if (name === "run_shell") {
         const { getSandbox } = await import("./sandbox/index.js");
-        const sandbox = getSandbox(this.env);
+        const sandbox = getSandbox(this.env, this.spec.machine);
         if (!sandbox) return { error: "no sandbox is configured for this agent" };
         const command = String(input.command ?? "").trim();
         if (!command) return { error: "run_shell requires { command }" };

@@ -4,6 +4,7 @@
 // The Sandbox interface stays deliberately small — exec, readFile, writeFile —
 // so a different backend can be dropped in without touching the harnesses.
 import type { Env } from "../types.js";
+import { MACHINES, DEFAULT_MACHINE } from "../catalog.js";
 import {
   getSandbox as getCloudflareSandbox,
   type Sandbox as CfSandbox,
@@ -61,7 +62,19 @@ export class ContainerSandbox implements Sandbox {
   }
 }
 
-/** The agent's sandbox, or null when no container is bound. */
-export function getSandbox(env: Env): Sandbox | null {
-  return env.SANDBOX ? new ContainerSandbox(env.SANDBOX) : null;
+/**
+ * The agent's sandbox for a given machine tier, or null when that tier's
+ * container is not bound.
+ *
+ * The tier selects which container class the agent runs on, and each class is
+ * pinned to one Cloudflare instance type. Routing here is what gives the
+ * machine picker real effect — the same agent id on a different tier is a
+ * different container, with its own CPU and memory.
+ */
+export function getSandbox(env: Env, machine: string = DEFAULT_MACHINE): Sandbox | null {
+  const tier = MACHINES[machine] ?? MACHINES[DEFAULT_MACHINE];
+  const ns = (env as unknown as Record<string, DurableObjectNamespace<CfSandbox> | undefined>)[
+    tier.binding
+  ];
+  return ns ? new ContainerSandbox(ns) : null;
 }

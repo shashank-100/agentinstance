@@ -11,19 +11,33 @@
   "assets": { "directory": "./public", "binding": "ASSETS" },
   // The sandbox runs as a container attached to its own Durable Object, so
   // each agent gets an isolated workspace addressed the same way its memory is.
+  //
+  // One class per machine tier, because `instance_type` is fixed per container
+  // class — it cannot be chosen per request. Three classes over the same image
+  // is what makes the builder's machine picker mean anything; with a single
+  // class every tier booted identical hardware whatever the UI charged.
   "containers": [
-    { "class_name": "Sandbox", "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 }
+    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "basic",      "max_instances": 5 },
+    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 },
+    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 5 }
   ],
   "durable_objects": {
     "bindings": [
       { "name": "AGENT", "class_name": "AgentInstance" },
       { "name": "REGISTRY", "class_name": "RegistryDO" },
-      { "name": "SANDBOX", "class_name": "Sandbox" }
+      { "name": "SANDBOX_SMALL", "class_name": "SandboxSmall" },
+      { "name": "SANDBOX_MEDIUM", "class_name": "SandboxMedium" },
+      { "name": "SANDBOX_LARGE", "class_name": "SandboxLarge" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["AgentInstance", "RegistryDO"] },
-    { "tag": "v2", "new_sqlite_classes": ["Sandbox"] }
+    { "tag": "v2", "new_sqlite_classes": ["Sandbox"] },
+    // The single Sandbox class is replaced by one per tier. Agents on the old
+    // class keep no state worth moving: a container's filesystem is discarded
+    // when it sleeps, so there is nothing to migrate, only to re-create.
+    { "tag": "v3", "deleted_classes": ["Sandbox"],
+      "new_sqlite_classes": ["SandboxSmall", "SandboxMedium", "SandboxLarge"] }
   ],
   "vars": {
     "DEFAULT_MODEL": "gpt-5.6-terra",

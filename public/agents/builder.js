@@ -179,7 +179,10 @@ if (typeof document !== "undefined") {
     const box = $("#machines");
     box.innerHTML = "";
     for (const m of state.catalog.machines) {
-      const el = card(m.id, m.label, `$${m.usdPerHour}/hr active`, state.machine === m.id);
+      // Spell out the hardware: "4 GB" alone hid that the tiers differ in CPU
+      // too, which is what actually limits anything run_shell does.
+      const spec = `${m.vcpu} vCPU · ${m.ramGb} GB RAM · ${m.diskGb} GB disk`;
+      const el = card(m.id, m.label, `${spec}<br>$${m.usdPerHour}/hr active`, state.machine === m.id);
       el.onclick = () => { selectMachine(state, m.id); renderMachines(); renderSummary(); };
       box.appendChild(el);
     }

@@ -32,11 +32,11 @@ const catalog = {
     { id: "run_shell", desc: "" },
   ],
   machines: [
-    { id: "1gb", label: "1 GB", usdPerHour: 0.021 },
-    { id: "2gb", label: "2 GB", usdPerHour: 0.038 },
-    { id: "4gb", label: "4 GB", usdPerHour: 0.071 },
+    { id: "basic", label: "Basic", vcpu: 0.25, ramGb: 1, diskGb: 4, usdPerHour: 0.021 },
+    { id: "standard", label: "Standard", vcpu: 0.5, ramGb: 4, diskGb: 8, usdPerHour: 0.038 },
+    { id: "large", label: "Large", vcpu: 1, ramGb: 6, diskGb: 12, usdPerHour: 0.071 },
   ],
-  defaultMachine: "4gb",
+  defaultMachine: "standard",
 };
 const fresh = () => createState(catalog, { preselect: false });
 const oneClick = () => createState(catalog); // defaults pre-selected
@@ -46,7 +46,7 @@ describe("one-click", () => {
     const s = oneClick();
     expect(s.harness).toBe("claude-code");
     expect(s.model).toBe("claude-opus-4.8");
-    expect(s.machine).toBe("4gb");
+    expect(s.machine).toBe("standard");
     expect(compatibility(s)).toBeNull(); // ready with zero clicks
     expect(summary(s).ready).toBe(true);
   });
@@ -109,12 +109,12 @@ describe("section 3 — capabilities", () => {
 
 describe("section 4 — machine", () => {
   it("selects a machine and recomputes cost", () => {
-    const s = selectMachine(fresh(), "2gb");
-    expect(s.machine).toBe("2gb");
-    expect(estimateMonthly(s)).toBe(Math.round(0.038 * 24 * 30 * 100) / 100);
+    const s = selectMachine(fresh(), "large");
+    expect(s.machine).toBe("large");
+    expect(estimateMonthly(s)).toBe(Math.round(0.071 * 24 * 30 * 100) / 100);
   });
-  it("defaults to 4gb", () => {
-    expect(fresh().machine).toBe("4gb");
+  it("defaults to standard", () => {
+    expect(fresh().machine).toBe("standard");
   });
 });
 
@@ -137,7 +137,7 @@ describe("section 6 — launch/compat (mirrors server)", () => {
       harness: "other-cli",
       model: "gpt-5.6-terra",
       capabilities: ["scrape_web", "run_shell"],
-      machine: "4gb",
+      machine: "standard",
     });
   });
 });

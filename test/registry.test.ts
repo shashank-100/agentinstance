@@ -6,7 +6,7 @@ describe("agent registry", () => {
   it("launched agents appear in GET /agents with status", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-1", harness: "claude-code", model: "gpt-5.6-terra", machine: "2gb" }),
+      body: JSON.stringify({ id: "reg-1", harness: "claude-code", model: "gpt-5.6-terra", machine: "large" }),
     });
     const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
       id: string;
@@ -16,7 +16,7 @@ describe("agent registry", () => {
     const rec = list.find((a) => a.id === "reg-1");
     expect(rec).toBeTruthy();
     expect(rec!.model).toBe("gpt-5.6-terra");
-    expect(rec!.machine).toBe("2gb");
+    expect(rec!.machine).toBe("large");
   });
 
 

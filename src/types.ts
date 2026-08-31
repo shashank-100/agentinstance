@@ -37,5 +37,9 @@ export interface Env {
   /** Headless Chrome via Browser Rendering Quick Actions. */
   BROWSER?: { quickAction(action: string, opts: Record<string, unknown>): Promise<Response> };
   /** Container-backed sandbox (Cloudflare Containers). */
-  SANDBOX?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
+  // One binding per machine tier: a container class carries a fixed
+  // instance_type, so different hardware means a different class.
+  SANDBOX_SMALL?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
+  SANDBOX_MEDIUM?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
+  SANDBOX_LARGE?: DurableObjectNamespace<import("@cloudflare/sandbox").Sandbox>;
 }
