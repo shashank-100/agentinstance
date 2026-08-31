@@ -180,9 +180,15 @@ if (typeof document !== "undefined") {
     const box = $("#machines");
     box.innerHTML = "";
     for (const m of state.catalog.machines) {
-      // CPU is the tier: it is what limits anything run_shell does. Memory and
-      // disk ride along with the instance type and are not the choice.
-      const el = card(m.id, m.label, `$${m.usdPerHour}/hr active`, state.machine === m.id);
+      // CPU names the tier because it is what limits anything run_shell does,
+      // but memory decides whether a build survives at all, so show it too.
+      // Both come bundled with the instance type — neither is chosen alone.
+      const el = card(
+        m.id,
+        m.label,
+        `${m.ramGb} GB RAM<br>$${m.usdPerHour}/hr active`,
+        state.machine === m.id,
+      );
       el.onclick = () => { selectMachine(state, m.id); renderMachines(); renderSummary(); };
       box.appendChild(el);
     }
