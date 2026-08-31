@@ -264,7 +264,18 @@ async function agentRoute(
       case "configure": {
         const out = await agent.configure(await bodyOf(request));
         if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
-        return json(out.spec);
+        // The registry holds its own copy of model/harness/machine for the
+        // dashboard, so a spec change that skipped it left the list showing
+        // hardware the agent no longer runs on, with nothing to correct it.
+        const spec = out.spec!;
+        await registry(env).register({
+          id: route.id,
+          model: spec.model,
+          harness: spec.harness,
+          machine: spec.machine,
+          createdAt: Date.now(),
+        });
+        return json(spec);
       }
 
       case "restore": {
