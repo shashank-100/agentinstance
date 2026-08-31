@@ -5,6 +5,7 @@ import {
   selectHarness,
   selectModel,
   modelsFor,
+  supportsModel,
   selectMachine,
   estimateMonthly,
   compatibility,
@@ -16,12 +17,12 @@ import {
 const catalog = {
   harnesses: [{ id: "claude-code", desc: "x" }, { id: "pi", desc: "y" }],
   models: [
-    { id: "claude-subscription", label: "Claude", priceIn: 0, priceOut: 0, oauth: true },
+    { id: "claude-opus-4.8", label: "Claude Opus 4.8", priceIn: 0, priceOut: 0, oauth: true },
     { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 3, priceOut: 15 },
     { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 3, priceOut: 15 },
   ],
   harnessModels: {
-    "claude-code": ["claude-subscription"],
+    "claude-code": ["claude-opus-4.8"],
     pi: ["gpt-5.6-terra", "gpt-5.4-mini"],
   },
   capabilities: [
@@ -42,7 +43,7 @@ describe("one-click", () => {
   it("is launch-ready immediately with defaults", () => {
     const s = oneClick();
     expect(s.harness).toBe("claude-code");
-    expect(s.model).toBe("claude-subscription");
+    expect(s.model).toBe("claude-opus-4.8");
     expect(s.machine).toBe("4gb");
     expect(compatibility(s)).toBeNull(); // ready with zero clicks
     expect(summary(s).ready).toBe(true);
@@ -70,9 +71,17 @@ describe("section 2 — model", () => {
     expect(compatibility(s)).toBe("Pick a model");
   });
 
+  it("marks models the harness cannot drive as unsupported", () => {
+    // They stay in the list — rendered disabled rather than hidden.
+    expect(supportsModel(catalog, "pi", "claude-opus-4.8")).toBe(false);
+    expect(supportsModel(catalog, "pi", "gpt-5.6-terra")).toBe(true);
+    expect(supportsModel(catalog, "claude-code", "claude-opus-4.8")).toBe(true);
+    expect(supportsModel(catalog, "claude-code", "gpt-5.6-terra")).toBe(false);
+  });
+
   it("offers only the models a harness can actually drive", () => {
     const s = selectHarness(fresh(), "pi");
-    expect(modelsFor(catalog, "pi").map((m) => m.id)).toEqual([
+    expect(modelsFor(catalog, "pi").map((m: { id: string }) => m.id)).toEqual([
       "gpt-5.6-terra",
       "gpt-5.4-mini",
     ]);
@@ -81,7 +90,7 @@ describe("section 2 — model", () => {
 
   it("moves off a model the new harness cannot run", () => {
     const s = oneClick();
-    expect(s.model).toBe("claude-subscription");
+    expect(s.model).toBe("claude-opus-4.8");
     selectHarness(s, "pi");
     // Claude Code speaks a different API, so its model cannot carry over.
     expect(s.model).toBe("gpt-5.6-terra");

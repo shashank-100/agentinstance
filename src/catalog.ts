@@ -38,9 +38,9 @@ export const MODELS: Record<string, ModelInfo> = {
   // Claude Code authenticates with a subscription OAuth token, so the model
   // comes from whatever that token grants rather than from a provider key.
   // There is no base URL and no per-token rate to quote here.
-  "claude-subscription": {
-    id: "claude-subscription",
-    label: "Claude (your subscription)",
+  "claude-opus-4.8": {
+    id: "claude-opus-4.8",
+    label: "Claude Opus 4.8",
     priceIn: 0,
     priceOut: 0,
     provider: "socheap",
@@ -57,7 +57,7 @@ export const MODELS: Record<string, ModelInfo> = {
  * the combinations that work instead of letting the pairing fail later.
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
-  "claude-code": ["claude-subscription"],
+  "claude-code": ["claude-opus-4.8"],
   pi: ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
 };
 

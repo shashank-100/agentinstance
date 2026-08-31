@@ -3,13 +3,21 @@
 
 // One-click ready: pre-select sensible defaults so Launch is enabled instantly.
 // The first harness/model in the catalog are used unless the caller overrides.
+/** Can this harness actually drive this model? */
+export function supportsModel(catalog, harness, modelId) {
+  const allowed = catalog.harnessModels?.[harness];
+  return allowed ? allowed.includes(modelId) : true;
+}
+
+/**
+ * The models a harness can run, in that harness's own order — the first is its
+ * default. Ordered by the mapping rather than by filtering the catalog, so an
+ * unrelated catalog ordering cannot decide which model an agent starts on.
+ */
 export function modelsFor(catalog, harness) {
   const allowed = catalog.harnessModels?.[harness];
-  // No mapping for this harness: show everything rather than an empty picker.
+  // No mapping for this harness: everything is fair game.
   if (!allowed) return catalog.models;
-  // Ordered by the harness's own list, not the catalog's — the first entry is
-  // that harness's default, so filtering the catalog would let an unrelated
-  // ordering decide which model an agent starts on.
   return allowed
     .map((id) => catalog.models.find((m) => m.id === id))
     .filter((m) => m !== undefined);
@@ -124,10 +132,19 @@ if (typeof document !== "undefined") {
   function renderModels() {
     const box = $("#models");
     box.innerHTML = "";
-    for (const m of modelsFor(state.catalog, state.harness)) {
+    // Every model stays visible: hiding them makes the list look arbitrary.
+    // The ones this harness cannot drive are shown disabled, with the reason.
+    for (const m of state.catalog.models) {
+      const ok = supportsModel(state.catalog, state.harness, m.id);
       const rate = m.oauth ? "included with your subscription" : `$${m.priceIn}/$${m.priceOut} per 1M`;
-      const el = card(m.id, m.label, rate, state.model === m.id);
-      el.onclick = () => { selectModel(state, m.id); renderModels(); renderSummary(); };
+      const el = card(m.id, m.label, ok ? rate : `needs a different harness`, state.model === m.id);
+      el.disabled = !ok;
+      if (!ok) {
+        el.classList.add("off");
+        el.title = `${state.harness} cannot run ${m.label}`;
+      } else {
+        el.onclick = () => { selectModel(state, m.id); renderModels(); renderSummary(); };
+      }
       box.appendChild(el);
     }
   }

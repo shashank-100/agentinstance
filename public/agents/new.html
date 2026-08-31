@@ -34,6 +34,9 @@
     border-radius:12px;padding:16px;color:var(--ink);cursor:pointer;transition:.18s}
   .card:hover{border-color:var(--ember-soft);transform:translateY(-2px)}
   .card.active{border-color:var(--ember);box-shadow:0 0 0 1px var(--ember) inset}
+  /* Shown but not selectable: this harness cannot drive this model. */
+  .card.off{opacity:.4;cursor:not-allowed}
+  .card.off:hover{border-color:var(--line);transform:none}
   .card-t{font-size:.95rem;text-transform:capitalize;margin-bottom:4px}
   .card-d{color:var(--muted);font-size:.78rem}
   .chips{display:flex;flex-wrap:wrap;gap:10px}
