@@ -146,19 +146,42 @@ if (typeof document !== "undefined") {
     $("#compat").textContent = msg ?? "Compatible ✔";
   }
 
+  let launching = false;
+
   async function launch() {
-    const res = await fetch("/api/launch", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(toSpec(state)),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      $("#result").textContent = `Error: ${data.error}`;
-      return;
+    // Without this guard a second click creates a second agent: the request
+    // takes a moment and the button stays live the whole time.
+    if (launching) return;
+    launching = true;
+    const btn = $("#launch");
+    btn.disabled = true;
+    btn.textContent = "Launching…";
+
+    try {
+      const res = await fetch("/api/launch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toSpec(state)),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        $("#result").textContent = `Error: ${data.error}`;
+        return;
+      }
+      // Go straight to the new agent — the builder's job is done, and staying
+      // here is what invites a second click.
+      $("#result").textContent = `Launched ${data.id} — opening chat…`;
+      location.href = `/chat?id=${encodeURIComponent(data.id)}`;
+    } catch (e) {
+      $("#result").textContent = `Error: ${e}`;
+    } finally {
+      // Only re-enable on failure; a success is navigating away.
+      if (!location.href.includes("/chat")) {
+        launching = false;
+        btn.disabled = false;
+        btn.textContent = "⚡ Launch agent";
+      }
     }
-    $("#result").textContent =
-      `Launched ${data.id} · est ~$${data.estMonthly}/mo (parked = free)`;
   }
 
   window.addEventListener("DOMContentLoaded", () => {
