@@ -3,6 +3,7 @@
 // Routing is deliberately plain — a handful of `if`s over the path segments,
 // no framework. Each route group gets its own function so the shape of a URL is
 // visible at the top and the handling is separate from the matching.
+import { Sandbox as CloudflareSandbox } from "@cloudflare/sandbox";
 import type { AgentInstance } from "./agent-instance.js";
 import type { RegistryDO } from "./registry-do.js";
 import type { Env } from "./types.js";
@@ -26,7 +27,21 @@ import { toText, type Part } from "./parts.js";
 
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
-export { Sandbox } from "@cloudflare/sandbox";
+
+/**
+ * The agent's container, with a short idle timeout.
+ *
+ * Containers are capped per account (`max_instances` in wrangler.jsonc) and a
+ * running one holds its slot whether or not the agent still exists — deleting
+ * an agent does not reclaim it. The SDK's default keeps them alive long enough
+ * that a handful of short-lived agents can exhaust the pool, at which point
+ * every new request waits for a slot and is cancelled with no error to explain
+ * it. Sleeping after a few idle minutes returns the slot on its own; the next
+ * message pays a cold start instead of hanging.
+ */
+export class Sandbox extends CloudflareSandbox {
+  sleepAfter = "5m";
+}
 
 const CHANNELS: Record<string, ChannelAdapter> = {
   telegram: new TelegramAdapter(),

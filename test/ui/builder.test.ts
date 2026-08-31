@@ -13,9 +13,11 @@ import {
   summary,
 } from "../../public/agents/builder.js";
 
-// Mirrors the real catalog: two CLI harnesses, each with its own models.
+// Two harnesses so the model-filtering logic stays covered. `other-cli` is a
+// stand-in, not a shipped harness: the real catalog has only claude-code, and
+// this file tests the mapping rather than the roster.
 const catalog = {
-  harnesses: [{ id: "claude-code", desc: "x" }, { id: "pi", desc: "y" }],
+  harnesses: [{ id: "claude-code", desc: "x" }, { id: "other-cli", desc: "y" }],
   models: [
     { id: "claude-opus-4.8", label: "Claude Opus 4.8", priceIn: 0, priceOut: 0, oauth: true },
     { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 3, priceOut: 15 },
@@ -23,7 +25,7 @@ const catalog = {
   ],
   harnessModels: {
     "claude-code": ["claude-opus-4.8"],
-    pi: ["gpt-5.6-terra", "gpt-5.4-mini"],
+    "other-cli": ["gpt-5.6-terra", "gpt-5.4-mini"],
   },
   capabilities: [
     { id: "scrape_web", desc: "" },
@@ -73,15 +75,15 @@ describe("section 2 — model", () => {
 
   it("marks models the harness cannot drive as unsupported", () => {
     // They stay in the list — rendered disabled rather than hidden.
-    expect(supportsModel(catalog, "pi", "claude-opus-4.8")).toBe(false);
-    expect(supportsModel(catalog, "pi", "gpt-5.6-terra")).toBe(true);
+    expect(supportsModel(catalog, "other-cli", "claude-opus-4.8")).toBe(false);
+    expect(supportsModel(catalog, "other-cli", "gpt-5.6-terra")).toBe(true);
     expect(supportsModel(catalog, "claude-code", "claude-opus-4.8")).toBe(true);
     expect(supportsModel(catalog, "claude-code", "gpt-5.6-terra")).toBe(false);
   });
 
   it("offers only the models a harness can actually drive", () => {
-    const s = selectHarness(fresh(), "pi");
-    expect(modelsFor(catalog, "pi").map((m: { id: string }) => m.id)).toEqual([
+    const s = selectHarness(fresh(), "other-cli");
+    expect(modelsFor(catalog, "other-cli").map((m: { id: string }) => m.id)).toEqual([
       "gpt-5.6-terra",
       "gpt-5.4-mini",
     ]);
@@ -91,7 +93,7 @@ describe("section 2 — model", () => {
   it("moves off a model the new harness cannot run", () => {
     const s = oneClick();
     expect(s.model).toBe("claude-opus-4.8");
-    selectHarness(s, "pi");
+    selectHarness(s, "other-cli");
     // Claude Code speaks a different API, so its model cannot carry over.
     expect(s.model).toBe("gpt-5.6-terra");
   });
@@ -118,7 +120,7 @@ describe("section 4 — machine", () => {
 
 describe("section 5 — summary + cost", () => {
   it("summarizes a complete build as ready", () => {
-    const s = selectHarness(fresh(), "pi");
+    const s = selectHarness(fresh(), "other-cli");
     selectModel(s, "gpt-5.4-mini");
     const sum = summary(s);
     expect(sum.ready).toBe(true);
@@ -129,10 +131,10 @@ describe("section 5 — summary + cost", () => {
 
 describe("section 6 — launch/compat (mirrors server)", () => {
   it("toSpec produces the server payload shape", () => {
-    const s = selectHarness(fresh(), "pi");
+    const s = selectHarness(fresh(), "other-cli");
     selectModel(s, "gpt-5.6-terra");
     expect(toSpec(s)).toEqual({
-      harness: "pi",
+      harness: "other-cli",
       model: "gpt-5.6-terra",
       capabilities: ["scrape_web", "run_shell"],
       machine: "4gb",

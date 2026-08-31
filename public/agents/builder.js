@@ -9,6 +9,13 @@ export function supportsModel(catalog, harness, modelId) {
   return allowed ? allowed.includes(modelId) : true;
 }
 
+/** Is there any harness at all that can run this model? */
+export function runnableByAny(catalog, modelId) {
+  const map = catalog.harnessModels;
+  if (!map) return true;
+  return Object.values(map).some((ids) => ids.includes(modelId));
+}
+
 /**
  * The models a harness can run, in that harness's own order — the first is its
  * default. Ordered by the mapping rather than by filtering the catalog, so an
@@ -139,11 +146,17 @@ if (typeof document !== "undefined") {
       // An OAuth model has no per-token rate to quote — leave the line blank
       // rather than printing $0, which would read as free.
       const rate = m.oauth ? "" : `$${m.priceIn}/$${m.priceOut} per 1M`;
-      const el = card(m.id, m.label, ok ? rate : `needs a different harness`, state.model === m.id);
+      // Distinguish "pick another harness" from "nothing can run this": with
+      // one harness shipped, most models fall in the second case and telling
+      // the user to switch harness would send them looking for one.
+      const why = runnableByAny(state.catalog, m.id)
+        ? "needs a different harness"
+        : "no harness available yet";
+      const el = card(m.id, m.label, ok ? rate : why, state.model === m.id);
       el.disabled = !ok;
       if (!ok) {
         el.classList.add("off");
-        el.title = `${state.harness} cannot run ${m.label}`;
+        el.title = why;
       } else {
         el.onclick = () => { selectModel(state, m.id); renderModels(); renderSummary(); };
       }

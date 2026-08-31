@@ -30,5 +30,5 @@
     "DEFAULT_HARNESS": "claude-code"
   }
   // Secrets (set via `wrangler secret put`):
-  //   ANTHROPIC_API_KEY (claude-code), PI_API_KEY (pi), SOCHEAP_API_KEY, OPENAI_API_KEY (generate_image), TELEGRAM_BOT_TOKEN, ...
+  //   ANTHROPIC_API_KEY (claude-code), SOCHEAP_API_KEY, OPENAI_API_KEY (generate_image), TELEGRAM_BOT_TOKEN, ...
 }

@@ -24,7 +24,7 @@ function fakeSandbox(capture: { cmd?: string }) {
 describe("agent CLI harnesses", () => {
   it("knows which harnesses it can run", () => {
     expect(isHarness("claude-code")).toBe(true);
-    expect(isHarness("pi")).toBe(true);
+    expect(isHarness("claude-code")).toBe(true);
     expect(isHarness("nope")).toBe(false);
   });
 
@@ -53,7 +53,7 @@ describe("agent CLI harnesses", () => {
 
   it("quotes the task so a prompt cannot break out of the command", async () => {
     const capture: { cmd?: string } = {};
-    await getHarness("pi").run(model, [msg("rm -rf /; echo pwned")], "sys", {
+    await getHarness("claude-code").run(model, [msg("rm -rf /; echo pwned")], "sys", {
       sandbox: fakeSandbox(capture),
       agentId: "a1",
       cliKey: "k",

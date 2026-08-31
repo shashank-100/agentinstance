@@ -11,7 +11,7 @@ describe("builder API", () => {
       machines: { id: string }[];
       defaultMachine: string;
     };
-    expect(cat.harnesses.some((h) => h.id === "pi")).toBe(true);
+    expect(cat.harnesses.some((h) => h.id === "claude-code")).toBe(true);
     expect(cat.models.some((m) => m.id === "gpt-5.6-terra")).toBe(true);
     expect(cat.capabilities.some((c) => c.id === "scrape_web")).toBe(true);
     expect(cat.machines.some((m) => m.id === "4gb")).toBe(true);

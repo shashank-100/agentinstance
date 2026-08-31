@@ -32,6 +32,10 @@ export interface Harness {
 /** Cap on model<->tool round trips, so a looping model can't run forever. */
 const MAX_TOOL_STEPS = 5;
 
+/** How long a CLI harness may run before it is killed. Comfortably above a
+ *  normal run (a few seconds) and safely inside the request's own lifetime. */
+const CLI_TIMEOUT_SECONDS = 120;
+
 // Default: one model completion per turn — unless capabilities are enabled and
 // the model supports tool calls, in which case run a bounded tool loop.
 export class ChatHarness implements Harness {
@@ -85,7 +89,7 @@ function toolResultMessage(
 }
 
 /**
- * Runs a real agent CLI inside the agent's VM — Claude Code, Pi — rather than
+ * Runs a real agent CLI inside the agent's VM — Claude Code — rather than
  * driving the model directly. The CLI owns its own loop, prompt and tools; this
  * class only starts it, gives it the task, and returns what it printed.
  *
@@ -180,15 +184,31 @@ export class AgentCliHarness implements Harness {
     // Claude Code refuses to skip permission prompts while running as root.
     // The VM is already an isolated sandbox, so drop to an unprivileged user
     // rather than leaving the CLI blocked on prompts it cannot answer.
+    // HOME must be set explicitly: runuser does not reliably carry it over, and
+    // every one of these CLIs resolves its config relative to the home dir.
+    // stdin is closed — a CLI that falls back to its interactive mode would
+    // otherwise block forever on a terminal the container does not have.
     const inner =
-      `${envs} ` +
-      this.template.replace("{task}", shellQuote(task)).replace("{model}", shellQuote(cliModel ?? ""));
+      `HOME=/home/agent ${envs} ` +
+      this.template.replace("{task}", shellQuote(task)).replace("{model}", shellQuote(cliModel ?? "")) +
+      " </dev/null 2>&1";
+    // Claude Code refuses to skip permission prompts while running as root.
+    // The VM is already an isolated sandbox, so drop to an unprivileged user
+    // rather than leaving the CLI blocked on prompts it cannot answer.
+    //
+    // The timeout is the backstop: without it a hung CLI holds the request
+    // until the platform kills it, which surfaces as an empty reply with
+    // nothing in the logs to explain it.
     const cmd =
       `cd /workspace && (id -u agent >/dev/null 2>&1 || useradd -m agent) && ` +
       `chown -R agent /workspace /home/agent && ` +
-      `runuser -u agent -- sh -c ${shellQuote(inner)}`;
+      `timeout ${CLI_TIMEOUT_SECONDS} runuser -u agent -- sh -c ${shellQuote(inner)}`;
 
     const out = await sandbox.exec(agentId, cmd);
+    // 124 is what `timeout` returns when it kills the command.
+    if (out.exitCode === 124) {
+      return `${this.name} timed out after ${CLI_TIMEOUT_SECONDS}s.`;
+    }
     if (out.exitCode !== 0) {
       return `${this.name} exited ${out.exitCode}:\n${out.stderr.slice(0, 2000) || out.stdout.slice(0, 2000)}`;
     }
@@ -246,26 +266,6 @@ const CLI_HARNESSES: Record<
     // providers do not serve. A subscription OAuth token bypasses that: it
     // authenticates against Anthropic directly, so no base URL is passed.
     oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
-  },
-  pi: {
-    // Pi resolves providers from ~/.pi/agent/models.json rather than env vars,
-    // so the harness writes that file before invoking it.
-    template: "pi --provider agentinstance --model {model} -p {task}",
-    env: { key: "", baseUrl: "", model: "" },
-    configFile: {
-      path: ".pi/agent/models.json",
-      build: (baseUrl, key, model) =>
-        JSON.stringify({
-          providers: {
-            agentinstance: {
-              baseUrl,
-              api: "openai-completions",
-              apiKey: key,
-              models: [{ id: model, name: model }],
-            },
-          },
-        }),
-    },
   },
 };
 

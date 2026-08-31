@@ -51,19 +51,20 @@ export const MODELS: Record<string, ModelInfo> = {
 /**
  * Which models each harness can actually drive.
  *
- * The two CLIs speak different wire formats: Claude Code talks Anthropic's
- * /v1/messages, Pi talks OpenAI's /chat/completions. Pairing a harness with a
- * model it cannot reach produces a 404 at run time, so the builder offers only
- * the combinations that work instead of letting the pairing fail later.
+ * Claude Code speaks Anthropic's /v1/messages, so it runs Claude and nothing
+ * else. The OpenAI-compatible models below it are listed in no harness at all:
+ * the two CLIs that could drive them (pi, opencode) both worked locally and
+ * failed inside the VM, so they were removed rather than shipped broken. The
+ * models stay in the catalog, rendered unselectable, so the provider wiring
+ * survives for whichever harness replaces them.
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
-  pi: ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
 };
 
 /** The model a harness starts on. */
 export function defaultModelFor(harness: string): string {
-  return HARNESS_MODELS[harness]?.[0] ?? "gpt-5.6-terra";
+  return HARNESS_MODELS[harness]?.[0] ?? "claude-opus-4.8";
 }
 
 /** `ready` marks what is actually implemented, so the builder can say so
@@ -74,7 +75,6 @@ export interface CatalogEntry { desc: string; ready: boolean }
 // own API key set as a Worker secret; `ready` says whether that key is present.
 export const HARNESSES: Record<string, CatalogEntry> = {
   "claude-code": { desc: "Anthropic's Claude Code CLI.", ready: false },
-  pi: { desc: "The Pi agent CLI.", ready: false },
 };
 
 export interface MachineTier { label: string; ramGb: number; usdPerHour: number; }
