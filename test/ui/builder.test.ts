@@ -4,7 +4,7 @@ import {
   createState,
   selectHarness,
   selectModel,
-  toggleCapability,
+  modelsFor,
   selectMachine,
   estimateMonthly,
   compatibility,
@@ -12,15 +12,21 @@ import {
   summary,
 } from "../../public/agents/builder.js";
 
+// Mirrors the real catalog: two CLI harnesses, each with its own models.
 const catalog = {
-  harnesses: [{ id: "chat", desc: "x" }, { id: "shell", desc: "y" }],
+  harnesses: [{ id: "claude-code", desc: "x" }, { id: "pi", desc: "y" }],
   models: [
+    { id: "claude-subscription", label: "Claude", priceIn: 0, priceOut: 0, oauth: true },
     { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 3, priceOut: 15 },
     { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 3, priceOut: 15 },
   ],
+  harnessModels: {
+    "claude-code": ["claude-subscription"],
+    pi: ["gpt-5.6-terra", "gpt-5.4-mini"],
+  },
   capabilities: [
     { id: "scrape_web", desc: "" },
-    { id: "generate_video", desc: "" },
+    { id: "run_shell", desc: "" },
   ],
   machines: [
     { id: "1gb", label: "1 GB", usdPerHour: 0.021 },
@@ -33,10 +39,10 @@ const fresh = () => createState(catalog, { preselect: false });
 const oneClick = () => createState(catalog); // defaults pre-selected
 
 describe("one-click", () => {
-  it("is launch-ready immediately with defaults (chat + sonnet + 4gb)", () => {
+  it("is launch-ready immediately with defaults", () => {
     const s = oneClick();
-    expect(s.harness).toBe("chat");
-    expect(s.model).toBe("gpt-5.4-mini");
+    expect(s.harness).toBe("claude-code");
+    expect(s.model).toBe("claude-subscription");
     expect(s.machine).toBe("4gb");
     expect(compatibility(s)).toBeNull(); // ready with zero clicks
     expect(summary(s).ready).toBe(true);
@@ -59,17 +65,34 @@ describe("section 2 — model", () => {
     expect(summary(s).model).toBe("GPT-5.6 Terra");
   });
   it("still blocks until a model is chosen", () => {
-    expect(compatibility(selectHarness(fresh(), "chat"))).toBe("Pick a model");
+    const s = fresh();
+    s.harness = "claude-code"; // set directly: selectHarness picks a model for you
+    expect(compatibility(s)).toBe("Pick a model");
+  });
+
+  it("offers only the models a harness can actually drive", () => {
+    const s = selectHarness(fresh(), "pi");
+    expect(modelsFor(catalog, "pi").map((m) => m.id)).toEqual([
+      "gpt-5.6-terra",
+      "gpt-5.4-mini",
+    ]);
+    expect(s.model).toBe("gpt-5.6-terra");
+  });
+
+  it("moves off a model the new harness cannot run", () => {
+    const s = oneClick();
+    expect(s.model).toBe("claude-subscription");
+    selectHarness(s, "pi");
+    // Claude Code speaks a different API, so its model cannot carry over.
+    expect(s.model).toBe("gpt-5.6-terra");
   });
 });
 
 describe("section 3 — capabilities", () => {
-  it("toggles on and off", () => {
-    const s = fresh();
-    toggleCapability(s, "scrape_web");
-    expect([...s.capabilities]).toEqual(["scrape_web"]);
-    toggleCapability(s, "scrape_web");
-    expect([...s.capabilities]).toEqual([]);
+  it("gives every agent every capability", () => {
+    // Not a menu: a shell and the web are what make it an agent.
+    expect([...oneClick().capabilities]).toEqual(["scrape_web", "run_shell"]);
+    expect([...fresh().capabilities]).toEqual(["scrape_web", "run_shell"]);
   });
 });
 
@@ -86,42 +109,23 @@ describe("section 4 — machine", () => {
 
 describe("section 5 — summary + cost", () => {
   it("summarizes a complete build as ready", () => {
-    let s = fresh();
-    selectHarness(s, "chat");
+    const s = selectHarness(fresh(), "pi");
     selectModel(s, "gpt-5.4-mini");
-    toggleCapability(s, "scrape_web");
     const sum = summary(s);
     expect(sum.ready).toBe(true);
-    expect(sum.capabilities).toEqual(["scrape_web"]);
+    expect(sum.capabilities).toEqual(["scrape_web", "run_shell"]);
     expect(sum.estMonthly).toBeGreaterThan(0);
   });
 });
 
 describe("section 6 — launch/compat (mirrors server)", () => {
-  it("flags heavy capability on 1gb", () => {
-    let s = fresh();
-    selectHarness(s, "chat");
-    selectModel(s, "gpt-5.4-mini");
-    selectMachine(s, "1gb");
-    toggleCapability(s, "generate_video");
-    expect(compatibility(s)).toMatch(/2gb/);
-  });
-  it("is compatible on 2gb", () => {
-    let s = fresh();
-    selectHarness(s, "chat");
-    selectModel(s, "gpt-5.4-mini");
-    selectMachine(s, "2gb");
-    toggleCapability(s, "generate_video");
-    expect(compatibility(s)).toBeNull();
-  });
   it("toSpec produces the server payload shape", () => {
-    let s = fresh();
-    selectHarness(s, "shell");
+    const s = selectHarness(fresh(), "pi");
     selectModel(s, "gpt-5.6-terra");
     expect(toSpec(s)).toEqual({
-      harness: "shell",
+      harness: "pi",
       model: "gpt-5.6-terra",
-      capabilities: [],
+      capabilities: ["scrape_web", "run_shell"],
       machine: "4gb",
     });
   });

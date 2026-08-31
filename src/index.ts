@@ -18,6 +18,7 @@ import {
   MACHINES,
   CAPABILITIES,
   DEFAULT_MACHINE,
+  HARNESS_MODELS,
   estimateMonthCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
@@ -96,6 +97,9 @@ function catalogRoute(env: Env): Response {
     capabilities: entries(CAPABILITIES),
     machines: Object.entries(MACHINES).map(([id, m]) => ({ id, ...m })),
     defaultMachine: DEFAULT_MACHINE,
+    // Which models each harness can actually drive, so the builder never
+    // offers a pairing that would 404 at run time.
+    harnessModels: HARNESS_MODELS,
   });
 }
 

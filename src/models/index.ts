@@ -53,6 +53,22 @@ export class EchoModel implements Model {
 }
 
 /**
+ * Stands in for a model the Worker never calls: a CLI harness authenticating
+ * with its own subscription token drives the model itself, so there is no key
+ * here to build a client from. Throwing on use keeps the "fail loudly" rule —
+ * if something does try to complete through this, that is a bug, not a fallback.
+ */
+export class UnusedModel implements Model {
+  name = "unused";
+  constructor(private modelId: string) {}
+  async complete(): Promise<string> {
+    throw new Error(
+      `'${this.modelId}' is driven by its CLI harness — the Worker cannot call it directly`,
+    );
+  }
+}
+
+/**
  * Any provider exposing OpenAI's /chat/completions shape. `baseUrl` selects
  * which one; `modelId` is the upstream's own name for the model.
  */

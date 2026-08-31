@@ -9,7 +9,7 @@ import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
 import { getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
 import { MODELS, PROVIDERS } from "./catalog.js";
-import { EchoModel, OpenAICompatModel, type Model } from "./models/index.js";
+import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
 export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
@@ -62,6 +62,10 @@ export class AgentInstance extends DurableObject<Env> {
     // reply: a silent stand-in makes a broken deployment look like a working one.
     const info = MODELS[this.spec.model];
     if (!info) throw new Error(`unknown model '${this.spec.model}'`);
+    // An OAuth model has no provider key by design — the CLI authenticates
+    // itself with a subscription token and never consults this object. Return a
+    // model that throws only if something actually tries to call it.
+    if (info.oauth) return new UnusedModel(info.id);
     const { baseUrl, keyVar } = PROVIDERS[info.provider];
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
     if (!key) throw new Error(`${keyVar} is not set — cannot run '${info.id}'`);
@@ -94,7 +98,9 @@ export class AgentInstance extends DurableObject<Env> {
    */
   private provider(): { key?: string; baseUrl?: string; model?: string } {
     const info = MODELS[this.spec.model];
-    if (!info) return {};
+    // No provider credentials for an OAuth model: the CLI uses its own token,
+    // and handing it a mismatched base URL would point it at the wrong API.
+    if (!info || info.oauth) return {};
     const { baseUrl, keyVar } = PROVIDERS[info.provider];
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
     return { key, baseUrl, model: info.upstreamId ?? info.id };

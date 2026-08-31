@@ -3,20 +3,40 @@
 
 // One-click ready: pre-select sensible defaults so Launch is enabled instantly.
 // The first harness/model in the catalog are used unless the caller overrides.
+export function modelsFor(catalog, harness) {
+  const allowed = catalog.harnessModels?.[harness];
+  // No mapping for this harness: show everything rather than an empty picker.
+  if (!allowed) return catalog.models;
+  // Ordered by the harness's own list, not the catalog's — the first entry is
+  // that harness's default, so filtering the catalog would let an unrelated
+  // ordering decide which model an agent starts on.
+  return allowed
+    .map((id) => catalog.models.find((m) => m.id === id))
+    .filter((m) => m !== undefined);
+}
+
 export function createState(catalog, { preselect = true } = {}) {
+  const harness = preselect ? (catalog.harnesses[0]?.id ?? null) : null;
   return {
     catalog,
-    harness: preselect ? (catalog.harnesses[0]?.id ?? null) : null,
-    model: preselect ? (catalog.models[0]?.id ?? null) : null,
-    // Every tool on by default: an agent that cannot reach the web or its own
-    // shell is the surprising case, not the useful one. They stay togglable.
-    capabilities: new Set(preselect ? catalog.capabilities.map((c) => c.id) : []),
+    harness,
+    model: preselect ? (modelsFor(catalog, harness)[0]?.id ?? null) : null,
+    // Every agent gets every tool. These are not a menu: a shell and the web
+    // are what make it an agent rather than a chat box.
+    capabilities: new Set(catalog.capabilities.map((c) => c.id)),
     machine: catalog.defaultMachine,
   };
 }
 
 export function selectHarness(state, id) {
   state.harness = id;
+  // The two CLIs speak different APIs, so a model valid for one is a 404 on
+  // the other. Move to this harness's own default rather than keeping a
+  // selection it cannot run.
+  const allowed = modelsFor(state.catalog, id);
+  if (!allowed.some((m) => m.id === state.model)) {
+    state.model = allowed[0]?.id ?? null;
+  }
   return state;
 }
 export function selectModel(state, id) {
@@ -44,10 +64,6 @@ export function estimateMonthly(state) {
 export function compatibility(state) {
   if (!state.harness) return "Choose a harness";
   if (!state.model) return "Pick a model";
-  const heavy = ["generate_video", "image_to_video", "browser_use"];
-  const usesHeavy = [...state.capabilities].some((c) => heavy.includes(c));
-  if (usesHeavy && state.machine === "1gb")
-    return "video/browser capabilities require at least the 2gb machine";
   return null;
 }
 
@@ -101,15 +117,16 @@ if (typeof document !== "undefined") {
     box.innerHTML = "";
     for (const h of state.catalog.harnesses) {
       const el = card(h.id, h.id, h.desc, state.harness === h.id);
-      el.onclick = () => { selectHarness(state, h.id); renderHarnesses(); renderSummary(); };
+      el.onclick = () => { selectHarness(state, h.id); renderHarnesses(); renderModels(); renderSummary(); };
       box.appendChild(el);
     }
   }
   function renderModels() {
     const box = $("#models");
     box.innerHTML = "";
-    for (const m of state.catalog.models) {
-      const el = card(m.id, m.label, `$${m.priceIn}/$${m.priceOut} per 1M`, state.model === m.id);
+    for (const m of modelsFor(state.catalog, state.harness)) {
+      const rate = m.oauth ? "included with your subscription" : `$${m.priceIn}/$${m.priceOut} per 1M`;
+      const el = card(m.id, m.label, rate, state.model === m.id);
       el.onclick = () => { selectModel(state, m.id); renderModels(); renderSummary(); };
       box.appendChild(el);
     }
@@ -117,12 +134,12 @@ if (typeof document !== "undefined") {
   function renderCapabilities() {
     const box = $("#capabilities");
     box.innerHTML = "";
+    // Shown, not chosen: every agent has all of these.
     for (const c of state.catalog.capabilities) {
-      const el = document.createElement("button");
-      el.className = "chip" + (state.capabilities.has(c.id) ? " active" : "");
-      el.dataset.id = c.id;
+      const el = document.createElement("span");
+      el.className = "chip active";
+      el.title = c.desc ?? "";
       el.textContent = c.id.replace(/_/g, " ");
-      el.onclick = () => { toggleCapability(state, c.id); renderCapabilities(); renderSummary(); };
       box.appendChild(el);
     }
   }

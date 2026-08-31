@@ -10,6 +10,8 @@ export interface ModelInfo {
   provider: Provider;
   /** Upstream's own name for the model, when it differs from our catalog id. */
   upstreamId?: string;
+  /** Served by a subscription token rather than a provider key: no rate to show. */
+  oauth?: boolean;
 }
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
@@ -32,7 +34,37 @@ export const MODELS: Record<string, ModelInfo> = {
   "gpt-5.4": { id: "gpt-5.4", label: "GPT-5.4", priceIn: 2, priceOut: 12, provider: "socheap" },
   "gpt-5.4-mini": { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 0.15, priceOut: 0.6, provider: "socheap" },
   "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshot" },
+
+  // Claude Code authenticates with a subscription OAuth token, so the model
+  // comes from whatever that token grants rather than from a provider key.
+  // There is no base URL and no per-token rate to quote here.
+  "claude-subscription": {
+    id: "claude-subscription",
+    label: "Claude (your subscription)",
+    priceIn: 0,
+    priceOut: 0,
+    provider: "socheap",
+    oauth: true,
+  },
 };
+
+/**
+ * Which models each harness can actually drive.
+ *
+ * The two CLIs speak different wire formats: Claude Code talks Anthropic's
+ * /v1/messages, Pi talks OpenAI's /chat/completions. Pairing a harness with a
+ * model it cannot reach produces a 404 at run time, so the builder offers only
+ * the combinations that work instead of letting the pairing fail later.
+ */
+export const HARNESS_MODELS: Record<string, string[]> = {
+  "claude-code": ["claude-subscription"],
+  pi: ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+};
+
+/** The model a harness starts on. */
+export function defaultModelFor(harness: string): string {
+  return HARNESS_MODELS[harness]?.[0] ?? "gpt-5.6-terra";
+}
 
 /** `ready` marks what is actually implemented, so the builder can say so
  *  rather than presenting stubs and real code as equal choices. */
