@@ -149,11 +149,10 @@ Two suites, two runners, because they need different environments:
 
 ---
 
-## `cli/` and `sandbox-service/`
+## Container image
 
 | Path | What it does |
 |---|---|
-| `cli/agentinstance.mjs` | A thin wrapper over the REST API — `launch`, `send`, `clone`. Zero dependencies; just `fetch`. |
 | `Dockerfile` | The sandbox image: Cloudflare's base plus python3 and git. |
 
 ---

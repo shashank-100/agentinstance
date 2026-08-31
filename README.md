@@ -86,9 +86,7 @@ POST /channels/whatsapp/:id
 POST /channels/web/:id       { text }              -> { reply }
 ```
 
-See [DEPLOY.md](./DEPLOY.md) for one-command Cloudflare deployment and channel setup.
-The `agentinstance` CLI (`cli/agentinstance.mjs`) wraps these routes, including `agentinstance clone` to
-push a local agent (spec + history) into the cloud.
+See [DEPLOY.md](./DEPLOY.md) for Cloudflare deployment and setup.
 
 ## Architecture
 
@@ -113,8 +111,7 @@ Use it by giving an agent the `shell` harness. See `Dockerfile` for the image.
 
 ## Roadmap
 
-Channels (Telegram, Discord, Slack, WhatsApp, iMessage), `agentinstance` CLI incl. `clone`,
-capabilities (scrape, search), snapshot/restore with
+Channels (Telegram), capabilities (scrape, search), snapshot/restore with
 idempotency keys for outbound side-effects.
 
 ## License

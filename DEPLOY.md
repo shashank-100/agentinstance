@@ -37,12 +37,16 @@ npx wrangler secret put TELEGRAM_BOT_TOKEN
 
 ## 5. Create and talk to an agent
 
+Open `/agents/new.html` to build one in the browser, or use the API:
+
 ```bash
 export AGENTINSTANCE_URL=https://agentinstance.<your-subdomain>.workers.dev
 
-node cli/agentinstance.mjs launch mybot --harness chat --model gpt-5.6-terra
-node cli/agentinstance.mjs send mybot "hello"
-node cli/agentinstance.mjs status mybot
+curl -X POST "$AGENTINSTANCE_URL/api/launch" -H 'content-type: application/json' \
+  -d '{"id":"mybot","harness":"chat","model":"gpt-5.6-terra","capabilities":["search_web"]}'
+
+curl -X POST "$AGENTINSTANCE_URL/agents/mybot/send" -H 'content-type: application/json' \
+  -d '{"text":"hello"}'
 ```
 
 ## 6. Wire a channel (Telegram example)
@@ -53,9 +57,9 @@ Point Telegram's webhook at your deployment:
 curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=$AGENTINSTANCE_URL/channels/telegram/mybot"
 ```
 
-Now messages to your bot drive the `mybot` agent, and its reply is sent back to
-the same chat. History is unified at the agent level, so the same `mybot` can
-also be reached on Slack/Discord/WhatsApp/web/CLI with shared context.
+Now messages to your bot drive the `mybot` agent, and its reply goes back to the
+same chat. History is unified at the agent level, so the same `mybot` reached
+over the web UI or the API shares that context.
 
 ## Local development
 
