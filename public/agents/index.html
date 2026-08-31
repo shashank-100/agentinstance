@@ -47,12 +47,9 @@
       <p class="sub">Every agent you've launched. Parked agents are free.</p>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="new" id="clone" style="border:none;cursor:pointer">⇪ Clone from local</button>
       <a class="new" href="/agents/new.html">＋ New agent</a>
     </div>
   </div>
-  <input type="file" id="clonefile" accept="application/json" style="display:none" />
-
   <table id="tbl">
     <thead><tr><th>Agent</th><th>Model</th><th>Harness</th><th>Machine</th><th>Status</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
@@ -94,26 +91,6 @@ async function load() {
     };
   });
 }
-
-// Clone from local: pick a JSON file (spec + history), push it to a new agent.
-document.getElementById("clone").onclick = () => document.getElementById("clonefile").click();
-document.getElementById("clonefile").onchange = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const local = JSON.parse(await file.text());
-  const id = local.id || prompt("New agent id:", "cloned-" + Date.now());
-  if (!id) return;
-  // register it, then restore its state
-  await fetch("/api/launch", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id, ...(local.spec || {}) }),
-  });
-  await fetch(`/agents/${id}/restore`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ spec: local.spec, history: local.history || [], kv: local.kv || {} }),
-  });
-  load();
-};
 
 load();
 </script>
