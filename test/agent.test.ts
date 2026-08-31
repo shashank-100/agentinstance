@@ -51,23 +51,13 @@ describe("AgentInstance runtime + memory", () => {
     expect(hist[2].channel).toBe("whatsapp");
   });
 
-  it("park blocks sends, unpark restores", async () => {
-    await SELF.fetch("https://x/agents/park1/park", { method: "POST" });
-    const blocked = await send("park1", "x");
-    expect(blocked.status).toBe(409);
-    await SELF.fetch("https://x/agents/park1/unpark", { method: "POST" });
-    const reply = ((await (await send("park1", "x")).json()) as { reply: string }).reply;
-    expect(reply.length).toBeGreaterThan(0); // sends work again after unpark
-  });
 
   it("status reports last-progress and stall detection", async () => {
     await send("stat1", "work");
     const st = (await (await SELF.fetch("https://x/agents/stat1/status")).json()) as {
-      parked: boolean;
       lastProgress: number;
       stalled: boolean;
     };
-    expect(st.parked).toBe(false);
     expect(st.lastProgress).toBeTypeOf("number");
     expect(st.stalled).toBe(false);
   });

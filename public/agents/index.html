@@ -27,7 +27,7 @@
   tr:hover td{background:var(--ink-2)}
   .id{color:var(--ember-soft)}
   .badge{font-size:.72rem;padding:3px 9px;border-radius:999px;border:1px solid var(--line)}
-  .live{color:#16a34a;border-color:#bbf7d0;background:#f0fdf4}.parked{color:var(--muted)}
+  .live{color:#16a34a;border-color:#bbf7d0;background:#f0fdf4}
   .act{color:var(--sky);text-decoration:none;cursor:pointer;font-size:.8rem;margin-right:12px}.act:hover{color:var(--ember)}
   .empty{color:var(--muted);text-align:center;padding:60px 0}
 </style>
@@ -44,7 +44,7 @@
   <div style="display:flex;justify-content:space-between;align-items:flex-end">
     <div>
       <h1>My Agents</h1>
-      <p class="sub">Every agent you've launched. Parked agents are free.</p>
+      <p class="sub">Every agent you've launched.</p>
     </div>
     <div style="display:flex;gap:10px">
       <a class="new" href="/agents/new.html">＋ New agent</a>
@@ -65,24 +65,13 @@ async function load() {
   rows.innerHTML = "";
   for (const a of agents) {
     const tr = document.createElement("tr");
-    const status = a.parked
-      ? `<span class="badge parked">parked · free</span>`
-      : `<span class="badge live">● live</span>`;
-    const toggle = a.parked
-      ? `<a class="act" data-act="unpark" data-id="${a.id}">unpark</a>`
-      : `<a class="act" data-act="park" data-id="${a.id}">park</a>`;
+    const status = `<span class="badge live">● live</span>`;
     tr.innerHTML = `<td class="id">${a.id}</td><td>${a.model}</td><td>${a.harness}</td>`
       + `<td>${a.machine}</td><td>${status}</td>`
-      + `<td><a class="act" href="/chat?id=${a.id}">chat</a>${toggle}`
+      + `<td><a class="act" href="/chat?id=${a.id}">chat</a>`
       + `<a class="act" data-del="${a.id}" style="color:#dc2626">delete</a></td>`;
     rows.appendChild(tr);
   }
-  rows.querySelectorAll("[data-act]").forEach((el) => {
-    el.onclick = async () => {
-      await fetch(`/agents/${el.dataset.id}/${el.dataset.act}`, { method: "POST" });
-      load();
-    };
-  });
   rows.querySelectorAll("[data-del]").forEach((el) => {
     el.onclick = async () => {
       if (!confirm(`Delete agent ${el.dataset.del}? This erases its history.`)) return;

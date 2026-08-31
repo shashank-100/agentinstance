@@ -68,10 +68,9 @@ npx wrangler secret put SOCHEAP_API_KEY
 
 ```
 POST /agents/:id/configure   { harness, model, capabilities, machine, system }
-POST /agents/:id/send        { text, channel? }  -> { reply }  (409 if parked)
+POST /agents/:id/send        { text, channel? }  -> { reply }
 GET  /agents/:id/history
-GET  /agents/:id/status      -> { parked, lastProgress, expectedCadenceMs, stalled }
-POST /agents/:id/park | /unpark
+GET  /agents/:id/status      -> { lastProgress, expectedCadenceMs, stalled }
 GET  /agents/:id/snapshot                          -> { spec, history, kv }
 POST /agents/:id/restore     { spec, history, kv }
 POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }

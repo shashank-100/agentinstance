@@ -26,10 +26,10 @@ export interface ChannelAdapter {
 
 async function agentReply(env: Env, msg: Inbound): Promise<string> {
   const stub = env.AGENT.get(env.AGENT.idFromName(msg.agentId)) as unknown as {
-    send(t: string, c?: string): Promise<{ reply?: string; parked?: boolean }>;
+    send(t: string, c?: string): Promise<{ reply?: string }>;
   };
   const res = await stub.send(msg.text, msg.channel);
-  return res.parked ? "(agent is parked)" : (res.reply ?? "");
+  return res.reply ?? "";
 }
 
 /** Shared pipeline: parse -> run agent -> reply back. Used by every channel. */

@@ -31,7 +31,7 @@ POST /agents/live/send   { text: "..." }
 | File | What it does | Why it's separate |
 |---|---|---|
 | `index.ts` | The HTTP router. Plain URL matching, no framework: `/agents/:id/:action` becomes an RPC call on a Durable Object stub. Also serves `/catalog`, `/api/launch`, `/api/agents`, and channel webhooks. | The only file that knows about HTTP. Everything below it works in plain objects, which is why the DO can be driven from tests without a server. |
-| `agent-instance.ts` | **One agent.** A Durable Object holding two SQLite tables — `messages` (full history) and `kv` (spec, park state, alarm cadence). Owns `send`, `history`, `park`/`unpark`, `snapshot`/`restore`, `schedule`, and the alarm handler. | The single-threaded DO *is* the concurrency model. Two requests to one agent queue automatically, so nothing here needs locks or transactions. |
+| `agent-instance.ts` | **One agent.** A Durable Object holding two SQLite tables — `messages` (full history) and `kv` (spec, alarm cadence). Owns `send`, `history`, `snapshot`/`restore`, `schedule`, and the alarm handler. | The single-threaded DO *is* the concurrency model. Two requests to one agent queue automatically, so nothing here needs locks or transactions. |
 | `registry-do.ts` | A second, singleton DO that records every agent created. | Agent DOs cannot enumerate each other — each only knows itself. Something has to keep the list for the dashboard, so it's one extra DO rather than an external database. |
 | `catalog.ts` | The menu: models (with provider + estimated price), providers (base URL + key name), harnesses, capabilities, machine tiers. Pure data. | One place to answer "what can this thing run?". Adding a provider is a row here plus a key in `types.ts` — no other file changes. |
 | `types.ts` | `Env` (every binding and secret), `Message`, `Role`. | The Worker's contract with Cloudflare. If a secret isn't declared here, TypeScript won't let you read it. |
@@ -120,7 +120,7 @@ plain HTML with a `<script>` block, so the deploy is a file upload.
 | File | What it does |
 |---|---|
 | `chat.html` | The playground: agent sidebar, header, conversation, composer. Includes a small hand-rolled markdown renderer that HTML-escapes first, so a model reply can never inject markup. |
-| `agents/index.html` | Dashboard listing every agent, with park/delete/chat links. |
+| `agents/index.html` | Dashboard listing every agent, with delete/chat links. |
 | `agents/new.html` | The builder: pick harness + model + capabilities + machine, check compatibility, launch. |
 | `agents/builder.js` | The builder's state machine, kept separate so it can be unit-tested in Node without a browser (see `test/ui/builder.test.ts`). |
 
@@ -137,7 +137,7 @@ Two suites, two runners, because they need different environments:
 
 | File | Covers |
 |---|---|
-| `agent.test.ts` | Memory, persistence across calls, agent isolation, park/unpark. |
+| `agent.test.ts` | Memory, persistence across calls, agent isolation. |
 | `integration.test.ts` | The REST surface end to end. |
 | `builder-api.test.ts` | `/catalog` and `/api/launch`, including rejection of invalid specs. |
 | `capabilities.test.ts` | The registry, the enabled-capability gate, and that deleted stubs stay deleted. |
@@ -176,6 +176,7 @@ back to a mock, which meant a completely unconfigured deployment produced
 plausible-looking replies and appeared to work. Errors that surface as
 `moonshot 401: Incorrect API key provided` are the point.
 
-**Park = free.** A parked agent returns 409 to `send`. Because a Durable Object
-with no traffic costs nothing, an idle agent genuinely costs nothing — the
-billing model and the product promise line up.
+**Idle = free.** A Durable Object with no traffic costs nothing and its
+container sleeps after a few idle minutes, so an agent nobody is talking to
+genuinely costs nothing. There is no park switch: idling is the default, not
+something to opt into.

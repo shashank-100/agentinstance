@@ -158,7 +158,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
 async function listAgentsRoute(env: Env): Promise<Response> {
   const records = await registry(env).list();
   const withStatus = await Promise.all(
-    records.map(async (r) => ({ ...r, parked: (await agentStub(env, r.id).status()).parked })),
+    records.map(async (r) => ({ ...r, ...(await agentStub(env, r.id).status()) })),
   );
   return json(withStatus);
 }
@@ -195,7 +195,6 @@ async function agentRoute(
         const body = await bodyOf<{ text?: string; parts?: Part[]; channel?: string }>(request);
         const text = body.parts ? toText(body.parts) : (body.text ?? "");
         const out = await agent.send(text, body.channel);
-        if (out.parked) return json({ error: "agent is parked", parked: true }, 409);
         return json({ reply: out.reply });
       }
 
@@ -210,12 +209,6 @@ async function agentRoute(
 
       case "restore":
         await agent.restore(await bodyOf(request));
-        return json({ ok: true });
-      case "park":
-        await agent.park();
-        return json({ ok: true });
-      case "unpark":
-        await agent.unpark();
         return json({ ok: true });
       case "wake":
         await agent.fireWakeup();
@@ -235,7 +228,6 @@ async function agentRoute(
         // Agent-to-agent: `from` sends `text` to this agent.
         const { from, text } = await bodyOf<{ from: string; text: string }>(request);
         const out = await agent.send(`[from agent ${from}] ${text}`, "a2a");
-        if (out.parked) return json({ error: "target agent parked", parked: true }, 409);
         return json({ from, to: route.id, reply: out.reply });
       }
 

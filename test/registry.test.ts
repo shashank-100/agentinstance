@@ -12,27 +12,13 @@ describe("agent registry", () => {
       id: string;
       model: string;
       machine: string;
-      parked: boolean;
     }[];
     const rec = list.find((a) => a.id === "reg-1");
     expect(rec).toBeTruthy();
     expect(rec!.model).toBe("gpt-5.6-terra");
     expect(rec!.machine).toBe("2gb");
-    expect(rec!.parked).toBe(false);
   });
 
-  it("reflects park state in the listing", async () => {
-    await SELF.fetch("https://x/api/launch", {
-      method: "POST",
-      body: JSON.stringify({ id: "reg-2", harness: "claude-code", model: "gpt-5.4-mini" }),
-    });
-    await SELF.fetch("https://x/agents/reg-2/park", { method: "POST" });
-    const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
-      id: string;
-      parked: boolean;
-    }[];
-    expect(list.find((a) => a.id === "reg-2")!.parked).toBe(true);
-  });
 
   it("DELETE removes an agent from the listing and wipes state", async () => {
     await SELF.fetch("https://x/api/launch", {

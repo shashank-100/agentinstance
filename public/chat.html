@@ -85,9 +85,6 @@
   .status .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
   .status.off{background:var(--rail-2);border-color:var(--line);color:var(--muted)}
   .status.off .dot{background:var(--faint)}
-  .iconbtn{color:var(--muted);cursor:pointer;font-size:.95rem;
-    background:none;border:none;padding:3px}
-  .iconbtn:hover{color:var(--ink)}
   .stats{display:flex;align-items:center;gap:7px;margin-top:7px;
     font-size:.86rem;color:var(--ink-2)}
   .stats .sep{color:var(--faint)}
@@ -181,8 +178,6 @@
     <span class="meta" id="stCost" title="Estimated upstream rate">—</span>
     <span class="meta"><b id="stTurns">0</b> turns</span>
     <span class="status" id="agentStatus"><span class="dot"></span><span>Ready</span></span>
-    <button class="iconbtn" id="openRaw" title="Open raw history">↗</button>
-    <button class="iconbtn" id="parkBtn" title="Park agent">▤</button>
   </section>
 
   <div id="log"><div class="inner" id="logInner"></div></div>
@@ -316,7 +311,7 @@ function renderColumns() {
        </div>
        <button class="del" title="Delete agent">×</button>`;
     // The agent's own id names it; the harness/model pair is what it runs on.
-    el.querySelector(".star").className = "star" + (a.parked ? " off" : "");
+    el.querySelector(".star").className = "star";
     el.querySelector(".nm").textContent = a.id;
     el.querySelector(".mdl").textContent =
       [a.harness, a.model ? modelLabel(a.model) : null].filter(Boolean).join(" · ") || "—";
@@ -350,10 +345,8 @@ function renderHead() {
   $("composerModel").textContent = runs;
 
   const st = $("agentStatus");
-  const parked = rec?.parked;
-  st.className = "status" + (parked ? " off" : "");
-  st.lastElementChild.textContent = parked ? "Parked" : "Ready";
-  $("parkBtn").title = parked ? "Unpark agent" : "Park agent";
+  st.className = "status";
+  st.lastElementChild.textContent = "Ready";
 
   // Cost is estimable only once we know the model's per-token price.
   const info = catalog?.models?.find((m) => m.id === model);
@@ -493,17 +486,7 @@ $("newSession").onclick = async () => {
 };
 
 $("addNew").onclick = () => { location.href = "/agents/new.html"; };
-$("openRaw").onclick = () => window.open(`/agents/${agentId}/history`, "_blank");
 
-$("parkBtn").onclick = async () => {
-  const rec = agents.find((a) => a.id === agentId);
-  const action = rec?.parked ? "unpark" : "park";
-  try {
-    await fetch(`/agents/${agentId}/${action}`, { method: "POST" });
-    toast(action === "park" ? "Agent parked" : "Agent unparked");
-    await loadAgents();
-  } catch { toast("Could not reach agent"); }
-};
 
 /* ------------------------------------------------------------------ boot */
 (async function boot() {

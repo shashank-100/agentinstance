@@ -71,6 +71,6 @@ npm test                          # Workers test suite
 
 ## Cost model
 
-Durable Objects hibernate when idle — a **parked agent costs nothing**. You pay
+Durable Objects hibernate when idle — an **idle agent costs nothing**. You pay
 for model tokens and active compute only. See `src/catalog.ts` for the modeled
 per-model pricing and machine tiers.

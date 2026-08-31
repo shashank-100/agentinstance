@@ -113,10 +113,8 @@ export class AgentInstance extends DurableObject<Env> {
     return merged;
   }
 
-  /** Core message loop: unified across channels (history is per-agent).
-   * Returns { parked: true } instead of throwing for the expected parked state. */
-  async send(text: string, channel = "core"): Promise<{ reply?: string; parked?: boolean }> {
-    if (this.getKV("parked", false)) return { parked: true };
+  /** Core message loop: unified across channels (history is per-agent). */
+  async send(text: string, channel = "core"): Promise<{ reply?: string }> {
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
@@ -199,12 +197,6 @@ export class AgentInstance extends DurableObject<Env> {
     for (const m of snap.history ?? []) this.record(m);
   }
 
-  async park(): Promise<void> {
-    this.setKV("parked", true);
-  }
-  async unpark(): Promise<void> {
-    this.setKV("parked", false);
-  }
 
   /** Permanently erase this agent's history + state. */
   async wipe(): Promise<void> {
@@ -215,17 +207,16 @@ export class AgentInstance extends DurableObject<Env> {
 
   /** health!=progress: report both heartbeat and last real progress + cadence. */
   async status(): Promise<{
-    parked: boolean;
     lastProgress: number | null;
     expectedCadenceMs: number | null;
     stalled: boolean;
   }> {
-    const parked = this.getKV("parked", false);
+
     const lastProgress = this.getKV<number | null>("last_progress", null);
     const cadence = this.getKV<number | null>("expected_cadence_ms", null);
     const stalled =
-      !parked && cadence != null && lastProgress != null && Date.now() - lastProgress > cadence;
-    return { parked, lastProgress, expectedCadenceMs: cadence, stalled };
+      cadence != null && lastProgress != null && Date.now() - lastProgress > cadence;
+    return { lastProgress, expectedCadenceMs: cadence, stalled };
   }
 
   // --- tools ----------------------------------------------------------------
@@ -350,7 +341,7 @@ export class AgentInstance extends DurableObject<Env> {
     }
 
     if (prompt) {
-      await this.send(prompt, "scheduler"); // no-op if parked
+      await this.send(prompt, "scheduler");
     }
   }
 

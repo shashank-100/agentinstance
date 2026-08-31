@@ -28,12 +28,4 @@ describe("A2A protocol", () => {
     expect(hist[0].content).toContain("from agent dave");
   });
 
-  it("messaging a parked agent returns 409", async () => {
-    await SELF.fetch("https://x/agents/erin/park", { method: "POST" });
-    const res = await SELF.fetch("https://x/agents/erin/a2a", {
-      method: "POST",
-      body: JSON.stringify({ from: "frank", text: "hi" }),
-    });
-    expect(res.status).toBe(409);
-  });
 });
