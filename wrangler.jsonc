@@ -17,9 +17,9 @@
   // is what makes the builder's machine picker mean anything; with a single
   // class every tier booted identical hardware whatever the UI charged.
   "containers": [
-    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "basic",      "max_instances": 5 },
-    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 },
-    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 5 }
+    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 5 },
+    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 5 },
+    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-3", "max_instances": 5 }
   ],
   "durable_objects": {
     "bindings": [

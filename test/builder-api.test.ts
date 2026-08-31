@@ -14,8 +14,8 @@ describe("builder API", () => {
     expect(cat.harnesses.some((h) => h.id === "claude-code")).toBe(true);
     expect(cat.models.some((m) => m.id === "gpt-5.6-terra")).toBe(true);
     expect(cat.capabilities.some((c) => c.id === "scrape_web")).toBe(true);
-    expect(cat.machines.some((m) => m.id === "standard")).toBe(true);
-    expect(cat.defaultMachine).toBe("standard");
+    expect(cat.machines.some((m) => m.id === "half-cpu")).toBe(true);
+    expect(cat.defaultMachine).toBe("half-cpu");
   });
 
   it("launch configures an agent and returns spec + cost", async () => {
@@ -26,7 +26,7 @@ describe("builder API", () => {
         harness: "claude-code",
         model: "gpt-5.4-mini",
         capabilities: ["scrape_web"],
-        machine: "standard",
+        machine: "half-cpu",
       }),
     });
     const data = (await res.json()) as { id: string; estMonthly: number; spec: { model: string } };
@@ -43,7 +43,7 @@ describe("builder API", () => {
         harness: "claude-code",
         model: "gpt-5.4-mini",
         capabilities: ["not_a_capability"],
-        machine: "basic",
+        machine: "two-cpu",
       }),
     });
     expect(res.status).toBe(400);

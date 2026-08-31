@@ -83,10 +83,11 @@ export const HARNESSES: Record<string, CatalogEntry> = {
  * class and cannot be picked per request. `binding` names the Worker binding
  * for that class; see the `containers` array in wrangler.jsonc.
  *
- * vCPU is listed because it is the figure that actually limits an agent: the
- * harness itself is I/O-bound waiting on the model, but anything run_shell
- * does — installing packages, compiling, processing data — is CPU-bound and
- * single-core.
+ * Tiers are named for vCPU because that is what limits an agent. The harness
+ * itself is I/O-bound waiting on the model, but anything run_shell does —
+ * installing packages, compiling, processing data — is CPU-bound and
+ * single-core. Memory and disk come along with the instance type and are kept
+ * here for the record, not as the thing being chosen.
  */
 export interface MachineTier {
   label: string;
@@ -100,20 +101,20 @@ export interface MachineTier {
 // Specs are Cloudflare's published instance types; the rates are their
 // per-hour active figures for each.
 export const MACHINES: Record<string, MachineTier> = {
-  basic: {
-    label: "Basic", vcpu: 0.25, ramGb: 1, diskGb: 4,
-    usdPerHour: 0.021, binding: "SANDBOX_SMALL",
+  "half-cpu": {
+    label: "½ vCPU", vcpu: 0.5, ramGb: 4, diskGb: 8,
+    usdPerHour: 0.038, binding: "SANDBOX_SMALL",
   },
-  standard: {
-    label: "Standard", vcpu: 0.5, ramGb: 4, diskGb: 8,
-    usdPerHour: 0.038, binding: "SANDBOX_MEDIUM",
+  "one-cpu": {
+    label: "1 vCPU", vcpu: 1, ramGb: 6, diskGb: 12,
+    usdPerHour: 0.071, binding: "SANDBOX_MEDIUM",
   },
-  large: {
-    label: "Large", vcpu: 1, ramGb: 6, diskGb: 12,
-    usdPerHour: 0.071, binding: "SANDBOX_LARGE",
+  "two-cpu": {
+    label: "2 vCPU", vcpu: 2, ramGb: 8, diskGb: 16,
+    usdPerHour: 0.104, binding: "SANDBOX_LARGE",
   },
 };
-export const DEFAULT_MACHINE = "standard";
+export const DEFAULT_MACHINE = "half-cpu";
 
 // Every capability here is implemented and works with the configured keys.
 export const CAPABILITIES: Record<string, CatalogEntry> = {
