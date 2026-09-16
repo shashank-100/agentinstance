@@ -99,6 +99,58 @@ describe("AgentInstance runtime + memory", () => {
     expect(hist.some((m) => m.content === "tick")).toBe(true);
   });
 
+  it("restore re-arms the alarm, so a restored agent still acts on its own", async () => {
+    // The schedule lives in kv, so its values cross a restore for free. The
+    // alarm does not: it is DO state. An agent that knows its task and never
+    // runs it is the one failure a backup of an always-on agent must not have.
+    await launch("restore-sched-src");
+    const atMs = Date.now() + 3_600_000;
+    await SELF.fetch("https://x/agents/restore-sched-src/schedule", {
+      method: "POST",
+      body: JSON.stringify({ atMs, prompt: "tick", cadenceMs: 3_600_000 }),
+    });
+    const snap = await (await SELF.fetch("https://x/agents/restore-sched-src/snapshot")).json();
+
+    await SELF.fetch("https://x/agents/restore-sched-dst/restore", {
+      method: "POST",
+      body: JSON.stringify(snap),
+    });
+
+    const sched = (await (
+      await SELF.fetch("https://x/agents/restore-sched-dst/schedule")
+    ).json()) as { prompt: string | null; cadenceMs: number | null; nextWake: number | null };
+    expect(sched.prompt).toBe("tick");
+    expect(sched.cadenceMs).toBe(3_600_000);
+    // Still in the future, so it is carried across untouched.
+    expect(sched.nextWake).toBe(atMs);
+  });
+
+  it("restore advances a lapsed recurring schedule instead of firing at once", async () => {
+    // A snapshot's next_wake is usually already past by the time it is
+    // restored, and a past-dated alarm fires immediately — which would run a
+    // recurring agent off-cadence and keep it there.
+    await launch("restore-lapsed");
+    const past = Date.now() - 5_000;
+    await SELF.fetch("https://x/agents/restore-lapsed/restore", {
+      method: "POST",
+      body: JSON.stringify({
+        spec: {
+          harness: "claude-code",
+          model: "claude-opus-4.8",
+          capabilities: [],
+          machine: "half-cpu",
+          system: "test",
+        },
+        kv: { wakeup_prompt: "tick", expected_cadence_ms: 60_000, next_wake: past },
+      }),
+    });
+
+    const sched = (await (
+      await SELF.fetch("https://x/agents/restore-lapsed/schedule")
+    ).json()) as { nextWake: number | null };
+    expect(sched.nextWake).toBeGreaterThan(Date.now());
+  });
+
   it("wipe clears notes, so a reused name cannot read the old agent's memory", async () => {
     // A DO is addressed by name: recreating a deleted agent lands on the same
     // object, so anything wipe() misses is readable by whoever takes that name.
