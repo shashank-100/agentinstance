@@ -234,6 +234,34 @@ export class AgentInstance extends DurableObject<Env> {
     for (const n of snap.notes ?? []) {
       this.sql.exec("INSERT INTO notes (key,value,ts) VALUES (?,?,?)", n.key, n.value, n.ts);
     }
+    await this.rearmAlarm();
+  }
+
+  /**
+   * Put the alarm back in step with the schedule the kv rows describe.
+   *
+   * The schedule lives in kv, so a restore carries its *values* across for
+   * free — but an alarm is DO state, not a table, and copying the rows does
+   * not re-arm it. Without this, a restored agent knows exactly what it is
+   * meant to do and when, and then never does it: the one failure a backup
+   * of an always-on agent must not have.
+   *
+   * `next_wake` is usually already in the past by the time a snapshot is
+   * restored, and a past-dated alarm fires at once. Firing immediately is
+   * right for a one-shot task that was owed while the agent was away, but
+   * wrong for a recurring one, where it would run off-cadence and then stay
+   * off it. So a lapsed recurring schedule is advanced to the next whole
+   * cycle instead.
+   */
+  private async rearmAlarm(): Promise<void> {
+    const at = this.getKV<number | null>("next_wake", null);
+    if (!at) return; // no standing task, or it was explicitly cleared
+
+    const cadence = this.getKV<number | null>("expected_cadence_ms", null);
+    const next = at <= Date.now() && cadence && cadence > 0 ? Date.now() + cadence : at;
+
+    this.setKV("next_wake", next);
+    await this.ctx.storage.setAlarm(next);
   }
 
 
