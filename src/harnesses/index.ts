@@ -9,7 +9,14 @@
 import type { Message } from "../types.js";
 import type { Model } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";
-import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
+import {
+  CAPABILITIES,
+  HARNESSES,
+  HARNESS_MODELS,
+  MACHINES,
+  MODELS,
+  DEFAULT_MACHINE,
+} from "../catalog.js";
 import { installVmTools, toolInstructions } from "./vm-tools.js";
 
 /** Optional execution context passed to harnesses that can run code. */
@@ -33,6 +40,8 @@ export interface HarnessContext {
    *  both by name rather than a base URL. */
   cliProvider?: string;
   cliKeyVar?: string;
+  /** False when this agent's model is not served by the OAuth token's vendor. */
+  cliOauthOk?: boolean;
 }
 
 export interface Harness {
@@ -82,7 +91,10 @@ export class AgentCliHarness implements Harness {
     const { cliKey, cliBaseUrl, cliModel, oauthToken } = ctx ?? {};
     // An OAuth token authenticates against the CLI's own vendor, so it wins:
     // the agent's provider may not speak that CLI's API format at all.
-    const useOauth = !!(this.oauthVar && oauthToken);
+    // The token authenticates against its own vendor, so it only applies to a
+    // model that vendor serves. Handing an Anthropic subscription to a Moonshot
+    // model would authenticate successfully against the wrong API.
+    const useOauth = !!(this.oauthVar && oauthToken && ctx?.cliOauthOk !== false);
     if (!useOauth && !cliKey) {
       throw new Error(
         `${this.name} has no credentials — set its OAuth token, or a key for this agent's model`,
@@ -146,7 +158,9 @@ export class AgentCliHarness implements Harness {
     const { cliKeyVar } = ctx ?? {};
     const envs = (
       useOauth
-        ? [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
+        ? // Only the credential changes on this path — a CLI that resolves its
+          // endpoint from a provider name still needs that name passed to it.
+          [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
         : this.providerKeyVar
           ? // The CLI resolves the endpoint itself from the provider name, so
             // the key is all it needs — under the name that provider uses.
@@ -323,6 +337,12 @@ const CLI_HARNESSES: Record<
     template: "PI_OFFLINE=1 pi --provider {provider} --model {model} --no-session -p {task}",
     env: { key: "", baseUrl: "", model: "" },
     providerKeyVar: true,
+    // pi reads ANTHROPIC_OAUTH_TOKEN as an alternative to an API key
+    // (verified: a bad one comes back "OAuth access token is invalid"), so one
+    // Claude subscription serves this harness as well as claude-code. Only
+    // meaningful for a Claude model; for anything else the provider key path
+    // applies, which is why oauthVar alone does not decide.
+    oauthVar: "ANTHROPIC_OAUTH_TOKEN",
   },
 
   // `codex exec` is the non-interactive mode; bare `codex` opens a TUI that
@@ -421,5 +441,15 @@ export function checkCompatible(spec: AgentSpec): void {
   if (!(spec.machine in MACHINES)) throw new IncompatibleSpec(`unknown machine '${spec.machine}'`);
   for (const cap of spec.capabilities) {
     if (!(cap in CAPABILITIES)) throw new IncompatibleSpec(`unknown capability '${cap}'`);
+  }
+  // Each field existing is not enough: the harness has to be able to drive the
+  // model. Claude Code speaks Anthropic's /v1/messages and pi speaks OpenAI's,
+  // so a valid harness beside a valid model can still be a pairing that fails
+  // at run time with an error pointing at neither.
+  const drivable = HARNESS_MODELS[spec.harness];
+  if (drivable && !drivable.includes(spec.model)) {
+    throw new IncompatibleSpec(
+      `${spec.harness} cannot run '${spec.model}' — it runs: ${drivable.join(", ")}`,
+    );
   }
 }

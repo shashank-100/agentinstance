@@ -16,9 +16,13 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "moonshot";
+export type Provider = "moonshot" | "anthropic";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
   moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
+  // Anthropic's own endpoint. Claude Code reaches it with a subscription token
+  // and no base URL; pi reaches it with this key, which is why a Claude model
+  // can be served either way depending on which harness is running.
+  anthropic: { baseUrl: "https://api.anthropic.com/v1", keyVar: "ANTHROPIC_API_KEY" },
 };
 
 // Only models a configured provider can actually serve.
@@ -28,12 +32,17 @@ export const MODELS: Record<string, ModelInfo> = {
   // Claude Code authenticates with a subscription OAuth token, so the model
   // comes from whatever that token grants rather than from a provider key.
   // There is no base URL and no per-token rate to quote here.
+  // Served two ways: claude-code authenticates with a subscription token and
+  // never consults the provider, while pi calls Anthropic directly with a key.
+  // `oauth` marks the first case — there is no per-token rate to quote for it.
   "claude-opus-4.8": {
     id: "claude-opus-4.8",
     label: "Claude Opus 4.8",
     priceIn: 0,
     priceOut: 0,
-    provider: "moonshot",
+    provider: "anthropic",
+    // Anthropic spells it with hyphens.
+    upstreamId: "claude-opus-4-8",
     oauth: true,
   },
 };
@@ -52,10 +61,9 @@ export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
   // pi carries its own model catalog and speaks each provider's API directly,
   // so it drives the OpenAI-compatible models Claude Code cannot reach.
-  pi: ["kimi-k3"],
-  // codex speaks OpenAI's wire format, so it runs whatever an OpenAI-compatible
-  // provider serves — the same models pi does.
-  codex: ["kimi-k3"],
+  // pi carries its own catalog covering both providers, so it is the one
+  // harness that runs everything here.
+  pi: ["kimi-k3", "claude-opus-4.8"],
 };
 
 /**
@@ -81,30 +89,38 @@ const has = (env: KeyEnv, key: string): boolean => {
   return typeof v === "string" && v.trim() !== "";
 };
 
+/**
+ * Can this deployment serve any model this harness drives?
+ *
+ * Two credentials can do it. A provider key serves that provider's models, and
+ * a Claude subscription token serves the `oauth` ones — which is not only
+ * claude-code's business: pi reads the same token, so one subscription makes
+ * both harnesses usable.
+ */
+const driveable = (env: KeyEnv, harness: string): boolean =>
+  (HARNESS_MODELS[harness] ?? []).some((id) => {
+    const info = MODELS[id];
+    if (!info) return false;
+    if (info.oauth && has(env, "CLAUDE_CODE_OAUTH_TOKEN")) return true;
+    return has(env, PROVIDERS[info.provider].keyVar);
+  });
+
 // A harness is the agent program that runs in the agent's VM, and it can only
 // run on a model whose provider this deployment holds a key for.
 const HARNESS_DEFS: Record<string, Described> = {
   "claude-code": {
     desc: "Anthropic's Claude Code CLI.",
-    // A subscription token, or any key that can serve a model it drives.
-    needs: (env) => has(env, "CLAUDE_CODE_OAUTH_TOKEN"),
+    // A subscription token, or a key for a provider serving a model it drives.
+    needs: (env) => driveable(env, "claude-code"),
   },
-  codex: {
-    desc: "OpenAI's Codex CLI.",
-    needs: (env) =>
-      (HARNESS_MODELS.codex ?? []).some((id) => {
-        const info = MODELS[id];
-        return info && !info.oauth && has(env, PROVIDERS[info.provider].keyVar);
-      }),
-  },
+  // codex is paused: it speaks OpenAI's wire format and so cannot use a Claude
+  // subscription, which leaves it needing a provider key nothing else here
+  // needs. The CLI_HARNESSES row and its Dockerfile package stay, so bringing
+  // it back is re-adding this entry and its HARNESS_MODELS line.
   pi: {
-    desc: "The pi coding agent — runs the OpenAI-compatible models.",
+    desc: "The pi coding agent — runs Claude and the OpenAI-compatible models.",
     // Ready when any provider serving a model pi drives has a key.
-    needs: (env) =>
-      (HARNESS_MODELS.pi ?? []).some((id) => {
-        const info = MODELS[id];
-        return info && !info.oauth && has(env, PROVIDERS[info.provider].keyVar);
-      }),
+    needs: (env) => driveable(env, "pi"),
   },
 };
 

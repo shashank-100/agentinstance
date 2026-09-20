@@ -119,11 +119,22 @@ export class AgentInstance extends DurableObject<Env> {
     keyVar?: string;
   } {
     const info = MODELS[this.spec.model];
-    // No provider credentials for an OAuth model: the CLI uses its own token,
-    // and handing it a mismatched base URL would point it at the wrong API.
-    if (!info || info.oauth) return {};
+    if (!info) return {};
     const { baseUrl, keyVar } = PROVIDERS[info.provider];
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
+
+    // `oauth` says a subscription token *can* serve this model, not that the
+    // model has no provider key: Claude is reachable either way. When a token
+    // is set it wins, and the base URL is withheld — Claude Code authenticates
+    // against its vendor directly, and pointing it elsewhere would send the
+    // subscription to an API that does not honour it.
+    //
+    // The provider *name* and model survive regardless. A CLI that resolves
+    // its endpoint from a name (pi) still needs that name on the command line,
+    // and dropping it here rendered `--provider '' --model ''`.
+    if (info.oauth && this.env.CLAUDE_CODE_OAUTH_TOKEN) {
+      return { model: info.upstreamId ?? info.id, provider: info.provider };
+    }
     // The provider's name and key var travel alongside the base URL: a CLI
     // with its own model catalog resolves the endpoint from the name and never
     // needs the URL at all.
@@ -200,6 +211,9 @@ export class AgentInstance extends DurableObject<Env> {
           cliProvider: p.provider,
           cliKeyVar: p.keyVar,
           oauthToken: this.env.CLAUDE_CODE_OAUTH_TOKEN,
+          // The subscription is Anthropic's, so it can only serve a Claude
+          // model. `oauth` marks exactly those.
+          cliOauthOk: MODELS[this.spec.model]?.oauth === true,
         };
       })(),
     });
@@ -263,11 +277,6 @@ export class AgentInstance extends DurableObject<Env> {
     // here where the caller can still do something about it.
     const { checkCompatible } = await import("./harnesses/index.js");
     checkCompatible(merged);
-    const { HARNESS_MODELS } = await import("./catalog.js");
-    const allowed = HARNESS_MODELS[merged.harness];
-    if (allowed && !allowed.includes(merged.model)) {
-      throw new Error(`${merged.harness} cannot run '${merged.model}'`);
-    }
 
     this.setKV("spec", merged);
     const why = to.reason ? ` (${to.reason})` : "";

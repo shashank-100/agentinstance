@@ -26,8 +26,10 @@ export interface Env {
   WORKER_URL?: string;
   /** Claude subscription token — lets claude-code skip a provider key. */
   CLAUDE_CODE_OAUTH_TOKEN?: string;
-  /** Provider key, forwarded into the VM for models served over HTTP. */
+  /** Provider keys, forwarded into the VM for models served over HTTP. */
   MOONSHOT_API_KEY?: string;
+  /** Anthropic's own key. Lets pi run Claude without a subscription token. */
+  ANTHROPIC_API_KEY?: string;
   /**
    * Shared secret guarding the management API. Optional so local dev needs no
    * setup; required in practice for any deployment reachable from the
