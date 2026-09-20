@@ -39,6 +39,7 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 ## Try it
 
 - **Your agents dashboard:** `/agents/` (`/` redirects here)
+- **Task board:** `/agents/board.html`
 - **Agent builder (one click):** `/agents/new.html`
 - **Web chat:** `/chat?id=<agent>`
 
@@ -55,6 +56,18 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 - **Capabilities the CLI can actually reach** — `search_web`, `browse_page`,
   `remember` and `recall` are installed into the VM as commands that call back
   into the Worker, so the agent uses them like any other program.
+- **Tasks, not just messages** — hand an agent a goal and close the tab. A task
+  carries a branch, a pull request and a terminal *settled* state, and outlives
+  the request that filed it. Nothing has to stay running for it to finish,
+  which is the whole reason for an agent that lives in a Durable Object rather
+  than on your laptop.
+- **Real git** — an agent clones, branches, commits, pushes and opens a pull
+  request from inside its own VM. The GitHub token reaches `git` through a
+  credential helper, so it is never written to `.git/config` or a remote URL.
+- **Model handoff** — hit a rate limit, or find a cheap model is not up to the
+  job, and move the agent to another harness or model mid-conversation. History
+  lives in the agent's SQLite, so the next model starts knowing what the last
+  one did.
 - **Persistent memory** — history and notes in Durable Object SQLite. The VM's
   filesystem is discarded between sessions; what the agent chose to `remember`
   is not.
@@ -93,6 +106,17 @@ POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }
 POST /agents/:id/wake
 POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capabilities)
 POST /agents/:id/a2a         { from, text, async? }  -> { reply } or { accepted }
+POST /agents/:id/handoff     { harness?, model?, reason? } -> { from, spec }
+
+# the work queue
+POST /api/fleet/tasks        { goal, repo?, createdBy? }   -> a task
+POST /api/fleet/tasks        { claim: "<agent>" }          -> the next queued task
+GET  /api/fleet/tasks        ?state=queued|running|settled|failed
+POST /api/fleet/tasks/:id    { assignedTo } | { branch } | { prUrl }
+                             | { state: "settled"|"failed"|"queued", result? }
+GET  /api/fleet/tasks/:id
+DELETE /api/fleet/tasks/:id
+GET  /api/fleet/status       -> counts per state
 
 # channel webhooks
 POST /channels/telegram/:id
@@ -132,16 +156,26 @@ API does.
 Deleting an agent stops its container immediately rather than leaving it to
 time out. See `Dockerfile` for the image.
 
+## Multi-agent
+
+Agents reach each other with `send_to_agent` and `list_agents`, enabled per
+agent like any other capability. There is no supervisor type and no worker
+type — a supervisor is an agent whose instructions tell it to delegate, which
+is why peer review and pipelines cost nothing extra. `from` is stamped by the
+Worker from the sending agent's own spec, so an agent cannot claim to be
+another one, and hops are capped so two agents cannot message each other
+forever.
+
+See [docs/topologies.md](./docs/topologies.md) for three worked examples.
+
 ## Roadmap
 
-**Tasks, not just messages.** An agent is reached with `send(text)` today, which
-is conversational. Work that outlives a request — take this goal, make the
-change, open the PR — wants a task with a branch, a lifecycle and a diff as its
-result. That is the next thing worth building, and it is what a cloud VM can do
-that a laptop-bound agent cannot.
-
-**More harnesses.** Codex and OpenCode are both one row in `CLI_HARNESSES` plus
-a package in the `Dockerfile`, once their env-var contracts are confirmed.
+**More harnesses.** A `codex` row exists in `CLI_HARNESSES` but is not offered
+in the catalog: it speaks OpenAI's wire format, so it cannot use a Claude
+subscription, leaving it the one harness needing a key nothing else here needs.
+Re-enabling it is two catalog lines. OpenCode is one more row, once its
+contract is confirmed — note it ships `bin/opencode.exe`, so check that
+resolves on Linux first.
 
 ## License
 
