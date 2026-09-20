@@ -46,6 +46,24 @@ const VM_TOOLS: Record<string, { usage: string; fields: string[] }> = {
   // from the calling agent's spec, so an agent cannot claim to be another.
   send_to_agent: { usage: "send_to_agent <agent> <message...>", fields: ["to", "text*"] },
   list_agents: { usage: "list_agents", fields: [] },
+  // The work queue. `action` first so the bare command claims the next task,
+  // which is the common case.
+  fleet_task: {
+    usage: "fleet_task [claim|list|get|branch|pr|settle|fail] [id] [value...]",
+    fields: ["action", "id", "value*"],
+  },
+  // One generic `arg` rather than a field per action: the script maps
+  // arguments to fields by position, so naming them repo/name/message would
+  // put `git_repo branch my-feature` into `repo`. The Worker knows which one
+  // each action means.
+  git_repo: {
+    usage: "git_repo <clone|branch|commit|push|status|diff> [argument...]",
+    fields: ["action", "arg*"],
+  },
+  open_pr: {
+    usage: "open_pr <owner/name> <branch> <title...>",
+    fields: ["repo", "head", "title*"],
+  },
 };
 
 /**
@@ -158,6 +176,34 @@ export function toolInstructions(enabled: string[]): string {
       "",
     );
   }
+  if (has("fleet_task")) {
+    lines.push(
+      "- `fleet_task` — claim the next task from the queue. Then:",
+      "  `fleet_task branch <id> <branch-name>` and `fleet_task pr <id> <url>` to",
+      "  record what you produced, and `fleet_task settle <id> <summary>` when the",
+      "  work is done (or `fail <id> <reason>`). **Settle every task you claim** —",
+      "  a task left running blocks nothing but tells everyone it is still in",
+      "  progress.",
+      "",
+    );
+  }
+  if (has("git_repo")) {
+    lines.push(
+      "- `git_repo clone <owner/name>` — clone into /workspace/repo. Then",
+      "  `git_repo branch <name>`, `git_repo commit <message>`, `git_repo push`.",
+      "  **Push before you finish.** This machine's disk is wiped when it goes",
+      "  idle, so anything unpushed is lost — commit and push as you go rather",
+      "  than saving it all for the end.",
+      "",
+    );
+  }
+  if (has("open_pr")) {
+    lines.push(
+      '- `open_pr <owner/name> <branch> "<title>"` — open a pull request. Push',
+      "  the branch first; a PR for a branch that is not on the remote fails.",
+      "",
+    );
+  }
   if (has("recall")) {
     lines.push(
       "- `recall [key]` — read notes you saved before. **Run this before",
@@ -189,7 +235,8 @@ export async function installVmTools(
       const tool = VM_TOOLS[name];
       // recall is the one tool that is meaningful with no arguments: it lists
       // recent notes.
-      const requiresArgs = name !== "recall" && name !== "list_agents";
+      const requiresArgs =
+        name !== "recall" && name !== "list_agents" && name !== "fleet_task";
       const script =
         `#!/bin/sh\n` +
         `# ${tool.usage}\n` +

@@ -35,6 +35,7 @@
     "bindings": [
       { "name": "AGENT", "class_name": "AgentInstance" },
       { "name": "REGISTRY", "class_name": "RegistryDO" },
+      { "name": "FLEET", "class_name": "FleetDO" },
       { "name": "SANDBOX_SMALL", "class_name": "SandboxSmall" },
       { "name": "SANDBOX_MEDIUM", "class_name": "SandboxMedium" },
       { "name": "SANDBOX_LARGE", "class_name": "SandboxLarge" }
@@ -47,7 +48,9 @@
     // class keep no state worth moving: a container's filesystem is discarded
     // when it sleeps, so there is nothing to migrate, only to re-create.
     { "tag": "v3", "deleted_classes": ["Sandbox"],
-      "new_sqlite_classes": ["SandboxSmall", "SandboxMedium", "SandboxLarge"] }
+      "new_sqlite_classes": ["SandboxSmall", "SandboxMedium", "SandboxLarge"] },
+    // The work queue: tasks outlive the request that filed them.
+    { "tag": "v4", "new_sqlite_classes": ["FleetDO"] }
   ],
   // WORKER_URL is deliberately unset: the Worker takes its own address from
   // the request it is serving, so every deployment calls its own tools back.

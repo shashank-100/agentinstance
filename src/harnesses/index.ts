@@ -224,8 +224,14 @@ function buildPrompt(history: Message[], maxChars = 24_000): string | null {
   if (latest === null) return null;
 
   // Everything before the message being answered.
+  //
+  // System messages are included when they are handoff notes: the whole point
+  // of a handoff is that the next model picks up where the last left off, and
+  // it cannot do that if the one line explaining the switch is the one line
+  // filtered out of its prompt.
   const prior = history.slice(0, history.length - 1).filter(
-    (m) => m.role === "user" || m.role === "assistant",
+    (m) =>
+      m.role === "user" || m.role === "assistant" || (m.role === "system" && m.channel === "handoff"),
   );
   if (!prior.length) return latest;
 
@@ -233,7 +239,10 @@ function buildPrompt(history: Message[], maxChars = 24_000): string | null {
   let used = 0;
   for (let i = prior.length - 1; i >= 0; i--) {
     const m = prior[i];
-    const line = `${m.role === "user" ? "User" : "You"}: ${m.content}`;
+    const line =
+      m.role === "system"
+        ? `[${m.content}]`
+        : `${m.role === "user" ? "User" : "You"}: ${m.content}`;
     if (used + line.length > maxChars) break;
     lines.unshift(line);
     used += line.length;

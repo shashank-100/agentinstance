@@ -6,6 +6,7 @@
 import { Sandbox as CloudflareSandbox } from "@cloudflare/sandbox";
 import type { AgentInstance } from "./agent-instance.js";
 import type { RegistryDO } from "./registry-do.js";
+import type { FleetDO, TaskState } from "./fleet-do.js";
 import type { Env } from "./types.js";
 import {
   handleChannel,
@@ -28,6 +29,7 @@ import { toText, type Part } from "./parts.js";
 
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
+export { FleetDO } from "./fleet-do.js";
 
 /**
  * The agent's container, one class per machine tier.
@@ -68,12 +70,16 @@ type AgentStub = Omit<DurableObjectStub<AgentInstance>, "runTool"> & {
   ): Promise<{ result?: unknown; error?: string }>;
 };
 type RegistryStub = DurableObjectStub<RegistryDO>;
+type FleetStub = DurableObjectStub<FleetDO>;
 
 const agentStub = (env: Env, id: string): AgentStub =>
   env.AGENT.get(env.AGENT.idFromName(id)) as AgentStub;
 
 const registry = (env: Env): RegistryStub =>
   env.REGISTRY.get(env.REGISTRY.idFromName("global")) as RegistryStub;
+
+const fleet = (env: Env): FleetStub =>
+  env.FLEET.get(env.FLEET.idFromName("global")) as FleetStub;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
@@ -141,6 +147,9 @@ export default {
     }
     if (first === "api" && second === "agents" && request.method === "GET") {
       return listAgentsRoute(env);
+    }
+    if (first === "api" && second === "fleet") {
+      return fleetRoute(request, env, third, fourth);
     }
     if (first === "channels" && second) return channelRoute(request, env, second);
 
@@ -222,6 +231,72 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   return json({ id, spec, usdPerHour: hourlyCost(spec.machine) });
 }
 
+// --- the work queue ----------------------------------------------------------
+/**
+ * `/api/fleet/tasks` — file work and read it back.
+ *
+ * A task is not a message: it outlives the request that created it, which is
+ * the whole reason for running an agent somewhere that does not have to stay
+ * awake. Filing one does not run anything; an agent claims it when it is free.
+ */
+async function fleetRoute(
+  request: Request,
+  env: Env,
+  section: string | undefined,
+  id: string | undefined,
+): Promise<Response> {
+  const f = fleet(env);
+  const write = request.method !== "GET";
+  if (write && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+
+  if (section === "status") return json(await f.stats());
+
+  if (section !== "tasks") return json({ error: "unknown fleet route" }, 404);
+
+  // One task: read it, patch its branch/PR, or drop it.
+  if (id) {
+    if (request.method === "GET") {
+      const task = await f.get(id);
+      return task ? json(task) : json({ error: `no task '${id}'` }, 404);
+    }
+    if (request.method === "DELETE") {
+      const out = await f.remove(id);
+      return out.ok ? json(out) : json({ error: `no task '${id}'` }, 404);
+    }
+    const body = await bodyOf<{
+      branch?: string;
+      prUrl?: string;
+      repo?: string;
+      result?: string;
+      state?: TaskState;
+    }>(request);
+    // Ending a task is a state change, not a patch: settle and fail record why.
+    if (body.state === "settled") return finished(await f.settle(id, body.result ?? ""), id);
+    if (body.state === "failed") return finished(await f.fail(id, body.result ?? ""), id);
+    if (body.state === "queued") return finished(await f.release(id), id);
+    return finished(await f.update(id, body), id);
+  }
+
+  if (request.method === "GET") {
+    const state = new URL(request.url).searchParams.get("state") as TaskState | null;
+    return json(await f.list(state ?? undefined));
+  }
+
+  // POST /api/fleet/tasks — file one, or claim the next.
+  const body = await bodyOf<{ goal?: string; repo?: string; createdBy?: string; claim?: string }>(
+    request,
+  );
+  if (body.claim) {
+    const task = await f.claim(body.claim);
+    return json(task ?? { task: null, reason: "nothing queued" });
+  }
+  if (!body.goal) return json({ error: "goal required" }, 400);
+  return json(await f.enqueue({ goal: body.goal, repo: body.repo, createdBy: body.createdBy }));
+}
+
+const finished = (task: unknown, id: string) =>
+  task ? json(task) : json({ error: `no task '${id}'` }, 404);
+
 // --- dashboard listing: registry records plus each agent's live status -------
 async function listAgentsRoute(env: Env): Promise<Response> {
   const records = await registry(env).list();
@@ -268,7 +343,7 @@ async function agentRoute(
   // Actions that change something must not run on GET. A GET that boots a VM
   // and spends the model quota is triggered by anything that follows links —
   // a crawler, a prefetch, a chat client generating a preview.
-  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure"]);
+  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure", "handoff"]);
   if (WRITES.has(route.action) && request.method === "GET") {
     return json({ error: `${route.action} requires POST` }, 405);
   }
@@ -316,6 +391,25 @@ async function agentRoute(
           createdAt: Date.now(),
         });
         return json(spec);
+      }
+
+      // Move an agent onto a different harness or model, keeping its history:
+      // a subscription hits its limit, or a cheap model is not up to the job.
+      case "handoff": {
+        const body = await bodyOf<{ harness?: string; model?: string; reason?: string }>(request);
+        const out = await agent.handoff(body);
+        if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
+        const spec = out.spec!;
+        // The registry keeps its own copy for the dashboard, so a handoff that
+        // skipped it would leave the list naming the model the agent just left.
+        await registry(env).register({
+          id: route.id,
+          model: spec.model,
+          harness: spec.harness,
+          machine: spec.machine,
+          createdAt: Date.now(),
+        });
+        return json({ ok: true, from: out.from, spec });
       }
 
       case "restore": {

@@ -232,6 +232,57 @@ export class AgentInstance extends DurableObject<Env> {
     return `${base}/agents/${encodeURIComponent(this.spec.name)}${auth}`;
   }
 
+  /**
+   * Move this agent onto a different harness or model, keeping everything else.
+   *
+   * The point is to continue, not to restart: a subscription hits its limit
+   * mid-job, or a cheap model turns out not to be up to the work. History
+   * lives in this object's own SQLite and the harness rebuilds its prompt from
+   * it every turn, so the next turn on the new model already knows everything
+   * the last one did. Only the spec changes.
+   *
+   * The switch is recorded in the transcript rather than happening silently.
+   * An agent whose answers change character mid-conversation, with nothing
+   * saying why, is one nobody can debug — and the note is context the new
+   * model reads too.
+   */
+  async handoff(to: {
+    harness?: string;
+    model?: string;
+    reason?: string;
+  }): Promise<{ spec?: AgentSpec; from?: { harness: string; model: string }; missing?: boolean }> {
+    if (!this.configured) return { missing: true };
+    const before = { harness: this.spec.harness, model: this.spec.model };
+    const merged: AgentSpec = {
+      ...this.spec,
+      harness: to.harness ?? this.spec.harness,
+      model: to.model ?? this.spec.model,
+    };
+
+    // A harness that cannot drive the model is a 404 at run time, so refuse it
+    // here where the caller can still do something about it.
+    const { checkCompatible } = await import("./harnesses/index.js");
+    checkCompatible(merged);
+    const { HARNESS_MODELS } = await import("./catalog.js");
+    const allowed = HARNESS_MODELS[merged.harness];
+    if (allowed && !allowed.includes(merged.model)) {
+      throw new Error(`${merged.harness} cannot run '${merged.model}'`);
+    }
+
+    this.setKV("spec", merged);
+    const why = to.reason ? ` (${to.reason})` : "";
+    this.record(
+      makeMessage(
+        "system",
+        `Handed off from ${before.harness}/${before.model} to ` +
+          `${merged.harness}/${merged.model}${why}. ` +
+          `The conversation above is yours to continue.`,
+        "handoff",
+      ),
+    );
+    return { spec: merged, from: before };
+  }
+
   async getHistory(): Promise<Message[]> {
     return this.history();
   }
@@ -408,6 +459,9 @@ export class AgentInstance extends DurableObject<Env> {
 
       if (name === "send_to_agent") return await this.sendToAgent(input);
       if (name === "list_agents") return { result: await this.listAgents() };
+      if (name === "fleet_task") return await this.fleetTask(input);
+      if (name === "git_repo") return await this.gitRepo(input);
+      if (name === "open_pr") return await this.openPr(input);
 
       const memo = this.runMemoryTool(name, input);
       if (memo) return { result: memo };
@@ -499,6 +553,189 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   /**
+   * The work queue, from inside the VM.
+   *
+   * An agent claims a task, records a branch or a pull request against it, and
+   * settles it. `claim` stamps this agent's own name for the same reason
+   * send_to_agent does: the queue should record who actually took the work.
+   */
+  private async fleetTask(
+    input: Record<string, unknown>,
+  ): Promise<{ result?: Record<string, unknown>; error?: string }> {
+    const fleet = this.env.FLEET.get(this.env.FLEET.idFromName("global")) as unknown as {
+      claim(agentId: string): Promise<unknown>;
+      get(id: string): Promise<unknown>;
+      list(state?: string): Promise<unknown[]>;
+      update(id: string, patch: Record<string, unknown>): Promise<unknown>;
+      settle(id: string, result: string): Promise<unknown>;
+      fail(id: string, reason: string): Promise<unknown>;
+    };
+    const action = String(input.action ?? "claim").trim();
+    const id = input.id ? String(input.id).trim() : "";
+    const me = this.spec.name ?? "unknown";
+
+    switch (action) {
+      case "claim": {
+        const task = await fleet.claim(me);
+        return { result: { task: task ?? null } };
+      }
+      case "list":
+        return { result: { tasks: await fleet.list(input.state ? String(input.state) : undefined) } };
+      case "get":
+        if (!id) return { error: "fleet_task get requires an id" };
+        return { result: { task: await fleet.get(id) } };
+      case "branch":
+      case "pr": {
+        if (!id) return { error: `fleet_task ${action} requires an id` };
+        const patch =
+          action === "branch"
+            ? { branch: String(input.value ?? "") }
+            : { prUrl: String(input.value ?? "") };
+        return { result: { task: await fleet.update(id, patch) } };
+      }
+      case "settle":
+        if (!id) return { error: "fleet_task settle requires an id" };
+        return { result: { task: await fleet.settle(id, String(input.value ?? "")) } };
+      case "fail":
+        if (!id) return { error: "fleet_task fail requires an id" };
+        return { result: { task: await fleet.fail(id, String(input.value ?? "")) } };
+      default:
+        return { error: `unknown fleet_task action '${action}'` };
+    }
+  }
+
+  /**
+   * Git against a real remote, inside the agent's own VM.
+   *
+   * The token is passed to the command's environment for the life of that
+   * command, never written to disk and never committed to a config file: a
+   * container's filesystem outlives the command, and a credential left in
+   * `.git/config` is still there for whatever runs next.
+   *
+   * It is also kept out of the remote URL, which git records verbatim in
+   * `.git/config` and echoes back in error messages. A credential helper
+   * reading it from the environment leaves nothing behind.
+   */
+  private async gitRepo(
+    input: Record<string, unknown>,
+  ): Promise<{ result?: Record<string, unknown>; error?: string }> {
+    const token = this.env.GITHUB_TOKEN;
+    if (!token) return { error: "GITHUB_TOKEN is not set" };
+    const { getSandbox } = await import("./sandbox/index.js");
+    const sandbox = getSandbox(this.env, this.spec.machine);
+    if (!sandbox) return { error: "no sandbox is configured for this agent" };
+
+    const action = String(input.action ?? "").trim();
+    // The VM sends one generic `arg`; the REST API may name the field for the
+    // action instead. Accept either, so both callers work.
+    const arg = String(input.arg ?? "").trim();
+    const repo = String(input.repo ?? arg).trim();
+    const dir = "/workspace/repo";
+
+    // A credential helper that prints the token, so it never lands in a file
+    // or a URL. GIT_ASKPASS would be consulted for the password only.
+    const creds =
+      `git config --global credential.helper '!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' && ` +
+      `git config --global user.name 'agentinstance' && ` +
+      `git config --global user.email 'agent@users.noreply.github.com' && ` +
+      `git config --global --add safe.directory ${dir}`;
+
+    let cmd: string;
+    switch (action) {
+      case "clone": {
+        if (!repo) return { error: "git_repo clone requires { repo: 'owner/name' }" };
+        // Re-cloning over an existing checkout is the normal case, not an
+        // error: the filesystem is discarded when the container sleeps, so a
+        // task resumed after an idle gap starts from nothing.
+        cmd =
+          `${creds} && rm -rf ${dir} && ` +
+          `git clone --depth 50 https://github.com/${repo}.git ${dir} && ` +
+          `cd ${dir} && git log --oneline -1`;
+        break;
+      }
+      case "branch": {
+        const name = String(input.name ?? arg).trim();
+        if (!name) return { error: "git_repo branch requires { name }" };
+        cmd = `cd ${dir} && git checkout -b ${shellArg(name)} && git rev-parse --abbrev-ref HEAD`;
+        break;
+      }
+      case "commit": {
+        const message = String(input.message ?? arg).trim();
+        if (!message) return { error: "git_repo commit requires { message }" };
+        cmd = `cd ${dir} && git add -A && git commit -m ${shellArg(message)} && git log --oneline -1`;
+        break;
+      }
+      case "push": {
+        // -u so the branch tracks its remote, and later pushes need no args.
+        cmd =
+          `${creds} && cd ${dir} && ` +
+          `git push -u origin HEAD 2>&1 && git rev-parse --abbrev-ref HEAD`;
+        break;
+      }
+      case "status":
+        cmd = `cd ${dir} && git status --short && git log --oneline -5`;
+        break;
+      case "diff":
+        cmd = `cd ${dir} && git diff HEAD~1 --stat 2>/dev/null || git diff --stat`;
+        break;
+      default:
+        return { error: `unknown git_repo action '${action}'` };
+    }
+
+    const out = await sandbox.exec(this.ctx.id.toString(), `GH_TOKEN=${shellArg(token)} sh -c ${shellArg(cmd)}`);
+    return {
+      result: {
+        stdout: out.stdout.slice(0, 8000),
+        stderr: out.stderr.slice(0, 4000),
+        exitCode: out.exitCode,
+      },
+    };
+  }
+
+  /**
+   * Open a pull request.
+   *
+   * Through GitHub's REST API from the Worker rather than `gh` in the VM: the
+   * container has no CLI for it, and this keeps the token on this side of the
+   * boundary entirely.
+   */
+  private async openPr(
+    input: Record<string, unknown>,
+  ): Promise<{ result?: Record<string, unknown>; error?: string }> {
+    const token = this.env.GITHUB_TOKEN;
+    if (!token) return { error: "GITHUB_TOKEN is not set" };
+    const repo = String(input.repo ?? "").trim();
+    const head = String(input.head ?? "").trim();
+    if (!repo || !head) {
+      return { error: "open_pr requires { repo: 'owner/name', head: 'branch' }" };
+    }
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/vnd.github+json",
+        "content-type": "application/json",
+        // GitHub rejects requests without one.
+        "user-agent": "agentinstance",
+      },
+      body: JSON.stringify({
+        title: String(input.title ?? head),
+        head,
+        base: String(input.base ?? "main"),
+        body: String(input.body ?? ""),
+      }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      html_url?: string;
+      number?: number;
+      message?: string;
+    };
+    if (!res.ok) return { error: body.message ?? `github returned ${res.status}` };
+    return { result: { url: body.html_url ?? "", number: body.number ?? 0 } };
+  }
+
+  /**
    * remember / recall, which the ordinary Capability contract cannot serve:
    * they need this agent's own SQLite, and a capability only receives `env`.
    * Returns null for any other tool name so the caller falls through.
@@ -586,4 +823,9 @@ export class AgentInstance extends DurableObject<Env> {
   async alarm(): Promise<void> {
     await this.fireWakeup();
   }
+}
+
+/** Single-quote for POSIX sh, so a value cannot break out of the command. */
+function shellArg(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }

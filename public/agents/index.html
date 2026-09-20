@@ -55,6 +55,17 @@
     <tbody id="rows"></tbody>
   </table>
   <div id="empty" class="empty" style="display:none">No agents yet — <a class="act" href="/agents/new.html">create your first →</a></div>
+
+  <!-- The work queue. Hidden until there is something in it: an empty table
+       on every dashboard would be noise for anyone not using tasks. -->
+  <div id="fleet" style="display:none;margin-top:38px">
+    <h1 style="font-size:1.05rem">Tasks</h1>
+    <p class="sub" id="fleetSummary"></p>
+    <table>
+      <thead><tr><th>Goal</th><th>State</th><th>Agent</th><th>Branch</th><th>PR</th></tr></thead>
+      <tbody id="taskRows"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -66,17 +77,60 @@ async function load() {
   for (const a of agents) {
     const tr = document.createElement("tr");
     const status = `<span class="badge live">● live</span>`;
-    tr.innerHTML = `<td class="id">${a.id}</td><td>${a.model}</td><td>${a.harness}</td>`
-      + `<td>${a.machine}</td><td>${status}</td>`
-      + `<td><a class="act" href="/chat?id=${a.id}">chat</a>`
-      + `<a class="act" data-del="${a.id}" style="color:#dc2626">delete</a></td>`;
+    // Agent names are chosen by whoever launched them, so they are escaped
+    // rather than interpolated: a name is user input reaching innerHTML.
+    const id = esc(a.id);
+    tr.innerHTML = `<td class="id">${id}</td><td>${esc(a.model)}</td><td>${esc(a.harness)}</td>`
+      + `<td>${esc(a.machine)}</td><td>${status}</td>`
+      + `<td><a class="act" href="/chat?id=${encodeURIComponent(a.id)}">chat</a>`
+      + `<a class="act" data-del="${id}" style="color:#dc2626">delete</a></td>`;
     rows.appendChild(tr);
   }
   rows.querySelectorAll("[data-del]").forEach((el) => {
     el.onclick = async () => {
       if (!confirm(`Delete agent ${el.dataset.del}? This erases its history.`)) return;
       await fetch(`/agents/${el.dataset.del}`, { method: "DELETE" });
-      load();
+      /** The task queue, when there is one. */
+async function loadFleet() {
+  const box = document.getElementById("fleet");
+  let tasks = [];
+  try {
+    tasks = await (await fetch("/api/fleet/tasks")).json();
+  } catch { /* a deployment without the binding simply has no queue */ }
+  if (!Array.isArray(tasks) || !tasks.length) { box.style.display = "none"; return; }
+
+  const counts = tasks.reduce((acc, t) => ((acc[t.state] = (acc[t.state] ?? 0) + 1), acc), {});
+  document.getElementById("fleetSummary").textContent =
+    ["queued", "running", "settled", "failed"]
+      .filter((k) => counts[k])
+      .map((k) => `${counts[k]} ${k}`)
+      .join(" · ");
+
+  const rows = document.getElementById("taskRows");
+  rows.innerHTML = "";
+  for (const t of tasks) {
+    const tr = document.createElement("tr");
+    const pr = t.prUrl
+      ? `<a class="act" href="${esc(t.prUrl)}" target="_blank" rel="noopener">open</a>`
+      : "—";
+    tr.innerHTML =
+      `<td>${esc(t.goal)}</td>` +
+      `<td><span class="badge">${esc(t.state)}</span></td>` +
+      `<td class="id">${esc(t.assignedTo ?? "—")}</td>` +
+      `<td class="id">${esc(t.branch ?? "—")}</td>` +
+      `<td>${pr}</td>`;
+    rows.appendChild(tr);
+  }
+  box.style.display = "block";
+}
+
+/** Task text is whatever the caller filed, so it is escaped before display. */
+function esc(v) {
+  return String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+load();
+loadFleet();
     };
   });
 }
@@ -88,9 +142,9 @@ load();
 // loaded. Refresh when the tab is looked at again rather than polling: the
 // list only matters while someone is reading it.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) load();
+  if (!document.hidden) { load(); loadFleet(); }
 });
-window.addEventListener("focus", () => load());
+window.addEventListener("focus", () => { load(); loadFleet(); });
 </script>
 </body>
 </html>

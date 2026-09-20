@@ -166,6 +166,19 @@ const CAPABILITY_DEFS: Record<string, Described> = {
   // goes to another agent in this same Worker, over its own front door.
   send_to_agent: { desc: "Message another agent and get its reply.", needs: () => true },
   list_agents: { desc: "List the other agents on this deployment.", needs: () => true },
+  // The work queue, from inside the VM: claim a task, record a branch or a
+  // pull request against it, and settle it.
+  fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
+  // Git against a real remote. Without a token an agent can still clone a
+  // public repo but cannot push, so this is offered only when one is set.
+  git_repo: {
+    desc: "Clone, branch, commit and push a repository.",
+    needs: (env) => has(env, "GITHUB_TOKEN"),
+  },
+  open_pr: {
+    desc: "Open a pull request on GitHub.",
+    needs: (env) => has(env, "GITHUB_TOKEN"),
+  },
 };
 
 /** Descriptions only — for code that needs the list without an env. */

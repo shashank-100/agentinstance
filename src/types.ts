@@ -19,6 +19,8 @@ export function makeMessage(
 export interface Env {
   AGENT: DurableObjectNamespace;
   REGISTRY: DurableObjectNamespace;
+  /** The work queue. One singleton, addressed by a fixed name. */
+  FLEET: DurableObjectNamespace;
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Public base URL of this Worker, so tools inside a VM can call back in. */
   WORKER_URL?: string;
@@ -32,6 +34,12 @@ export interface Env {
    * internet, where its absence lets anyone spend the model keys above.
    */
   FLEET_TOKEN?: string;
+  /**
+   * GitHub token, forwarded into an agent's VM so it can clone, push and open
+   * pull requests. Never baked into the image — it reaches the container in
+   * the command's environment, for the life of that command only.
+   */
+  GITHUB_TOKEN?: string;
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;
   // Capability keys.
