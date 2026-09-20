@@ -111,14 +111,29 @@ export class AgentInstance extends DurableObject<Env> {
    * program at this, so Claude Code runs on whatever model the agent is
    * configured with rather than requiring an Anthropic subscription.
    */
-  private provider(): { key?: string; baseUrl?: string; model?: string } {
+  private provider(): {
+    key?: string;
+    baseUrl?: string;
+    model?: string;
+    provider?: string;
+    keyVar?: string;
+  } {
     const info = MODELS[this.spec.model];
     // No provider credentials for an OAuth model: the CLI uses its own token,
     // and handing it a mismatched base URL would point it at the wrong API.
     if (!info || info.oauth) return {};
     const { baseUrl, keyVar } = PROVIDERS[info.provider];
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
-    return { key, baseUrl, model: info.upstreamId ?? info.id };
+    // The provider's name and key var travel alongside the base URL: a CLI
+    // with its own model catalog resolves the endpoint from the name and never
+    // needs the URL at all.
+    return {
+      key,
+      baseUrl,
+      model: info.upstreamId ?? info.id,
+      provider: info.provider,
+      keyVar,
+    };
   }
 
   // --- the conversation -----------------------------------------------------
@@ -142,12 +157,20 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   /** Core message loop: unified across channels (history is per-agent). */
-  async send(text: string, channel = "core"): Promise<{ reply?: string; missing?: boolean }> {
+  async send(
+    text: string,
+    channel = "core",
+    origin?: string,
+    depth = 0,
+  ): Promise<{ reply?: string; missing?: boolean }> {
     // Cloudflare routes any name to a Durable Object, so an agent that was
     // never launched is indistinguishable from one that was — it just has no
     // spec. Without this check a typo in the URL boots a VM, spends the
     // subscription quota, and produces an agent no dashboard ever lists.
     if (!this.configured) return { missing: true };
+    // The VM's send_to_agent runs mid-turn and has no way to know how many
+    // hops preceded it, so the count is parked here for this turn to read.
+    this.setKV("a2a_depth", depth);
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
@@ -160,16 +183,22 @@ export class AgentInstance extends DurableObject<Env> {
       capabilities: this.spec.capabilities,
       // The VM's tools call back in over the public URL: a container has no
       // route to a Durable Object except through the Worker's own front door.
-      agentUrl:
-        this.env.WORKER_URL && this.spec.name
-          ? `${this.env.WORKER_URL}/agents/${this.spec.name}`
-          : undefined,
+      //
+      // The origin comes from the request being served, so every deployment
+      // calls back to itself. A hardcoded value here would be baked into the
+      // tool scripts inside every user's VM, pointing their agents' tool calls
+      // and memory writes at whichever deployment the value named. WORKER_URL
+      // remains as an override for when the public URL differs from the
+      // request host (a proxy, a custom domain).
+      agentUrl: this.agentUrl(origin),
       ...(() => {
         const p = this.provider();
         return {
           cliKey: p.key,
           cliBaseUrl: p.baseUrl,
           cliModel: p.model,
+          cliProvider: p.provider,
+          cliKeyVar: p.keyVar,
           oauthToken: this.env.CLAUDE_CODE_OAUTH_TOKEN,
         };
       })(),
@@ -178,6 +207,29 @@ export class AgentInstance extends DurableObject<Env> {
     // health != progress: advance last-progress only when a unit of work completes.
     this.setKV("last_progress", Date.now());
     return { reply };
+  }
+
+  /**
+   * This agent's own REST base, for tools running inside its VM.
+   *
+   * `WORKER_URL` wins when set — a deployment behind a proxy or custom domain
+   * knows its public address better than the request host does. Otherwise the
+   * origin of the request being served is exactly right, and costs no config.
+   *
+   * The last origin seen is remembered because a scheduled wakeup has no
+   * request to take one from: the alarm fires on its own, and without this its
+   * agent would lose every VM tool until someone next messaged it.
+   */
+  private agentUrl(origin?: string): string | undefined {
+    if (origin) this.setKV("origin", origin);
+    const base = this.env.WORKER_URL ?? origin ?? this.getKV<string | null>("origin", null);
+    if (!base || !this.spec.name) return undefined;
+    // The tool scripts run inside the VM and post back through the public
+    // front door, so on a guarded deployment they need the token. It rides on
+    // the query string because those scripts are generated python with no
+    // per-call header plumbing; the URL never leaves the container.
+    const auth = this.env.FLEET_TOKEN ? `?token=${encodeURIComponent(this.env.FLEET_TOKEN)}` : "";
+    return `${base}/agents/${encodeURIComponent(this.spec.name)}${auth}`;
   }
 
   async getHistory(): Promise<Message[]> {
@@ -354,6 +406,9 @@ export class AgentInstance extends DurableObject<Env> {
         };
       }
 
+      if (name === "send_to_agent") return await this.sendToAgent(input);
+      if (name === "list_agents") return { result: await this.listAgents() };
+
       const memo = this.runMemoryTool(name, input);
       if (memo) return { result: memo };
 
@@ -364,6 +419,83 @@ export class AgentInstance extends DurableObject<Env> {
     } catch (e) {
       return { error: String(e) };
     }
+  }
+
+  /**
+   * How many agent-to-agent hops a single chain may make.
+   *
+   * Two agents that message each other keep going until something stops them,
+   * and every hop is a model call on a booted container. The depth rides with
+   * the message rather than being counted here: each agent only sees its own
+   * turn, so there is nowhere local to keep a total.
+   */
+  private static readonly MAX_A2A_DEPTH = 3;
+
+  /**
+   * Message another agent and return its reply.
+   *
+   * `from` is this agent's own name, taken from its spec and never from the
+   * tool input. An agent in a VM calls `send_to_agent bob "..."` and cannot
+   * name itself, so the recipient's history records who actually sent it.
+   *
+   * The call goes back out through the Worker's front door rather than to
+   * another DO stub directly: the route already records the message on the
+   * `a2a` channel and enforces the target's own guards, and duplicating that
+   * here would mean two paths into an agent that could drift apart.
+   */
+  private async sendToAgent(
+    input: Record<string, unknown>,
+  ): Promise<{ result?: Record<string, unknown>; error?: string }> {
+    const to = String(input.to ?? "").trim();
+    const text = String(input.text ?? "").trim();
+    if (!to || !text) return { error: "send_to_agent requires <agent> <message>" };
+
+    const me = this.spec.name;
+    if (!me) return { error: "this agent has no name, so it cannot identify itself" };
+    // A self-send is a loop with one participant, and the DO is single-threaded:
+    // the inner request would wait on the outer one, which is still waiting.
+    if (to === me) return { error: "an agent cannot send to itself" };
+
+    const depth = this.getKV<number>("a2a_depth", 0) + 1;
+    if (depth > AgentInstance.MAX_A2A_DEPTH) {
+      return { error: `a2a depth limit (${AgentInstance.MAX_A2A_DEPTH}) reached` };
+    }
+
+    const base = this.getKV<string | null>("origin", null) ?? this.env.WORKER_URL;
+    if (!base) return { error: "this deployment does not know its own URL yet" };
+
+    // The token when the deployment has one: this request goes back through
+    // the Worker's own front door, which is guarded like any other caller's.
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (this.env.FLEET_TOKEN) headers.authorization = `Bearer ${this.env.FLEET_TOKEN}`;
+    const res = await fetch(`${base}/agents/${encodeURIComponent(to)}/a2a`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ from: me, text, depth }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { reply?: string; error?: string };
+    if (!res.ok) return { error: body.error ?? `agent '${to}' returned ${res.status}` };
+    return { result: { from: me, to, reply: body.reply ?? "" } };
+  }
+
+  /**
+   * The other agents on this deployment.
+   *
+   * Reads the registry rather than guessing: an agent DO cannot enumerate its
+   * peers, and an agent told to delegate needs to know who actually exists.
+   * This agent is filtered out — it is not someone it can send to.
+   */
+  private async listAgents(): Promise<Record<string, unknown>> {
+    const registry = this.env.REGISTRY.get(
+      this.env.REGISTRY.idFromName("global"),
+    ) as unknown as { list(): Promise<{ id: string; model: string; harness: string }[]> };
+    const all = await registry.list();
+    const me = this.spec.name;
+    return {
+      agents: all
+        .filter((a) => a.id !== me)
+        .map((a) => ({ id: a.id, model: a.model, harness: a.harness })),
+    };
   }
 
   /**

@@ -14,8 +14,13 @@ Agents need a model key before they can reply — add one as a secret after the
 first deploy:
 
 ```sh
-wrangler secret put SOCHEAP_API_KEY
+wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # a Claude subscription, for claude-code
+# or
+wrangler secret put MOONSHOT_API_KEY          # for the pi harness
 ```
+
+Set `FLEET_TOKEN` too on anything reachable from the internet — without it,
+anyone with the URL can launch agents and spend those keys.
 
 See [DEPLOY.md](./DEPLOY.md).
 
@@ -27,7 +32,8 @@ It sleeps when idle and you pay nothing while it does.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note:** a model key is required. Without `SOCHEAP_API_KEY` set, `send`
+> **Note:** a model key is required. Set either `CLAUDE_CODE_OAUTH_TOKEN` (a
+> Claude subscription) or `MOONSHOT_API_KEY` (for pi). Without one, `send`
 > returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 
 ## Try it
@@ -38,8 +44,14 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 
 ## Features
 
-- **A real agent CLI, not a chat loop** — every agent runs Claude Code inside
-  its own micro-VM, with its own shell, filesystem, and editing tools.
+- **A real agent CLI, not a chat loop** — every agent runs a coding CLI inside
+  its own micro-VM, with its own shell, filesystem, and editing tools. Two
+  harnesses today: **Claude Code** (on a Claude subscription token) and **pi**
+  (on any provider it has a key for, so agents can run cheaper models).
+- **Agents that talk to each other** — `send_to_agent` and `list_agents` are
+  capabilities like any other, so a supervisor delegating to workers, two
+  agents reviewing each other, or a pipeline are all the same primitive. See
+  [docs/topologies.md](./docs/topologies.md).
 - **Capabilities the CLI can actually reach** — `search_web`, `browse_page`,
   `remember` and `recall` are installed into the VM as commands that call back
   into the Worker, so the agent uses them like any other program.
@@ -62,10 +74,10 @@ npm run dev       # local dev server
 npm run deploy    # deploy to your Cloudflare account
 ```
 
-Set the model key (required — agents cannot reply without it):
+Set a model key (required — agents cannot reply without it):
 
 ```bash
-npx wrangler secret put SOCHEAP_API_KEY
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # or MOONSHOT_API_KEY
 ```
 
 ## API
@@ -80,6 +92,7 @@ POST /agents/:id/restore     { spec, history, kv }
 POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }
 POST /agents/:id/wake
 POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capabilities)
+POST /agents/:id/a2a         { from, text, async? }  -> { reply } or { accepted }
 
 # channel webhooks
 POST /channels/telegram/:id
@@ -121,9 +134,14 @@ time out. See `Dockerfile` for the image.
 
 ## Roadmap
 
-An OpenAI-compatible harness: pi and opencode both worked locally and failed
-inside the VM, so the GPT models are in the catalog but unselectable until one
-of them (or a replacement) runs there.
+**Tasks, not just messages.** An agent is reached with `send(text)` today, which
+is conversational. Work that outlives a request — take this goal, make the
+change, open the PR — wants a task with a branch, a lifecycle and a diff as its
+result. That is the next thing worth building, and it is what a cloud VM can do
+that a laptop-bound agent cannot.
+
+**More harnesses.** Codex and OpenCode are both one row in `CLI_HARNESSES` plus
+a package in the `Dockerfile`, once their env-var contracts are confirmed.
 
 ## License
 

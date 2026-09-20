@@ -26,11 +26,16 @@ This publishes the Worker, creates the `AgentDO` Durable Object namespace (via t
 
 ## 4. Add secrets
 
-`SOCHEAP_API_KEY` is required — without it, `send` returns an error instead of
+A model key is required — without one, `send` returns an error instead of
 a reply. Channel and capability keys are optional.
 
 ```bash
-npx wrangler secret put SOCHEAP_API_KEY
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # claude-code (a Claude subscription)
+npx wrangler secret put MOONSHOT_API_KEY          # pi (kimi-k3)
+
+# Set this on anything reachable from the internet. Without it, every route
+# that launches, deletes or runs an agent is open to whoever has the URL.
+npx wrangler secret put FLEET_TOKEN
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 # ...and any channel/capability keys you need (see .dev.vars.example)
 ```

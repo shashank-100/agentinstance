@@ -44,7 +44,7 @@ POST /agents/live/send   { text: "..." }
 | `index.ts` | `Model` interface (`complete`), `OpenAICompatModel`, `EchoModel`, and `UnusedModel`. |
 
 **Why one adapter:** every provider we use speaks OpenAI's `/chat/completions`
-shape, so the only difference between Moonshot and socheap is a base URL.
+shape, so the only difference between providers is a base URL.
 `OpenAICompatModel` takes that URL as a constructor argument. Adding DeepSeek or
 Z.ai later is a catalog row, not a new class.
 
@@ -57,13 +57,29 @@ fallback to a canned responder makes a broken deployment look healthy.
 
 | File | What it does |
 |---|---|
-| `index.ts` | `AgentCliHarness` — runs Claude Code inside the agent's VM. Also `AgentSpec` and `checkCompatible`. |
+| `index.ts` | `AgentCliHarness` — runs a coding CLI inside the agent's VM. Also `AgentSpec` and `checkCompatible`. |
 | `vm-tools.ts` | Installs the agent's capabilities into the VM as commands, and writes the instructions telling the CLI when to use them. |
 
 **The agent is a real CLI, not a loop we wrote.** `AgentCliHarness` shells into
-the container, runs `claude -p "<message>"`, and returns what it printed. Claude
-Code owns its own planning, its own tools, and its own retries; this class only
-starts it and gets out of the way.
+the container, runs the CLI with the task as its prompt, and returns what it
+printed. The CLI owns its own planning, its own tools, and its own retries; this
+class only starts it and gets out of the way.
+
+**Two harnesses, and the difference between them is how they are credentialed.**
+Claude Code speaks Anthropic's `/v1/messages`, so it authenticates with a
+subscription token (`CLAUDE_CODE_OAUTH_TOKEN`) and needs no provider key. pi
+carries its own model catalog — `pi --list-models` already lists
+`moonshot/kimi-k3` — and reads each provider's key from that provider's own
+conventional env var, so it needs neither a base URL nor a config file: naming
+the provider and model is enough. `providerKeyVar` on the `CLI_HARNESSES` row is
+what selects that second style.
+
+pi is invoked with `PI_OFFLINE=1` and `--no-session`. Both are consequences of
+the container: a session file written to a filesystem that is discarded on sleep
+is never read again, and the startup catalog fetch has no route out of a sandbox
+that blocks it. An earlier version of this harness wrote
+`~/.pi/agent/models.json` to define a custom provider, which is why `configFile`
+still exists on that type; it is unnecessary for a provider pi already knows.
 
 **Why the VM tools exist:** the CLI runs inside the container, and capabilities
 like web search live outside it in the Worker. Nothing bridges that gap on its
@@ -93,6 +109,13 @@ loop rebuilt, which is the honest cost of not keeping untested code alive.
 | File | What it does |
 |---|---|
 | `index.ts` | `scrape_web` (fetch a URL, extract text) and `search_web` (Tavily), plus the registry and the enabled-capability gate. |
+
+`send_to_agent`, `list_agents`, `remember`, `recall` and `run_shell` are not
+here: each needs something a `Capability` never receives. `remember`/`recall`
+need the agent's own SQLite; `run_shell` needs its sandbox; `send_to_agent`
+needs its *name*, so the recipient is told who actually sent the message rather
+than whoever the sender claimed to be. All five are implemented in
+`AgentInstance.runTool`.
 
 A capability with a `parameters` JSON Schema is offered to the model as a
 callable tool; without one it is only reachable via `POST /agents/:id/tool/:name`.
@@ -174,6 +197,7 @@ Two suites, two runners, because they need different environments:
 | `capabilities.test.ts` | The registry, the enabled-capability gate, and that deleted stubs stay deleted. |
 | `channels.test.ts` | Webhook parsing and unified history. |
 | `a2a.test.ts` | Agent-to-agent messaging. |
+| `topologies.md` | Not a test — worked multi-agent examples in `docs/`. |
 | `ui/*.test.ts` | Builder state machine, parts helpers, sandbox harness. |
 
 ---
@@ -190,14 +214,27 @@ Two suites, two runners, because they need different environments:
 
 | File | What it does |
 |---|---|
-| `wrangler.jsonc` | Worker name, DO bindings and migrations, static assets, `DEFAULT_MODEL`/`DEFAULT_HARNESS`. Secrets are *not* here — they go in `wrangler secret put`. |
+| `wrangler.jsonc` | Worker name, DO bindings and migrations, static assets, container tiers. Secrets are *not* here — they go in `wrangler secret put`. `WORKER_URL` is deliberately unset; see "Two decisions worth knowing". |
 | `tsconfig.json` | Strict TypeScript against `@cloudflare/workers-types`. |
-| `.dev.vars.example` | Every secret name the app reads, with empty values. Copy to `.dev.vars` for local dev; that file is gitignored. |
+| `.dev.vars.example` | Every secret name the app reads, with empty values and what each unlocks. Copy to `.dev.vars` for local dev; that file is gitignored. |
 | `package.json` | Scripts: `dev`, `deploy`, `test`, `test:ui`, `typecheck`. |
 
 ---
 
 ## Two decisions worth knowing
+
+**Readiness is computed, never stored.** `/catalog` derives each harness's and
+capability's `ready` flag from the secrets *this* deployment holds. A hardcoded
+flag describes whoever wrote it: every other deployer would see a builder that
+offers what they cannot run and greys out what they can.
+
+**The Worker takes its own address from the request.** Nothing inside a
+container can infer the Worker's public URL, so the tool scripts installed into
+a VM are written with it baked in. Hardcoding that value meant every deployment
+shipped agents whose tool calls and memory writes pointed at whoever's URL was
+in the repo. `WORKER_URL` survives only as an override for a proxy or custom
+domain. The last origin seen is remembered in kv, because a scheduled wakeup has
+no request to take one from.
 
 **Fail loudly.** `buildModel()` throws when a model is unknown or its key is
 missing, rather than substituting a stand-in. An earlier version silently fell

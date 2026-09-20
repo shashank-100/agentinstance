@@ -28,6 +28,11 @@ export interface HarnessContext {
   cliModel?: string;
   /** Subscription token for CLIs that accept one instead of a provider key. */
   oauthToken?: string;
+  /** The provider this agent's model belongs to, and the env var its key is
+   *  conventionally read from. CLIs with their own model catalog (pi) want
+   *  both by name rather than a base URL. */
+  cliProvider?: string;
+  cliKeyVar?: string;
 }
 
 export interface Harness {
@@ -59,6 +64,9 @@ export class AgentCliHarness implements Harness {
       path: string;
       build: (baseUrl: string, key: string, model: string) => string;
     },
+    /** This CLI knows the provider already and reads its key from that
+     *  provider's own env var, so pass the key under that name. */
+    private providerKeyVar?: boolean,
   ) {}
 
   async run(
@@ -135,16 +143,21 @@ export class AgentCliHarness implements Harness {
     //
     // Keys go in the command's environment, never the prompt: a prompt is echoed
     // back in the CLI's own logs.
+    const { cliKeyVar } = ctx ?? {};
     const envs = (
       useOauth
         ? [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
-        : [
-            this.env.key ? `${this.env.key}=${shellQuote(cliKey as string)}` : "",
-            this.env.baseUrl && cliBaseUrl
-              ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}`
-              : "",
-            this.env.model && cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
-          ]
+        : this.providerKeyVar
+          ? // The CLI resolves the endpoint itself from the provider name, so
+            // the key is all it needs — under the name that provider uses.
+            [cliKeyVar ? `${cliKeyVar}=${shellQuote(cliKey as string)}` : ""]
+          : [
+              this.env.key ? `${this.env.key}=${shellQuote(cliKey as string)}` : "",
+              this.env.baseUrl && cliBaseUrl
+                ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}`
+                : "",
+              this.env.model && cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
+            ]
     )
       .filter(Boolean)
       .join(" ");
@@ -157,7 +170,10 @@ export class AgentCliHarness implements Harness {
     // otherwise block forever on a terminal the container does not have.
     const inner =
       `HOME=/home/agent ${envs} ` +
-      this.template.replace("{task}", shellQuote(task)).replace("{model}", shellQuote(cliModel ?? "")) +
+      this.template
+        .replace("{task}", shellQuote(task))
+        .replace("{model}", shellQuote(cliModel ?? ""))
+        .replace("{provider}", shellQuote(ctx?.cliProvider ?? "")) +
       " </dev/null 2>&1";
     // Claude Code refuses to skip permission prompts while running as root.
     // The VM is already an isolated sandbox, so drop to an unprivileged user
@@ -260,6 +276,9 @@ const CLI_HARNESSES: Record<
       path: string;
       build: (baseUrl: string, key: string, model: string) => string;
     };
+    /** Set when the CLI has its own model catalog and wants the provider key
+     *  under that provider's conventional env var. */
+    providerKeyVar?: boolean;
   }
 > = {
   "claude-code": {
@@ -274,6 +293,25 @@ const CLI_HARNESSES: Record<
     // authenticates against Anthropic directly, so no base URL is passed.
     oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
   },
+
+  // pi ships its own model catalog — `pi --list-models` already lists
+  // `moonshot/kimi-k3` — and reads each provider's key straight from the
+  // environment under that provider's own name. So it needs no base URL and no
+  // config file: naming the provider and model is enough.
+  //
+  // An earlier version of this harness wrote ~/.pi/agent/models.json to define
+  // a custom provider, which is why `configFile` exists on this type. That is
+  // no longer necessary for a provider pi already knows.
+  //
+  // --no-session because the container's filesystem is discarded when it
+  // sleeps, so a session written there is never read again; and PI_OFFLINE=1
+  // to skip the startup catalog fetch, which has no route out of a sandbox
+  // that blocks it and is the most likely cause of an earlier hang.
+  pi: {
+    template: "PI_OFFLINE=1 pi --provider {provider} --model {model} --no-session -p {task}",
+    env: { key: "", baseUrl: "", model: "" },
+    providerKeyVar: true,
+  },
 };
 
 export function getHarness(name: string, offline = false): Harness {
@@ -283,7 +321,14 @@ export function getHarness(name: string, offline = false): Harness {
   // Gated on an explicit flag so this can never be reached in production.
   return offline
     ? new EchoHarness(name)
-    : new AgentCliHarness(name, cli.template, cli.env, cli.oauthVar, cli.configFile);
+    : new AgentCliHarness(
+        name,
+        cli.template,
+        cli.env,
+        cli.oauthVar,
+        cli.configFile,
+        cli.providerKeyVar,
+      );
 }
 
 /** Offline stand-in: replies from the model, skipping the CLI entirely. */

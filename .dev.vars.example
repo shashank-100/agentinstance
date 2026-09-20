@@ -1,0 +1,36 @@
+# Copy to .dev.vars for local dev (that file is gitignored), or set each one
+# in production with `wrangler secret put <NAME>`.
+#
+# Nothing here is required to boot the Worker. What you set decides what the
+# builder offers: a harness or capability whose key is missing is shown as not
+# ready rather than failing later.
+
+# --- models: set at least one, or agents cannot reply --------------------
+# A Claude subscription token. Lets the claude-code harness authenticate
+# against Anthropic directly, with no provider key and no per-token rate.
+# Get one with: claude setup-token
+CLAUDE_CODE_OAUTH_TOKEN=
+
+# Moonshot (Kimi). Serves kimi-k3, which the pi harness drives.
+MOONSHOT_API_KEY=
+
+# --- capabilities --------------------------------------------------------
+# search_web. Without it that capability is offered as not ready.
+TAVILY_API_KEY=
+
+# --- channels ------------------------------------------------------------
+# Telegram bot token, for POST /channels/telegram/:id
+TELEGRAM_BOT_TOKEN=
+
+# --- access control ------------------------------------------------------
+# Optional, but set it on any deployment reachable from the internet: without
+# it anyone with the URL can launch, delete and run agents, and spend whatever
+# the keys above pay for. When set, /api/* and every mutating /agents/:id/*
+# action require `Authorization: Bearer <token>`.
+FLEET_TOKEN=
+
+# --- deployment ----------------------------------------------------------
+# Only needed when the public URL differs from the request host (a proxy, or a
+# custom domain). Left unset, the Worker takes its own address from the
+# request it is serving, which is right for a normal workers.dev deploy.
+# WORKER_URL=https://agents.example.com

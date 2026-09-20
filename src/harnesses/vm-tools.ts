@@ -41,6 +41,11 @@ const VM_TOOLS: Record<string, { usage: string; fields: string[] }> = {
   browse_page: { usage: "browse_page <url>", fields: ["url"] },
   remember: { usage: 'remember <key> <value...>', fields: ["key", "value*"] },
   recall: { usage: "recall [key]", fields: ["key"] },
+  // Agent-to-agent. `to` is the agent's name as it appears in /agents/:id —
+  // the sender's own name is not a field here: it is stamped by the Worker
+  // from the calling agent's spec, so an agent cannot claim to be another.
+  send_to_agent: { usage: "send_to_agent <agent> <message...>", fields: ["to", "text*"] },
+  list_agents: { usage: "list_agents", fields: [] },
 };
 
 /**
@@ -54,6 +59,13 @@ const VM_TOOLS: Record<string, { usage: string; fields: string[] }> = {
  */
 function scriptBody(endpoint: string, tool: string, fields: string[]): string {
   const spec = JSON.stringify(fields);
+  // The endpoint may carry a token as a query string. The tool name is a path
+  // segment, so it has to go before that query, not after it.
+  const cut = endpoint.indexOf("?");
+  const url =
+    cut === -1
+      ? `${endpoint}/tool/${tool}`
+      : `${endpoint.slice(0, cut)}/tool/${tool}${endpoint.slice(cut)}`;
   return [
     `exec python3 - "$@" <<'PY'`,
     "import json, sys, urllib.request",
@@ -70,7 +82,7 @@ function scriptBody(endpoint: string, tool: string, fields: string[]): string {
     "    if value:",
     "        payload[key] = value",
     `req = urllib.request.Request(`,
-    `    "${endpoint}/tool/${tool}",`,
+    `    "${url}",`,
     "    data=json.dumps(payload).encode(),",
     "    headers={",
     '        "content-type": "application/json",',
@@ -129,6 +141,23 @@ export function toolInstructions(enabled: string[]): string {
       "",
     );
   }
+  if (has("send_to_agent")) {
+    lines.push(
+      '- `send_to_agent <agent> "<message>"` — send a message to another agent',
+      "  and get its reply. Use it to delegate work, ask for a review, or report",
+      "  back to whoever delegated to you. The other agent has its own memory and",
+      "  its own machine; it does not see this conversation, so say enough for it",
+      "  to act without context.",
+      "",
+    );
+  }
+  if (has("list_agents")) {
+    lines.push(
+      "- `list_agents` — list the other agents you can reach, with their models.",
+      "  Run it before delegating so you address an agent that exists.",
+      "",
+    );
+  }
   if (has("recall")) {
     lines.push(
       "- `recall [key]` — read notes you saved before. **Run this before",
@@ -160,7 +189,7 @@ export async function installVmTools(
       const tool = VM_TOOLS[name];
       // recall is the one tool that is meaningful with no arguments: it lists
       // recent notes.
-      const requiresArgs = name !== "recall";
+      const requiresArgs = name !== "recall" && name !== "list_agents";
       const script =
         `#!/bin/sh\n` +
         `# ${tool.usage}\n` +
