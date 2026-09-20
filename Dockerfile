@@ -39,4 +39,19 @@ RUN npm install -g \
       @earendil-works/pi-coding-agent@0.86.0 \
       @openai/codex@0.155.1
 
+# pi-anthropic-oauth makes pi authenticate the way Claude Code does, so an
+# ANTHROPIC_OAUTH_TOKEN bills against a Claude subscription instead of API
+# credit. Without it pi sends the same token to the plain API and Anthropic
+# answers "You're out of extra usage" — the token is valid, the meter is not
+# the one the subscription pays for.
+#
+# Installed into the image, and into the home the CLI actually runs as: pi
+# resolves extensions from $HOME/.pi, and a container's filesystem does not
+# survive sleeping, so installing at run time would mean reinstalling every
+# session.
+RUN (id -u agent >/dev/null 2>&1 || useradd -m agent) \
+    && runuser -u agent -- env HOME=/home/agent \
+         pi install npm:pi-anthropic-oauth \
+    && chown -R agent /home/agent
+
 EXPOSE 3000

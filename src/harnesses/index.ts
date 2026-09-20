@@ -342,11 +342,15 @@ const CLI_HARNESSES: Record<
     template: "pi --provider {provider} --model {model} --no-session -p {task}",
     env: { key: "", baseUrl: "", model: "" },
     providerKeyVar: true,
-    // pi reads ANTHROPIC_OAUTH_TOKEN as an alternative to an API key
-    // (verified: a bad one comes back "OAuth access token is invalid"), so one
-    // Claude subscription serves this harness as well as claude-code. Only
-    // meaningful for a Claude model; for anything else the provider key path
-    // applies, which is why oauthVar alone does not decide.
+    // pi reads ANTHROPIC_OAUTH_TOKEN, and the pi-anthropic-oauth extension in
+    // the image makes it authenticate the way Claude Code does — so the same
+    // subscription token bills against the subscription rather than API
+    // credit. Without that extension the token is accepted and then billed to
+    // the wrong meter, which surfaces as "You're out of extra usage" on an
+    // account that has a working subscription.
+    //
+    // Only meaningful for a Claude model; anything else takes the provider key
+    // path, which is why oauthVar alone does not decide.
     oauthVar: "ANTHROPIC_OAUTH_TOKEN",
   },
 
