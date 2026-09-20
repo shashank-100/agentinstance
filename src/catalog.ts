@@ -16,9 +16,14 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "moonshot" | "anthropic";
+export type Provider = "moonshotai" | "anthropic";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
-  moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
+  // `moonshotai` is what pi's own catalog calls this provider. A bare
+  // `moonshot` exists too, but only on a machine with local pi config — in a
+  // clean container it does not, and naming it there fails with "Unknown
+  // provider". The harness passes this name straight to the CLI, so it has to
+  // be the portable one.
+  moonshotai: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
   // Anthropic's own endpoint. Claude Code reaches it with a subscription token
   // and no base URL; pi reaches it with this key, which is why a Claude model
   // can be served either way depending on which harness is running.
@@ -27,7 +32,7 @@ export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = 
 
 // Only models a configured provider can actually serve.
 export const MODELS: Record<string, ModelInfo> = {
-  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshot" },
+  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshotai" },
 
   // Claude Code authenticates with a subscription OAuth token, so the model
   // comes from whatever that token grants rather than from a provider key.

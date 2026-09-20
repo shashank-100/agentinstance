@@ -330,11 +330,16 @@ const CLI_HARNESSES: Record<
   // no longer necessary for a provider pi already knows.
   //
   // --no-session because the container's filesystem is discarded when it
-  // sleeps, so a session written there is never read again; and PI_OFFLINE=1
-  // to skip the startup catalog fetch, which has no route out of a sandbox
-  // that blocks it and is the most likely cause of an earlier hang.
+  // sleeps, so a session written there is never read again.
+  //
+  // PI_OFFLINE=1 was set here on the theory that pi's startup catalog fetch
+  // was what hung inside a container. It was not: pi runs in the container,
+  // and the fetch costs about a second. What the flag did cost was accuracy —
+  // offline, pi falls back to a stale built-in catalog and warns that
+  // claude-opus-4-8 is "not found for provider anthropic" before using it
+  // anyway. Better to let it read the real list.
   pi: {
-    template: "PI_OFFLINE=1 pi --provider {provider} --model {model} --no-session -p {task}",
+    template: "pi --provider {provider} --model {model} --no-session -p {task}",
     env: { key: "", baseUrl: "", model: "" },
     providerKeyVar: true,
     // pi reads ANTHROPIC_OAUTH_TOKEN as an alternative to an API key
