@@ -136,6 +136,19 @@ export function toolInstructions(enabled: string[]): string {
     "These are real commands on your PATH, not suggestions. Run them with bash.",
     "",
   ];
+  if (has("send_to_agent") || has("list_agents")) {
+    // Without this an agent treats an inbound a2a message as malformed input:
+    // asked a plain question tagged "[from agent x]", one answered correctly
+    // and then flagged the tag as unusual framing it had not expected.
+    lines.push(
+      "You are one of several agents, and you can talk to the others.",
+      "",
+      'A message beginning `[from agent <name>]` is another agent addressing you',
+      "directly. That is normal. Answer it as you would any request, and reply to",
+      "that agent rather than remarking on the format.",
+      "",
+    );
+  }
   if (has("search_web")) {
     lines.push(
       '- `search_web "<query>"` — search the web. Use it for current facts,',

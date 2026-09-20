@@ -110,6 +110,26 @@ export class FleetDO extends DurableObject<Env> {
   }
 
   /**
+   * Hand a specific task to a specific agent.
+   *
+   * The push counterpart to `claim`'s pull. An agent claiming work takes
+   * whatever is next; a person assigning it has one agent in mind, usually
+   * because that agent is the one with the right model or the right
+   * capabilities enabled.
+   */
+  async assign(id: string, agentId: string): Promise<Task | null> {
+    const task = await this.get(id);
+    if (!task) return null;
+    this.sql.exec(
+      "UPDATE tasks SET state='running', assignedTo=?, updatedAt=? WHERE id=?",
+      agentId,
+      Date.now(),
+      id,
+    );
+    return this.get(id);
+  }
+
+  /**
    * Take the oldest queued task, or null when there is nothing to do.
    *
    * Read and write happen in one call on purpose. A DO is single-threaded, so

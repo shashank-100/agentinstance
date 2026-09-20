@@ -38,6 +38,7 @@
     <div class="brand"><span class="glyph">⌇</span> agentinstance</div>
     <div>
       <a href="/agents/">My Agents</a>
+      <a href="/agents/board.html">Board</a>
       <a href="/agents/new.html">New Agent</a>
     </div>
   </nav>
@@ -56,8 +57,8 @@
   </table>
   <div id="empty" class="empty" style="display:none">No agents yet — <a class="act" href="/agents/new.html">create your first →</a></div>
 
-  <!-- The work queue. Hidden until there is something in it: an empty table
-       on every dashboard would be noise for anyone not using tasks. -->
+  <!-- A summary only: the board at /agents/board.html is where tasks are
+       filed and assigned. Hidden until there is something to summarise. -->
   <div id="fleet" style="display:none;margin-top:38px">
     <h1 style="font-size:1.05rem">Tasks</h1>
     <p class="sub" id="fleetSummary"></p>

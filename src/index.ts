@@ -269,8 +269,12 @@ async function fleetRoute(
       repo?: string;
       result?: string;
       state?: TaskState;
+      assignedTo?: string;
     }>(request);
     // Ending a task is a state change, not a patch: settle and fail record why.
+    // Assigning is a state change too: it moves the task to `running` under a
+    // named agent, rather than waiting for one to claim it.
+    if (body.assignedTo) return finished(await f.assign(id, body.assignedTo), id);
     if (body.state === "settled") return finished(await f.settle(id, body.result ?? ""), id);
     if (body.state === "failed") return finished(await f.fail(id, body.result ?? ""), id);
     if (body.state === "queued") return finished(await f.release(id), id);
