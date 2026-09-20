@@ -53,6 +53,9 @@ export const HARNESS_MODELS: Record<string, string[]> = {
   // pi carries its own model catalog and speaks each provider's API directly,
   // so it drives the OpenAI-compatible models Claude Code cannot reach.
   pi: ["kimi-k3"],
+  // codex speaks OpenAI's wire format, so it runs whatever an OpenAI-compatible
+  // provider serves — the same models pi does.
+  codex: ["kimi-k3"],
 };
 
 /**
@@ -85,6 +88,14 @@ const HARNESS_DEFS: Record<string, Described> = {
     desc: "Anthropic's Claude Code CLI.",
     // A subscription token, or any key that can serve a model it drives.
     needs: (env) => has(env, "CLAUDE_CODE_OAUTH_TOKEN"),
+  },
+  codex: {
+    desc: "OpenAI's Codex CLI.",
+    needs: (env) =>
+      (HARNESS_MODELS.codex ?? []).some((id) => {
+        const info = MODELS[id];
+        return info && !info.oauth && has(env, PROVIDERS[info.provider].keyVar);
+      }),
   },
   pi: {
     desc: "The pi coding agent — runs the OpenAI-compatible models.",

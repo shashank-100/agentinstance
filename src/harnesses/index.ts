@@ -173,7 +173,10 @@ export class AgentCliHarness implements Harness {
       this.template
         .replace("{task}", shellQuote(task))
         .replace("{model}", shellQuote(cliModel ?? ""))
-        .replace("{provider}", shellQuote(ctx?.cliProvider ?? "")) +
+        .replace("{provider}", shellQuote(ctx?.cliProvider ?? ""))
+        // A config *value* rather than an env var: codex takes the endpoint on
+        // the command line, so the base URL is substituted into the template.
+        .replace("{baseUrlValue}", shellQuote(cliBaseUrl ?? "")) +
       " </dev/null 2>&1";
     // Claude Code refuses to skip permission prompts while running as root.
     // The VM is already an isolated sandbox, so drop to an unprivileged user
@@ -320,6 +323,37 @@ const CLI_HARNESSES: Record<
     template: "PI_OFFLINE=1 pi --provider {provider} --model {model} --no-session -p {task}",
     env: { key: "", baseUrl: "", model: "" },
     providerKeyVar: true,
+  },
+
+  // `codex exec` is the non-interactive mode; bare `codex` opens a TUI that
+  // would block forever on a terminal the container does not have.
+  //
+  // Provider config goes through repeated `--config key=value` rather than a
+  // ~/.codex/config.toml, because `--config` sets any config key inline and a
+  // file would have to be rewritten every session — the VM's filesystem does
+  // not survive sleeping. The provider is defined and selected in one command.
+  //
+  // --skip-git-repo-check because /workspace is not a repository until an
+  // agent clones one, and codex otherwise refuses to run outside a checkout.
+  // --ephemeral keeps no session state, for the same reason pi gets
+  // --no-session: a session written here is never read again.
+  // -s danger-full-access because the container *is* the sandbox; codex's own
+  // sandbox inside it would block the edits the agent was asked to make.
+  codex: {
+    template:
+      "codex exec --ephemeral --skip-git-repo-check -s danger-full-access " +
+      "--model {model} " +
+      // Bare `key=value`. The double quotes t3code writes around its own
+      // --config values are stripped by the shell before codex sees them, so
+      // adding them here would only make this line inconsistent with itself.
+      "--config model_provider=agentinstance " +
+      "--config model_providers.agentinstance.name=agentinstance " +
+      "--config model_providers.agentinstance.base_url={baseUrlValue} " +
+      "--config model_providers.agentinstance.env_key=OPENAI_API_KEY " +
+      "--config model_providers.agentinstance.wire_api=chat " +
+      "-- {task}",
+    // codex reads the key from whatever env_key names above.
+    env: { key: "OPENAI_API_KEY", baseUrl: "", model: "" },
   },
 };
 
