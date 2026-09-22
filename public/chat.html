@@ -97,6 +97,18 @@
   .user .bubble{background:var(--pill);border-radius:14px;padding:9px 15px;
     max-width:75%;font-size:.94rem;line-height:1.5}
   .assistant .bubble{max-width:100%;font-size:.95rem;line-height:1.6;color:var(--ink)}
+  /* Messages that did not come from a person. An agent's history is unified
+     across channels, so without a mark these read as things the user said. */
+  .msg.a2a{justify-content:flex-start}
+  .a2a .bubble{background:var(--rail-2);border-left:3px solid var(--muted);
+    border-radius:0 10px 10px 0;padding:9px 15px;max-width:75%;
+    font-size:.9rem;line-height:1.5}
+  .msg .tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block}
+  .msg.handoff{justify-content:center}
+  .handoff .bubble{background:none;border:1px dashed var(--line);border-radius:8px;
+    padding:6px 13px;font-family:var(--mono);font-size:.76rem;color:var(--muted);
+    max-width:100%;text-align:center}
   .bubble p{margin:0 0 .95em}.bubble p:last-child{margin-bottom:0}
   .bubble h3,.bubble h4,.bubble h5,.bubble h6{margin:1.1em 0 .45em;
     font-size:1rem;line-height:1.35;font-weight:650}
@@ -162,6 +174,7 @@
 
   <div class="foot">
     <a href="/agents/">My Agents <span id="agentCount">—</span></a>
+    <a href="/agents/board.html">Board</a>
     <span class="grow"></span>
     <a href="https://github.com/shashank-100/agentinstance#readme"
        target="_blank" rel="noopener">Docs</a>
@@ -276,10 +289,22 @@ function renderMarkdown(src) {
   return out.join("").replace(/ CODE(\d+) /g, (_, i) => codeBlocks[Number(i)]);
 }
 
-function add(role, content) {
+function add(role, content, channel) {
   const wrap = document.createElement("div");
-  wrap.className = "msg " + role;
-  wrap.innerHTML = `<div class="bubble">${renderMarkdown(content)}</div>`;
+  // An a2a message is a user turn as far as the agent is concerned, but it did
+  // not come from the person reading this, so it is styled as its own thing.
+  const kind = channel === "a2a" ? "a2a" : channel === "handoff" ? "handoff" : role;
+  wrap.className = "msg " + kind;
+  // The sender rides in the message body as "[from agent x] ..." — lift it out
+  // into a label rather than leaving it in the prose.
+  let body = content;
+  let tag = "";
+  if (kind === "a2a") {
+    const m = /^\[from agent ([^\]]+)\]\s*/.exec(content);
+    tag = `<span class="tag">from ${m ? escapeHtml(m[1]) : "agent"}</span>`;
+    if (m) body = content.slice(m[0].length);
+  }
+  wrap.innerHTML = `<div class="bubble">${tag}${renderMarkdown(body)}</div>`;
   log.appendChild(wrap);
   $("log").scrollTop = $("log").scrollHeight;
   return wrap;
@@ -377,8 +402,9 @@ async function loadHistory() {
   try { hist = await (await fetch(`/agents/${agentId}/history`)).json(); } catch {}
   if (!Array.isArray(hist)) hist = [];
   for (const m of hist) {
-    if (m.role === "user" || m.role === "assistant") {
-      add(m.role, m.content);
+    const isHandoff = m.role === "system" && m.channel === "handoff";
+    if (m.role === "user" || m.role === "assistant" || isHandoff) {
+      add(m.role, m.content, m.channel);
       if (m.role === "assistant") turns++;
     }
   }

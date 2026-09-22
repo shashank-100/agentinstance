@@ -6,7 +6,7 @@ describe("agent registry", () => {
   it("launched agents appear in GET /agents with status", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-1", harness: "claude-code", model: "gpt-5.6-terra", machine: "one-cpu" }),
+      body: JSON.stringify({ id: "reg-1", harness: "claude-code", model: "claude-opus-4.8", machine: "one-cpu" }),
     });
     const list = (await (await SELF.fetch("https://x/api/agents")).json()) as {
       id: string;
@@ -15,7 +15,7 @@ describe("agent registry", () => {
     }[];
     const rec = list.find((a) => a.id === "reg-1");
     expect(rec).toBeTruthy();
-    expect(rec!.model).toBe("gpt-5.6-terra");
+    expect(rec!.model).toBe("claude-opus-4.8");
     expect(rec!.machine).toBe("one-cpu");
   });
 
@@ -23,7 +23,7 @@ describe("agent registry", () => {
   it("DELETE removes an agent from the listing and wipes state", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-del", harness: "claude-code", model: "gpt-5.4-mini" }),
+      body: JSON.stringify({ id: "reg-del", harness: "pi", model: "kimi-k3" }),
     });
     await SELF.fetch("https://x/agents/reg-del/send", {
       method: "POST",
@@ -56,7 +56,7 @@ describe("agent registry", () => {
   it("DELETE on a sub-path clears that resource, not the whole agent", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "keep-me", harness: "claude-code", model: "gpt-5.6-terra" }),
+      body: JSON.stringify({ id: "keep-me", harness: "claude-code", model: "claude-opus-4.8" }),
     });
     await SELF.fetch("https://x/agents/keep-me/send", {
       method: "POST",

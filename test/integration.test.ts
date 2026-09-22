@@ -51,7 +51,7 @@ describe("worker gateway", () => {
     await launch("agentR");
     await SELF.fetch("https://x/agents/agentR/configure", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-5.6-terra" }),
+      body: JSON.stringify({ model: "claude-opus-4.8" }),
     });
     const res = await SELF.fetch("https://x/agents/agentR/send", {
       method: "POST",

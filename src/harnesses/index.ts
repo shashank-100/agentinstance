@@ -9,7 +9,14 @@
 import type { Message } from "../types.js";
 import type { Model } from "../models/index.js";
 import type { Sandbox } from "../sandbox/index.js";
-import { CAPABILITIES, HARNESSES, MACHINES, MODELS, DEFAULT_MACHINE } from "../catalog.js";
+import {
+  CAPABILITIES,
+  HARNESSES,
+  HARNESS_MODELS,
+  MACHINES,
+  MODELS,
+  DEFAULT_MACHINE,
+} from "../catalog.js";
 import { installVmTools, toolInstructions } from "./vm-tools.js";
 
 /** Optional execution context passed to harnesses that can run code. */
@@ -28,6 +35,13 @@ export interface HarnessContext {
   cliModel?: string;
   /** Subscription token for CLIs that accept one instead of a provider key. */
   oauthToken?: string;
+  /** The provider this agent's model belongs to, and the env var its key is
+   *  conventionally read from. CLIs with their own model catalog (pi) want
+   *  both by name rather than a base URL. */
+  cliProvider?: string;
+  cliKeyVar?: string;
+  /** False when this agent's model is not served by the OAuth token's vendor. */
+  cliOauthOk?: boolean;
 }
 
 export interface Harness {
@@ -59,6 +73,9 @@ export class AgentCliHarness implements Harness {
       path: string;
       build: (baseUrl: string, key: string, model: string) => string;
     },
+    /** This CLI knows the provider already and reads its key from that
+     *  provider's own env var, so pass the key under that name. */
+    private providerKeyVar?: boolean,
   ) {}
 
   async run(
@@ -74,7 +91,10 @@ export class AgentCliHarness implements Harness {
     const { cliKey, cliBaseUrl, cliModel, oauthToken } = ctx ?? {};
     // An OAuth token authenticates against the CLI's own vendor, so it wins:
     // the agent's provider may not speak that CLI's API format at all.
-    const useOauth = !!(this.oauthVar && oauthToken);
+    // The token authenticates against its own vendor, so it only applies to a
+    // model that vendor serves. Handing an Anthropic subscription to a Moonshot
+    // model would authenticate successfully against the wrong API.
+    const useOauth = !!(this.oauthVar && oauthToken && ctx?.cliOauthOk !== false);
     if (!useOauth && !cliKey) {
       throw new Error(
         `${this.name} has no credentials — set its OAuth token, or a key for this agent's model`,
@@ -135,16 +155,23 @@ export class AgentCliHarness implements Harness {
     //
     // Keys go in the command's environment, never the prompt: a prompt is echoed
     // back in the CLI's own logs.
+    const { cliKeyVar } = ctx ?? {};
     const envs = (
       useOauth
-        ? [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
-        : [
-            this.env.key ? `${this.env.key}=${shellQuote(cliKey as string)}` : "",
-            this.env.baseUrl && cliBaseUrl
-              ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}`
-              : "",
-            this.env.model && cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
-          ]
+        ? // Only the credential changes on this path — a CLI that resolves its
+          // endpoint from a provider name still needs that name passed to it.
+          [`${this.oauthVar}=${shellQuote(oauthToken as string)}`]
+        : this.providerKeyVar
+          ? // The CLI resolves the endpoint itself from the provider name, so
+            // the key is all it needs — under the name that provider uses.
+            [cliKeyVar ? `${cliKeyVar}=${shellQuote(cliKey as string)}` : ""]
+          : [
+              this.env.key ? `${this.env.key}=${shellQuote(cliKey as string)}` : "",
+              this.env.baseUrl && cliBaseUrl
+                ? `${this.env.baseUrl}=${shellQuote(cliBaseUrl)}`
+                : "",
+              this.env.model && cliModel ? `${this.env.model}=${shellQuote(cliModel)}` : "",
+            ]
     )
       .filter(Boolean)
       .join(" ");
@@ -157,7 +184,13 @@ export class AgentCliHarness implements Harness {
     // otherwise block forever on a terminal the container does not have.
     const inner =
       `HOME=/home/agent ${envs} ` +
-      this.template.replace("{task}", shellQuote(task)).replace("{model}", shellQuote(cliModel ?? "")) +
+      this.template
+        .replace("{task}", shellQuote(task))
+        .replace("{model}", shellQuote(cliModel ?? ""))
+        .replace("{provider}", shellQuote(ctx?.cliProvider ?? ""))
+        // A config *value* rather than an env var: codex takes the endpoint on
+        // the command line, so the base URL is substituted into the template.
+        .replace("{baseUrlValue}", shellQuote(cliBaseUrl ?? "")) +
       " </dev/null 2>&1";
     // Claude Code refuses to skip permission prompts while running as root.
     // The VM is already an isolated sandbox, so drop to an unprivileged user
@@ -208,8 +241,14 @@ function buildPrompt(history: Message[], maxChars = 24_000): string | null {
   if (latest === null) return null;
 
   // Everything before the message being answered.
+  //
+  // System messages are included when they are handoff notes: the whole point
+  // of a handoff is that the next model picks up where the last left off, and
+  // it cannot do that if the one line explaining the switch is the one line
+  // filtered out of its prompt.
   const prior = history.slice(0, history.length - 1).filter(
-    (m) => m.role === "user" || m.role === "assistant",
+    (m) =>
+      m.role === "user" || m.role === "assistant" || (m.role === "system" && m.channel === "handoff"),
   );
   if (!prior.length) return latest;
 
@@ -217,7 +256,10 @@ function buildPrompt(history: Message[], maxChars = 24_000): string | null {
   let used = 0;
   for (let i = prior.length - 1; i >= 0; i--) {
     const m = prior[i];
-    const line = `${m.role === "user" ? "User" : "You"}: ${m.content}`;
+    const line =
+      m.role === "system"
+        ? `[${m.content}]`
+        : `${m.role === "user" ? "User" : "You"}: ${m.content}`;
     if (used + line.length > maxChars) break;
     lines.unshift(line);
     used += line.length;
@@ -260,6 +302,9 @@ const CLI_HARNESSES: Record<
       path: string;
       build: (baseUrl: string, key: string, model: string) => string;
     };
+    /** Set when the CLI has its own model catalog and wants the provider key
+     *  under that provider's conventional env var. */
+    providerKeyVar?: boolean;
   }
 > = {
   "claude-code": {
@@ -274,6 +319,71 @@ const CLI_HARNESSES: Record<
     // authenticates against Anthropic directly, so no base URL is passed.
     oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
   },
+
+  // pi ships its own model catalog — `pi --list-models` already lists
+  // `moonshot/kimi-k3` — and reads each provider's key straight from the
+  // environment under that provider's own name. So it needs no base URL and no
+  // config file: naming the provider and model is enough.
+  //
+  // An earlier version of this harness wrote ~/.pi/agent/models.json to define
+  // a custom provider, which is why `configFile` exists on this type. That is
+  // no longer necessary for a provider pi already knows.
+  //
+  // --no-session because the container's filesystem is discarded when it
+  // sleeps, so a session written there is never read again.
+  //
+  // PI_OFFLINE=1 was set here on the theory that pi's startup catalog fetch
+  // was what hung inside a container. It was not: pi runs in the container,
+  // and the fetch costs about a second. What the flag did cost was accuracy —
+  // offline, pi falls back to a stale built-in catalog and warns that
+  // claude-opus-4-8 is "not found for provider anthropic" before using it
+  // anyway. Better to let it read the real list.
+  pi: {
+    template: "pi --provider {provider} --model {model} --no-session -p {task}",
+    env: { key: "", baseUrl: "", model: "" },
+    providerKeyVar: true,
+    // pi reads ANTHROPIC_OAUTH_TOKEN, and the pi-anthropic-oauth extension in
+    // the image makes it authenticate the way Claude Code does — so the same
+    // subscription token bills against the subscription rather than API
+    // credit. Without that extension the token is accepted and then billed to
+    // the wrong meter, which surfaces as "You're out of extra usage" on an
+    // account that has a working subscription.
+    //
+    // Only meaningful for a Claude model; anything else takes the provider key
+    // path, which is why oauthVar alone does not decide.
+    oauthVar: "ANTHROPIC_OAUTH_TOKEN",
+  },
+
+  // `codex exec` is the non-interactive mode; bare `codex` opens a TUI that
+  // would block forever on a terminal the container does not have.
+  //
+  // Provider config goes through repeated `--config key=value` rather than a
+  // ~/.codex/config.toml, because `--config` sets any config key inline and a
+  // file would have to be rewritten every session — the VM's filesystem does
+  // not survive sleeping. The provider is defined and selected in one command.
+  //
+  // --skip-git-repo-check because /workspace is not a repository until an
+  // agent clones one, and codex otherwise refuses to run outside a checkout.
+  // --ephemeral keeps no session state, for the same reason pi gets
+  // --no-session: a session written here is never read again.
+  // -s danger-full-access because the container *is* the sandbox; codex's own
+  // sandbox inside it would block the edits the agent was asked to make.
+  codex: {
+    template:
+      "codex exec --ephemeral --skip-git-repo-check -s danger-full-access " +
+      "--model {model} " +
+      // Bare `key=value`. The double quotes t3code writes around its own
+      // --config values are stripped by the shell before codex sees them, so
+      // adding them here would only make this line inconsistent with itself.
+      "--config model_provider=agentinstance " +
+      "--config model_providers.agentinstance.name=agentinstance " +
+      "--config model_providers.agentinstance.base_url={baseUrlValue} " +
+      "--config model_providers.agentinstance.env_key=OPENAI_API_KEY " +
+      "--config model_providers.agentinstance.wire_api=chat " +
+      "-- {task}",
+    // codex reads the key from whatever env_key names above.
+    env: { key: "OPENAI_API_KEY", baseUrl: "", model: "" },
+  },
 };
 
 export function getHarness(name: string, offline = false): Harness {
@@ -283,7 +393,14 @@ export function getHarness(name: string, offline = false): Harness {
   // Gated on an explicit flag so this can never be reached in production.
   return offline
     ? new EchoHarness(name)
-    : new AgentCliHarness(name, cli.template, cli.env, cli.oauthVar, cli.configFile);
+    : new AgentCliHarness(
+        name,
+        cli.template,
+        cli.env,
+        cli.oauthVar,
+        cli.configFile,
+        cli.providerKeyVar,
+      );
 }
 
 /** Offline stand-in: replies from the model, skipping the CLI entirely. */
@@ -333,5 +450,15 @@ export function checkCompatible(spec: AgentSpec): void {
   if (!(spec.machine in MACHINES)) throw new IncompatibleSpec(`unknown machine '${spec.machine}'`);
   for (const cap of spec.capabilities) {
     if (!(cap in CAPABILITIES)) throw new IncompatibleSpec(`unknown capability '${cap}'`);
+  }
+  // Each field existing is not enough: the harness has to be able to drive the
+  // model. Claude Code speaks Anthropic's /v1/messages and pi speaks OpenAI's,
+  // so a valid harness beside a valid model can still be a pairing that fails
+  // at run time with an error pointing at neither.
+  const drivable = HARNESS_MODELS[spec.harness];
+  if (drivable && !drivable.includes(spec.model)) {
+    throw new IncompatibleSpec(
+      `${spec.harness} cannot run '${spec.model}' — it runs: ${drivable.join(", ")}`,
+    );
   }
 }

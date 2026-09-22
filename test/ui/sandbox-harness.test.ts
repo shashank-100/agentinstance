@@ -35,8 +35,8 @@ describe("agent CLI harnesses", () => {
       sandbox: fakeSandbox(capture),
       agentId: "a1",
       cliKey: "sk-test",
-      cliBaseUrl: "https://socheap.ai/v1",
-      cliModel: "gpt-5.6-terra",
+      cliBaseUrl: "https://api.moonshot.ai/v1",
+      cliModel: "claude-opus-4.8",
     });
     expect(out).toBe("done");
     expect(capture.cmd).toContain("claude");
@@ -46,8 +46,8 @@ describe("agent CLI harnesses", () => {
     // Nested inside runuser's quoting, so match the names and values loosely.
     expect(capture.cmd).toContain("ANTHROPIC_AUTH_TOKEN=");
     expect(capture.cmd).toContain("ANTHROPIC_BASE_URL=");
-    expect(capture.cmd).toContain("https://socheap.ai/v1");
-    expect(capture.cmd).toContain("gpt-5.6-terra");
+    expect(capture.cmd).toContain("https://api.moonshot.ai/v1");
+    expect(capture.cmd).toContain("claude-opus-4.8");
     // The CLI must not run as root — it refuses to skip permission prompts.
     expect(capture.cmd).toContain("runuser -u agent");
   });

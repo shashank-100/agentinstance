@@ -16,34 +16,38 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "socheap" | "moonshot";
+export type Provider = "moonshotai" | "anthropic";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
-  socheap: { baseUrl: "https://socheap.ai/v1", keyVar: "SOCHEAP_API_KEY" },
-  moonshot: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
+  // `moonshotai` is what pi's own catalog calls this provider. A bare
+  // `moonshot` exists too, but only on a machine with local pi config — in a
+  // clean container it does not, and naming it there fails with "Unknown
+  // provider". The harness passes this name straight to the CLI, so it has to
+  // be the portable one.
+  moonshotai: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
+  // Anthropic's own endpoint. Claude Code reaches it with a subscription token
+  // and no base URL; pi reaches it with this key, which is why a Claude model
+  // can be served either way depending on which harness is running.
+  anthropic: { baseUrl: "https://api.anthropic.com/v1", keyVar: "ANTHROPIC_API_KEY" },
 };
 
 // Only models a configured provider can actually serve.
-//
-// socheap is a reseller and publishes no rate card (its /v1/models returns no
-// pricing), so these are the upstream OpenAI list prices for the equivalent
-// tier — an estimate, surfaced as "Est. rate" in the UI, not a billed figure.
 export const MODELS: Record<string, ModelInfo> = {
-  "gpt-5.6-terra": { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", priceIn: 2.5, priceOut: 15, provider: "socheap" },
-  "gpt-5.6-sol": { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", priceIn: 5, priceOut: 30, provider: "socheap" },
-  "gpt-5.5": { id: "gpt-5.5", label: "GPT-5.5", priceIn: 2.5, priceOut: 15, provider: "socheap" },
-  "gpt-5.4": { id: "gpt-5.4", label: "GPT-5.4", priceIn: 2, priceOut: 12, provider: "socheap" },
-  "gpt-5.4-mini": { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", priceIn: 0.15, priceOut: 0.6, provider: "socheap" },
-  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshot" },
+  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshotai" },
 
   // Claude Code authenticates with a subscription OAuth token, so the model
   // comes from whatever that token grants rather than from a provider key.
   // There is no base URL and no per-token rate to quote here.
+  // Served two ways: claude-code authenticates with a subscription token and
+  // never consults the provider, while pi calls Anthropic directly with a key.
+  // `oauth` marks the first case — there is no per-token rate to quote for it.
   "claude-opus-4.8": {
     id: "claude-opus-4.8",
     label: "Claude Opus 4.8",
     priceIn: 0,
     priceOut: 0,
-    provider: "socheap",
+    provider: "anthropic",
+    // Anthropic spells it with hyphens.
+    upstreamId: "claude-opus-4-8",
     oauth: true,
   },
 };
@@ -52,25 +56,90 @@ export const MODELS: Record<string, ModelInfo> = {
  * Which models each harness can actually drive.
  *
  * Claude Code speaks Anthropic's /v1/messages, so it runs Claude and nothing
- * else. The OpenAI-compatible models below it are listed in no harness at all:
- * the two CLIs that could drive them (pi, opencode) both worked locally and
- * failed inside the VM, so they were removed rather than shipped broken. The
- * models stay in the catalog, rendered unselectable, so the provider wiring
- * survives for whichever harness replaces them.
+ * else. Kimi is listed in no harness at all: the two CLIs that could drive an
+ * OpenAI-compatible model (pi, opencode) both worked locally and failed inside
+ * the VM, so they were removed rather than shipped broken. It stays in the
+ * catalog, rendered unselectable, so the provider wiring survives for whichever
+ * harness replaces them.
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
+  // pi carries its own model catalog and speaks each provider's API directly,
+  // so it drives the OpenAI-compatible models Claude Code cannot reach.
+  // pi carries its own catalog covering both providers, so it is the one
+  // harness that runs everything here.
+  pi: ["kimi-k3", "claude-opus-4.8"],
 };
 
-/** `ready` marks what is actually implemented, so the builder can say so
- *  rather than presenting stubs and real code as equal choices. */
+/**
+ * `ready` marks what a given deployment can actually run, so the builder can
+ * say so rather than presenting stubs and real code as equal choices.
+ *
+ * It is computed per request from that deployment's secrets, never stored: a
+ * hardcoded flag describes whoever wrote it, and every other deployer sees a
+ * builder that is wrong about their own setup — offering what they cannot run
+ * and greying out what they can.
+ */
 export interface CatalogEntry { desc: string; ready: boolean }
 
-// A harness is the agent program that runs in the agent's VM. Each needs its
-// own API key set as a Worker secret; `ready` says whether that key is present.
-export const HARNESSES: Record<string, CatalogEntry> = {
-  "claude-code": { desc: "Anthropic's Claude Code CLI.", ready: false },
+/** A catalog entry before readiness is known: the parts that never change. */
+interface Described { desc: string; needs: (env: KeyEnv) => boolean }
+
+/** The subset of Env this file reads. Keeps the catalog free of the Worker's
+ *  binding types, which it has no other reason to know about. */
+export type KeyEnv = Record<string, unknown>;
+
+const has = (env: KeyEnv, key: string): boolean => {
+  const v = env[key];
+  return typeof v === "string" && v.trim() !== "";
 };
+
+/**
+ * Can this deployment serve any model this harness drives?
+ *
+ * Two credentials can do it. A provider key serves that provider's models, and
+ * a Claude subscription token serves the `oauth` ones — which is not only
+ * claude-code's business: pi reads the same token, so one subscription makes
+ * both harnesses usable.
+ */
+const driveable = (env: KeyEnv, harness: string): boolean =>
+  (HARNESS_MODELS[harness] ?? []).some((id) => {
+    const info = MODELS[id];
+    if (!info) return false;
+    if (info.oauth && has(env, "CLAUDE_CODE_OAUTH_TOKEN")) return true;
+    return has(env, PROVIDERS[info.provider].keyVar);
+  });
+
+// A harness is the agent program that runs in the agent's VM, and it can only
+// run on a model whose provider this deployment holds a key for.
+const HARNESS_DEFS: Record<string, Described> = {
+  "claude-code": {
+    desc: "Anthropic's Claude Code CLI.",
+    // A subscription token, or a key for a provider serving a model it drives.
+    needs: (env) => driveable(env, "claude-code"),
+  },
+  // codex is paused: it speaks OpenAI's wire format and so cannot use a Claude
+  // subscription, which leaves it needing a provider key nothing else here
+  // needs. The CLI_HARNESSES row and its Dockerfile package stay, so bringing
+  // it back is re-adding this entry and its HARNESS_MODELS line.
+  pi: {
+    desc: "The pi coding agent — runs Claude and the OpenAI-compatible models.",
+    // Ready when any provider serving a model pi drives has a key.
+    needs: (env) => driveable(env, "pi"),
+  },
+};
+
+/** Descriptions only — for code that needs the list without an env. */
+export const HARNESSES: Record<string, { desc: string }> = Object.fromEntries(
+  Object.entries(HARNESS_DEFS).map(([id, d]) => [id, { desc: d.desc }]),
+);
+
+/** What this deployment can actually run, given the secrets it has. */
+export function harnessCatalog(env: KeyEnv): Record<string, CatalogEntry> {
+  return Object.fromEntries(
+    Object.entries(HARNESS_DEFS).map(([id, d]) => [id, { desc: d.desc, ready: d.needs(env) }]),
+  );
+}
 
 /**
  * A machine tier maps to a Cloudflare container instance type, and each
@@ -111,16 +180,50 @@ export const MACHINES: Record<string, MachineTier> = {
 };
 export const DEFAULT_MACHINE = "half-cpu";
 
-// Every capability here is implemented and works with the configured keys.
-export const CAPABILITIES: Record<string, CatalogEntry> = {
-  scrape_web: { desc: "Fetch and extract page text.", ready: true },
-  search_web: { desc: "Web search via Tavily.", ready: true },
-  fetch_json: { desc: "Call any JSON HTTP API.", ready: true },
-  run_shell: { desc: "Run shell commands in the agent's VM.", ready: true },
-  browse_page: { desc: "Render a page in headless Chrome.", ready: true },
-  remember: { desc: "Save a durable note for later sessions.", ready: true },
-  recall: { desc: "Read notes saved in earlier sessions.", ready: true },
+// Every capability here is implemented; `ready` says whether this particular
+// deployment holds the key or binding it needs.
+const CAPABILITY_DEFS: Record<string, Described> = {
+  scrape_web: { desc: "Fetch and extract page text.", needs: () => true },
+  search_web: { desc: "Web search via Tavily.", needs: (env) => has(env, "TAVILY_API_KEY") },
+  fetch_json: { desc: "Call any JSON HTTP API.", needs: () => true },
+  run_shell: { desc: "Run shell commands in the agent's VM.", needs: () => true },
+  // A binding rather than a secret, so presence is the test, not emptiness.
+  browse_page: {
+    desc: "Render a page in headless Chrome.",
+    needs: (env) => env.BROWSER != null,
+  },
+  remember: { desc: "Save a durable note for later sessions.", needs: () => true },
+  recall: { desc: "Read notes saved in earlier sessions.", needs: () => true },
+  // Agent-to-agent. Needs nothing beyond the deployment itself: the message
+  // goes to another agent in this same Worker, over its own front door.
+  send_to_agent: { desc: "Message another agent and get its reply.", needs: () => true },
+  list_agents: { desc: "List the other agents on this deployment.", needs: () => true },
+  // The work queue, from inside the VM: claim a task, record a branch or a
+  // pull request against it, and settle it.
+  fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
+  // Git against a real remote. Without a token an agent can still clone a
+  // public repo but cannot push, so this is offered only when one is set.
+  git_repo: {
+    desc: "Clone, branch, commit and push a repository.",
+    needs: (env) => has(env, "GITHUB_TOKEN"),
+  },
+  open_pr: {
+    desc: "Open a pull request on GitHub.",
+    needs: (env) => has(env, "GITHUB_TOKEN"),
+  },
 };
+
+/** Descriptions only — for code that needs the list without an env. */
+export const CAPABILITIES: Record<string, { desc: string }> = Object.fromEntries(
+  Object.entries(CAPABILITY_DEFS).map(([id, d]) => [id, { desc: d.desc }]),
+);
+
+/** What this deployment can actually run, given the secrets it has. */
+export function capabilityCatalog(env: KeyEnv): Record<string, CatalogEntry> {
+  return Object.fromEntries(
+    Object.entries(CAPABILITY_DEFS).map(([id, d]) => [id, { desc: d.desc, ready: d.needs(env) }]),
+  );
+}
 
 /**
  * What the machine costs per hour while it is running.
