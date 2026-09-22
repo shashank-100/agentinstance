@@ -4,9 +4,9 @@ import { GitHubConnect } from "@/components/cockpit/GitHubConnect";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 
-const title = "Relay — agent runs, reviewed as pull requests";
+const title = "agentinstance — agent runs, reviewed as pull requests";
 const description =
-  "Relay dispatches coding agents into ephemeral cloud microVMs and returns their work as pull requests: diffs, sandbox checks, live terminal streams.";
+  "agentinstance dispatches coding agents into ephemeral cloud microVMs and returns their work as pull requests: diffs, sandbox checks, live terminal streams.";
 
 export const Route = createFileRoute("/")({
   head: () => ({

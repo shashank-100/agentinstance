@@ -350,7 +350,11 @@ export class FleetDO extends DurableObject<Env> {
       .toArray() as unknown as { state: TaskState; n: number }[];
     const out = { queued: 0, running: 0, settled: 0, failed: 0, total: 0 };
     for (const r of rows) {
-      out[r.state] = Number(r.n);
+      // `state` is whatever is in the column, and the type says nothing about
+      // what SQLite actually holds. An unrecognised value would otherwise add
+      // a key nobody reads while still counting toward the total, so the two
+      // would disagree with no way to see why.
+      if (r.state in out) out[r.state] = Number(r.n);
       out.total += Number(r.n);
     }
     return out;

@@ -5,12 +5,15 @@ import { cn } from "@/lib/utils";
 
 type Group = { label: string; statuses: TaskStatus[] };
 
+// The queue produces four states, and these cover all of them. An earlier
+// "Needs review" group led with `review`, which `toStatus` never emits — so
+// the group existed to hold a status nothing could have, and only ever showed
+// failures filed under a heading that misdescribed them.
 const groups: Group[] = [
-  { label: "Needs review", statuses: ["review", "failed"] },
+  { label: "Failed", statuses: ["failed"] },
   { label: "In progress", statuses: ["running", "provisioning", "queued"] },
-  { label: "Merged", statuses: ["merged"] },
+  { label: "Settled", statuses: ["merged"] },
 ];
-
 
 export function TaskRail() {
   const { tasks } = useTasks();
@@ -18,9 +21,7 @@ export function TaskRail() {
     <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-[280px] shrink-0 flex-col border-r border-border bg-surface md:flex lg:w-[320px]">
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <p className="rule-label">Sessions</p>
-        <span className="font-mono text-[10px] text-muted-foreground">
-          {tasks.length}
-        </span>
+        <span className="font-mono text-[10px] text-muted-foreground">{tasks.length}</span>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2.5 py-4">
@@ -85,15 +86,12 @@ function TaskRow({ task }: { task: Task }) {
       params={{ id: task.id }}
       className="block rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:bg-surface-2/70"
       activeProps={{
-        className:
-          "border-border-strong bg-background",
+        className: "border-border-strong bg-background",
       }}
     >
       <span className="flex items-center gap-2">
         <StatusDot status={task.status} />
-        <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-tight">
-          {task.title}
-        </span>
+        <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-tight">{task.title}</span>
       </span>
       {/* Who has it and when it last moved — the two things the queue knows.
           A diff stat and a harness label were shown here before, and the queue

@@ -31,6 +31,30 @@ const OUTPUT_CHAR_LIMIT = 256 * 1024;
  *  unbounded row that trimming can only remove wholesale. */
 const OUTPUT_CHUNK_MAX = 8 * 1024;
 
+/**
+ * The kv keys a snapshot may write back.
+ *
+ * What belongs in a backup is what the agent *is* — its standing instructions
+ * and its schedule — not what happened to be true of the run that produced
+ * the snapshot. Everything else is deliberately excluded:
+ *
+ * - `origin` decides where tools inside the VM call back to, and is re-learned
+ *   from the next request. Restoring it would point a recovered agent's tool
+ *   calls at whatever host took the snapshot.
+ * - `a2a_depth` bounds agent-to-agent fan-out for one turn.
+ * - `output_chars` counts a table that restore deletes, so carrying the old
+ *   figure across would leave the counter describing rows that are gone.
+ * - `last_progress` and `git_repo_last` describe a run that is over.
+ *
+ * `spec` is written separately and ahead of this, so it is not listed here.
+ */
+const RESTORABLE_KV = new Set([
+  "agents_md",
+  "wakeup_prompt",
+  "expected_cadence_ms",
+  "next_wake",
+]);
+
 export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
 
@@ -468,12 +492,20 @@ export class AgentInstance extends DurableObject<Env> {
     this.sql.exec("DELETE FROM kv");
     this.sql.exec("DELETE FROM notes");
     // Live output belongs to the run that produced it, not to the snapshot.
-    // Leaving it while kv is wiped desyncs the byte counter from the table —
+    // Leaving it while kv is wiped desyncs the stored length from the table —
     // the counter resets to zero, the rows stay, and nothing trims until a
     // fresh budget has been counted on top of what is already stored.
     this.sql.exec("DELETE FROM output");
     if (snap.spec) this.setKV("spec", snap.spec);
-    for (const [k, v] of Object.entries(snap.kv ?? {})) this.setKV(k, v);
+    // Only keys a snapshot legitimately carries. `kv` used to be written
+    // wholesale, which made restore a general write primitive over this
+    // agent's entire internal state — including `origin`, which decides where
+    // the VM's tools call back to, and `a2a_depth`, which bounds agent-to-
+    // agent fan-out. Neither belongs in a backup, and an unknown key is far
+    // more likely to be a mistake than something worth preserving.
+    for (const [k, v] of Object.entries(snap.kv ?? {})) {
+      if (RESTORABLE_KV.has(k)) this.setKV(k, v);
+    }
     for (const m of snap.history ?? []) this.record(m);
     for (const n of snap.notes ?? []) {
       this.sql.exec("INSERT INTO notes (key,value,ts) VALUES (?,?,?)", n.key, n.value, n.ts);
@@ -607,10 +639,18 @@ export class AgentInstance extends DurableObject<Env> {
       const memo = this.runMemoryTool(name, input);
       if (memo) return { result: memo };
 
-      const { getCapability } = await import("./capabilities/index.js");
-      const cap = getCapability(name);
-      if (!cap) return { error: `capability '${name}' has no implementation` };
-      return { result: (await cap.run(this.env, input)) as Record<string, unknown> };
+      // Through runCapability rather than looking the capability up here: the
+      // enabled-check and dispatch used to be written out twice, so the copy
+      // with tests around it was the copy nothing called.
+      const { runCapability } = await import("./capabilities/index.js");
+      return {
+        result: (await runCapability(
+          this.env,
+          this.spec.capabilities,
+          name,
+          input,
+        )) as Record<string, unknown>,
+      };
     } catch (e) {
       return { error: String(e) };
     }
@@ -792,9 +832,17 @@ export class AgentInstance extends DurableObject<Env> {
         // Re-cloning over an existing checkout is the normal case, not an
         // error: the filesystem is discarded when the container sleeps, so a
         // task resumed after an idle gap starts from nothing.
+        // The checkout is handed to the CLI's user, not left owned by root.
+        // `git_repo` runs as root; the harness runs the agent CLI as `agent`.
+        // Without this the agent can clone, branch and commit — and cannot
+        // edit a single file, because every path under the checkout is
+        // root-owned and `touch` fails with EACCES. It reads as "the CLI is
+        // broken" rather than "the clone was made by a different user".
         cmd =
           `${creds} && rm -rf ${dir} && ` +
           `git clone --depth 50 https://github.com/${repo}.git ${dir} && ` +
+          `(id -u agent >/dev/null 2>&1 || useradd -m agent) && ` +
+          `chown -R agent ${dir} && ` +
           `cd ${dir} && git log --oneline -1`;
         break;
       }
@@ -839,7 +887,16 @@ export class AgentInstance extends DurableObject<Env> {
       token = got.token!;
     }
 
-    const out = await sandbox.exec(this.ctx.id.toString(), `GH_TOKEN=${shellArg(token)} sh -c ${shellArg(cmd)}`);
+    // The token goes through the exec's own env, scoped to this one command,
+    // rather than into the command string. A `GH_TOKEN=<token> sh -c ...`
+    // assignment puts the credential in the process's argv, where anything
+    // else running in the container can read it out of the process list — the
+    // one place the rest of this function is careful to keep it out of.
+    const out = await sandbox.exec(
+      this.ctx.id.toString(),
+      cmd,
+      token ? { GH_TOKEN: token } : undefined,
+    );
     return {
       result: {
         stdout: out.stdout.slice(0, 8000),

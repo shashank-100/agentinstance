@@ -1,4 +1,4 @@
-# ⌇ agentinstance
+# agentinstance
 
 **Open-source, self-hostable always-on AI agents on Cloudflare.**
 
