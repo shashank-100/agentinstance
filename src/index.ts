@@ -6,6 +6,7 @@
 import { Sandbox as CloudflareSandbox } from "@cloudflare/sandbox";
 import type { AgentInstance } from "./agent-instance.js";
 import type { RegistryDO } from "./registry-do.js";
+import type { FleetDO, TaskState } from "./fleet-do.js";
 import type { Env } from "./types.js";
 import {
   handleChannel,
@@ -14,10 +15,11 @@ import {
   type ChannelAdapter,
 } from "./channels/index.js";
 import {
-  HARNESSES,
+  harnessCatalog,
+  capabilityCatalog,
+  type KeyEnv,
   MODELS,
   MACHINES,
-  CAPABILITIES,
   DEFAULT_MACHINE,
   HARNESS_MODELS,
   hourlyCost,
@@ -27,6 +29,7 @@ import { toText, type Part } from "./parts.js";
 
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
+export { FleetDO } from "./fleet-do.js";
 
 /**
  * The agent's container, one class per machine tier.
@@ -67,6 +70,7 @@ type AgentStub = Omit<DurableObjectStub<AgentInstance>, "runTool"> & {
   ): Promise<{ result?: unknown; error?: string }>;
 };
 type RegistryStub = DurableObjectStub<RegistryDO>;
+type FleetStub = DurableObjectStub<FleetDO>;
 
 const agentStub = (env: Env, id: string): AgentStub =>
   env.AGENT.get(env.AGENT.idFromName(id)) as AgentStub;
@@ -74,7 +78,31 @@ const agentStub = (env: Env, id: string): AgentStub =>
 const registry = (env: Env): RegistryStub =>
   env.REGISTRY.get(env.REGISTRY.idFromName("global")) as RegistryStub;
 
+const fleet = (env: Env): FleetStub =>
+  env.FLEET.get(env.FLEET.idFromName("global")) as FleetStub;
+
 const json = (body: unknown, status = 200) => Response.json(body, { status });
+
+/**
+ * Is this request allowed to change things?
+ *
+ * Unset FLEET_TOKEN means an open deployment — the default, so a fresh clone
+ * runs with no configuration. Once set, every mutating route requires it, and
+ * the agents' own VM tools carry it too.
+ *
+ * Reads are deliberately left open: the dashboard is static and fetches the
+ * agent list before it could prompt for anything, and a listing is not what
+ * costs money. Launching, deleting and sending are.
+ */
+const authorized = (request: Request, env: Env): boolean => {
+  if (!env.FLEET_TOKEN) return true;
+  const header = request.headers.get("authorization") ?? "";
+  const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
+  // Also accept the token on a query param: the VM tool scripts post from
+  // python with no easy way to add headers per call.
+  const param = new URL(request.url).searchParams.get("token") ?? "";
+  return bearer === env.FLEET_TOKEN || param === env.FLEET_TOKEN;
+};
 const bodyOf = <T>(request: Request) => request.json().catch(() => ({})) as Promise<T>;
 
 /** Like bodyOf, but tells the caller the body was unparseable rather than
@@ -91,7 +119,7 @@ const parsedBody = async <T>(request: Request): Promise<T | null> => {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     // Decode each segment: `url.pathname` keeps percent-encoding, so an agent
     // whose name needs escaping could never be addressed again — a DELETE would
@@ -114,10 +142,14 @@ export default {
     }
     if (first === "catalog") return catalogRoute(env);
     if (first === "api" && second === "launch" && request.method === "POST") {
+      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       return launchRoute(request, env);
     }
     if (first === "api" && second === "agents" && request.method === "GET") {
       return listAgentsRoute(env);
+    }
+    if (first === "api" && second === "fleet") {
+      return fleetRoute(request, env, third, fourth);
     }
     if (first === "channels" && second) return channelRoute(request, env, second);
 
@@ -126,8 +158,11 @@ export default {
       // it, DELETE /agents/:id/schedule would match here and destroy the agent
       // instead of clearing its standing task.
       const isAgentItself = third === undefined;
-      if (isAgentItself && request.method === "DELETE") return deleteAgentRoute(env, second);
-      return agentRoute(request, env, { id: second, action: third ?? "send", arg: fourth });
+      if (isAgentItself && request.method === "DELETE") {
+        if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+        return deleteAgentRoute(env, second);
+      }
+      return agentRoute(request, env, ctx, { id: second, action: third ?? "send", arg: fourth });
     }
 
     return env.ASSETS.fetch(request); // static assets
@@ -138,10 +173,12 @@ export default {
 function catalogRoute(env: Env): Response {
   const entries = (m: Record<string, { desc: string; ready: boolean }>) =>
     Object.entries(m).map(([id, v]) => ({ id, ...v }));
+  // Readiness is computed from this deployment's own secrets, so the builder
+  // describes what the person looking at it can actually run.
   return json({
-    harnesses: entries(HARNESSES),
+    harnesses: entries(harnessCatalog(env as unknown as KeyEnv)),
     models: Object.values(MODELS),
-    capabilities: entries(CAPABILITIES),
+    capabilities: entries(capabilityCatalog(env as unknown as KeyEnv)),
     machines: Object.entries(MACHINES).map(([id, m]) => ({ id, ...m })),
     defaultMachine: DEFAULT_MACHINE,
     // Which models each harness can actually drive, so the builder never
@@ -194,6 +231,76 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   return json({ id, spec, usdPerHour: hourlyCost(spec.machine) });
 }
 
+// --- the work queue ----------------------------------------------------------
+/**
+ * `/api/fleet/tasks` — file work and read it back.
+ *
+ * A task is not a message: it outlives the request that created it, which is
+ * the whole reason for running an agent somewhere that does not have to stay
+ * awake. Filing one does not run anything; an agent claims it when it is free.
+ */
+async function fleetRoute(
+  request: Request,
+  env: Env,
+  section: string | undefined,
+  id: string | undefined,
+): Promise<Response> {
+  const f = fleet(env);
+  const write = request.method !== "GET";
+  if (write && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+
+  if (section === "status") return json(await f.stats());
+
+  if (section !== "tasks") return json({ error: "unknown fleet route" }, 404);
+
+  // One task: read it, patch its branch/PR, or drop it.
+  if (id) {
+    if (request.method === "GET") {
+      const task = await f.get(id);
+      return task ? json(task) : json({ error: `no task '${id}'` }, 404);
+    }
+    if (request.method === "DELETE") {
+      const out = await f.remove(id);
+      return out.ok ? json(out) : json({ error: `no task '${id}'` }, 404);
+    }
+    const body = await bodyOf<{
+      branch?: string;
+      prUrl?: string;
+      repo?: string;
+      result?: string;
+      state?: TaskState;
+      assignedTo?: string;
+    }>(request);
+    // Ending a task is a state change, not a patch: settle and fail record why.
+    // Assigning is a state change too: it moves the task to `running` under a
+    // named agent, rather than waiting for one to claim it.
+    if (body.assignedTo) return finished(await f.assign(id, body.assignedTo), id);
+    if (body.state === "settled") return finished(await f.settle(id, body.result ?? ""), id);
+    if (body.state === "failed") return finished(await f.fail(id, body.result ?? ""), id);
+    if (body.state === "queued") return finished(await f.release(id), id);
+    return finished(await f.update(id, body), id);
+  }
+
+  if (request.method === "GET") {
+    const state = new URL(request.url).searchParams.get("state") as TaskState | null;
+    return json(await f.list(state ?? undefined));
+  }
+
+  // POST /api/fleet/tasks — file one, or claim the next.
+  const body = await bodyOf<{ goal?: string; repo?: string; createdBy?: string; claim?: string }>(
+    request,
+  );
+  if (body.claim) {
+    const task = await f.claim(body.claim);
+    return json(task ?? { task: null, reason: "nothing queued" });
+  }
+  if (!body.goal) return json({ error: "goal required" }, 400);
+  return json(await f.enqueue({ goal: body.goal, repo: body.repo, createdBy: body.createdBy }));
+}
+
+const finished = (task: unknown, id: string) =>
+  task ? json(task) : json({ error: `no task '${id}'` }, 404);
+
 // --- dashboard listing: registry records plus each agent's live status -------
 async function listAgentsRoute(env: Env): Promise<Response> {
   const records = await registry(env).list();
@@ -230,23 +337,35 @@ async function channelRoute(request: Request, env: Env, name: string): Promise<R
 async function agentRoute(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   route: { id: string; action: string; arg?: string },
 ): Promise<Response> {
   const agent = agentStub(env, route.id);
+  // Every deployment must call its own tools back, so the origin comes from
+  // the request rather than from a value compiled into the repo.
+  const origin = new URL(request.url).origin;
   // Actions that change something must not run on GET. A GET that boots a VM
   // and spends the model quota is triggered by anything that follows links —
   // a crawler, a prefetch, a chat client generating a preview.
-  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure"]);
+  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure", "handoff"]);
   if (WRITES.has(route.action) && request.method === "GET") {
     return json({ error: `${route.action} requires POST` }, 405);
   }
+  // Anything that changes state, boots a VM, or spends model quota needs the
+  // token when one is configured. `schedule` and `agents-md` are included on
+  // their mutating methods: a standing task is a recurring spend.
+  const mutating =
+    WRITES.has(route.action) ||
+    ((route.action === "schedule" || route.action === "agents-md") &&
+      request.method !== "GET");
+  if (mutating && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
   try {
     switch (route.action) {
       case "send": {
         // Accept either { text } or AgentSky-style { parts: [...] }.
         const body = await bodyOf<{ text?: string; parts?: Part[]; channel?: string }>(request);
         const text = body.parts ? toText(body.parts) : (body.text ?? "");
-        const out = await agent.send(text, body.channel);
+        const out = await agent.send(text, body.channel, origin);
         if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
         return json({ reply: out.reply });
       }
@@ -276,6 +395,25 @@ async function agentRoute(
           createdAt: Date.now(),
         });
         return json(spec);
+      }
+
+      // Move an agent onto a different harness or model, keeping its history:
+      // a subscription hits its limit, or a cheap model is not up to the job.
+      case "handoff": {
+        const body = await bodyOf<{ harness?: string; model?: string; reason?: string }>(request);
+        const out = await agent.handoff(body);
+        if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
+        const spec = out.spec!;
+        // The registry keeps its own copy for the dashboard, so a handoff that
+        // skipped it would leave the list naming the model the agent just left.
+        await registry(env).register({
+          id: route.id,
+          model: spec.model,
+          harness: spec.harness,
+          machine: spec.machine,
+          createdAt: Date.now(),
+        });
+        return json({ ok: true, from: out.from, spec });
       }
 
       case "restore": {
@@ -317,8 +455,33 @@ async function agentRoute(
 
       case "a2a": {
         // Agent-to-agent: `from` sends `text` to this agent.
-        const { from, text } = await bodyOf<{ from: string; text: string }>(request);
-        const out = await agent.send(`[from agent ${from}] ${text}`, "a2a");
+        //
+        // `depth` counts hops so a cycle between two agents cannot run forever;
+        // it rides with the message because each agent only ever sees its own
+        // turn and has nowhere local to keep a total.
+        const { from, text, depth, async: isAsync } = await bodyOf<{
+          from: string;
+          text: string;
+          depth?: number;
+          async?: boolean;
+        }>(request);
+        const message = `[from agent ${from}] ${text}`;
+
+        // Fanning out to several agents in turn would otherwise block the
+        // sender for the sum of all their replies. An async send is accepted
+        // and acknowledged; the work continues after the response is returned.
+        if (isAsync) {
+          if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
+          ctx.waitUntil(
+            agent.send(message, "a2a", origin, depth).then(
+              () => {},
+              (e: unknown) => console.log(`a2a to ${route.id} failed: ${e}`),
+            ),
+          );
+          return json({ from, to: route.id, accepted: true });
+        }
+
+        const out = await agent.send(message, "a2a", origin, depth);
         if (out.missing) return json({ error: `no agent '${route.id}'` }, 404);
         return json({ from, to: route.id, reply: out.reply });
       }

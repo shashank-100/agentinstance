@@ -24,11 +24,15 @@ export interface ChannelAdapter {
   send(env: Env, to: string, text: string, idempotencyKey: string): Promise<void>;
 }
 
-async function agentReply(env: Env, msg: Inbound): Promise<{ reply: string; missing?: boolean }> {
+async function agentReply(
+  env: Env,
+  msg: Inbound,
+  origin: string,
+): Promise<{ reply: string; missing?: boolean }> {
   const stub = env.AGENT.get(env.AGENT.idFromName(msg.agentId)) as unknown as {
-    send(t: string, c?: string): Promise<{ reply?: string; missing?: boolean }>;
+    send(t: string, c?: string, origin?: string): Promise<{ reply?: string; missing?: boolean }>;
   };
-  const res = await stub.send(msg.text, msg.channel);
+  const res = await stub.send(msg.text, msg.channel, origin);
   return { reply: res.reply ?? "", missing: res.missing };
 }
 
@@ -40,7 +44,7 @@ export async function handleChannel(
 ): Promise<Response> {
   const inbound = await adapter.parse(request);
   if (!inbound) return new Response("ignored", { status: 200 });
-  const out = await agentReply(env, inbound);
+  const out = await agentReply(env, inbound, new URL(request.url).origin);
   // A webhook naming an agent that was never launched used to answer
   // { ok: true, reply: "" } — success, with the reason hidden.
   //

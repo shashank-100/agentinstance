@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>agentinstance — board</title>
+<style>
+  /* Same tokens as the agent list, so the two pages are one product. */
+  :root{--ink:#18181b;--ink-2:#fafafa;--panel:#f4f4f5;--line:#e8e8e8;--ember:#2563eb;
+    --ember-soft:#1d4ed8;--sky:#2563eb;--paper:#ffffff;--muted:#71717a;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+    --serif:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;}
+  .wrap{max-width:1280px;margin:0 auto;padding:28px}
+  nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .brand{display:flex;gap:10px;font-weight:700}.brand .glyph{color:var(--ember)}
+  nav a{color:var(--muted);text-decoration:none;font-size:.85rem;margin-left:20px}
+  nav a:hover{color:var(--ink)} nav a.on{color:var(--ink);font-weight:600}
+  h1{font-family:var(--serif);font-weight:400;font-size:2rem;margin:24px 0 4px}
+  .sub{color:var(--muted);margin-bottom:22px;font-size:.9rem}
+
+  /* Filing a task is the point of the page, so the composer is the first
+     thing under the heading rather than behind a button. */
+  .compose{display:flex;gap:9px;margin-bottom:30px}
+  .compose input{flex:1;border:1px solid var(--line);border-radius:9px;
+    padding:11px 14px;font-size:.9rem;font-family:inherit;color:var(--ink)}
+  .compose input:focus{outline:none;border-color:var(--ember)}
+  .compose input.repo{flex:0 0 200px;font-family:var(--mono);font-size:.82rem}
+  .btn{background:var(--ember);color:#fff;border:none;padding:11px 18px;
+    border-radius:9px;font-weight:600;font-size:.85rem;cursor:pointer;font-family:inherit}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* Four columns, one per state. They scroll independently: a long settled
+     column should not push the working column off the screen. */
+  .board{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start}
+  @media (max-width:1000px){.board{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:620px){.board{grid-template-columns:1fr}}
+  .col{background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:12px;
+    min-height:120px;max-height:70vh;overflow-y:auto}
+  .col h2{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;margin-bottom:10px;display:flex;
+    justify-content:space-between;align-items:center;position:sticky;top:0;
+    background:var(--ink-2);padding-bottom:6px}
+  .col h2 .n{font-family:var(--mono);font-size:.7rem;
+    background:var(--line);color:var(--muted);border-radius:999px;padding:1px 7px}
+
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:10px;
+    padding:12px;margin-bottom:9px}
+  .card:last-child{margin-bottom:0}
+  .card .goal{font-size:.86rem;line-height:1.45;margin-bottom:9px;word-break:break-word}
+  .meta{display:flex;flex-wrap:wrap;gap:7px;align-items:center;
+    font-size:.72rem;color:var(--muted);font-family:var(--mono)}
+  .meta .who{color:var(--ember-soft)}
+  .meta .branch::before{content:"⑂ "}
+  .card a.pr{color:var(--sky);text-decoration:none}.card a.pr:hover{text-decoration:underline}
+  .result{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);
+    font-size:.78rem;color:var(--muted);line-height:1.45;word-break:break-word}
+  .card .drop{float:right;color:var(--muted);cursor:pointer;font-size:.9rem;
+    line-height:1;margin:-2px 0 0 6px}
+  .card .drop:hover{color:#dc2626}
+
+  /* The queued column carries the only action a person takes here: hand a
+     task to an agent. Hidden until there is an agent to hand it to. */
+  .assign{margin-top:9px;display:flex;gap:6px}
+  .assign select{flex:1;border:1px solid var(--line);border-radius:7px;
+    padding:5px 7px;font-size:.75rem;font-family:var(--mono);color:var(--ink);background:var(--paper)}
+  .assign button{border:1px solid var(--ember);background:var(--paper);color:var(--ember);
+    border-radius:7px;padding:5px 10px;font-size:.75rem;cursor:pointer;font-weight:600;font-family:inherit}
+  .assign button:hover{background:var(--ember);color:#fff}
+  .assign button:disabled{opacity:.4;cursor:default}
+
+  .empty{color:var(--muted);font-size:.8rem;text-align:center;padding:18px 0}
+  .note{color:var(--muted);font-size:.82rem;text-align:center;padding:50px 20px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="brand"><span class="glyph">⌇</span> agentinstance</div>
+    <div>
+      <a href="/agents/">My Agents</a>
+      <a class="on" href="/agents/board.html">Board</a>
+      <a href="/agents/new.html">New Agent</a>
+    </div>
+  </nav>
+
+  <h1>Board</h1>
+  <p class="sub">Work you have handed to an agent. A task outlives the request that filed it — nothing has to stay open for it to finish.</p>
+
+  <form class="compose" id="compose">
+    <input id="goal" placeholder="What should an agent do?" autocomplete="off" />
+    <input id="repo" class="repo" placeholder="owner/repo (optional)" autocomplete="off" />
+    <button class="btn" type="submit">File task</button>
+  </form>
+
+  <div class="board" id="board">
+    <div class="col" data-state="queued"><h2>Queued <span class="n">0</span></h2><div class="body"></div></div>
+    <div class="col" data-state="running"><h2>Working <span class="n">0</span></h2><div class="body"></div></div>
+    <div class="col" data-state="settled"><h2>Settled <span class="n">0</span></h2><div class="body"></div></div>
+    <div class="col" data-state="failed"><h2>Failed <span class="n">0</span></h2><div class="body"></div></div>
+  </div>
+  <div class="note" id="note" style="display:none"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+/** Task text is whatever was filed, and agent names are chosen at launch —
+ *  both reach innerHTML, so both are escaped. */
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/** Agents that could take a task, for the assign dropdown. */
+let agents = [];
+
+async function loadAgents() {
+  try { agents = await (await fetch("/api/agents")).json(); } catch { agents = []; }
+  if (!Array.isArray(agents)) agents = [];
+}
+
+async function load() {
+  let tasks = [];
+  try { tasks = await (await fetch("/api/fleet/tasks")).json(); } catch {}
+  if (!Array.isArray(tasks)) tasks = [];
+
+  for (const col of document.querySelectorAll(".col")) {
+    const state = col.dataset.state;
+    const mine = tasks.filter((t) => t.state === state);
+    col.querySelector(".n").textContent = mine.length;
+    const body = col.querySelector(".body");
+    body.innerHTML = mine.length
+      ? ""
+      : `<div class="empty">${state === "queued" ? "nothing waiting" : "—"}</div>`;
+    for (const t of mine) body.appendChild(card(t));
+  }
+
+  // An empty board explains itself rather than showing four blank columns.
+  $("note").style.display = tasks.length ? "none" : "block";
+  $("note").innerHTML = tasks.length
+    ? ""
+    : "No tasks yet. File one above, then assign it to an agent —<br>or let an agent claim it itself with <code>fleet_task</code>.";
+}
+
+function card(t) {
+  const el = document.createElement("div");
+  el.className = "card";
+
+  const bits = [];
+  if (t.assignedTo) bits.push(`<span class="who">${esc(t.assignedTo)}</span>`);
+  if (t.repo) bits.push(`<span>${esc(t.repo)}</span>`);
+  if (t.branch) bits.push(`<span class="branch">${esc(t.branch)}</span>`);
+  if (t.prUrl) bits.push(`<a class="pr" href="${esc(t.prUrl)}" target="_blank" rel="noopener">pull request</a>`);
+  bits.push(`<span>${age(t.updatedAt)}</span>`);
+
+  el.innerHTML =
+    `<span class="drop" data-drop="${esc(t.id)}" title="Delete task">×</span>` +
+    `<div class="goal">${esc(t.goal)}</div>` +
+    `<div class="meta">${bits.join("")}</div>` +
+    (t.result ? `<div class="result">${esc(t.result)}</div>` : "");
+
+  // Only a queued task has an action worth offering: give it to an agent.
+  if (t.state === "queued" && agents.length) {
+    const row = document.createElement("div");
+    row.className = "assign";
+    row.innerHTML =
+      `<select>${agents.map((a) => `<option>${esc(a.id)}</option>`).join("")}</select>` +
+      `<button>Assign</button>`;
+    const [select, button] = [row.querySelector("select"), row.querySelector("button")];
+    button.onclick = () => assign(t, select.value, button);
+    el.appendChild(row);
+  }
+
+  el.querySelector("[data-drop]").onclick = async () => {
+    if (!confirm("Delete this task?")) return;
+    await fetch(`/api/fleet/tasks/${encodeURIComponent(t.id)}`, { method: "DELETE" });
+    load();
+  };
+  return el;
+}
+
+/**
+ * Hand a task to an agent.
+ *
+ * The send is async: a task can take minutes, and the board should not hang on
+ * one agent's container booting. The agent reports back by settling the task,
+ * so the column it sits in is the status — nothing here polls for a reply.
+ */
+async function assign(task, agentId, button) {
+  button.disabled = true;
+  button.textContent = "sending…";
+  try {
+    await fetch(`/api/fleet/tasks/${encodeURIComponent(task.id)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ state: "running", assignedTo: agentId }),
+    });
+    const brief =
+      `You have been given this task: ${task.goal}` +
+      (task.repo ? `\n\nRepository: ${task.repo}` : "") +
+      `\n\nWhen you are done, run: fleet_task settle ${task.id} <a one-line summary>` +
+      `\nIf you cannot do it: fleet_task fail ${task.id} <why>`;
+    await fetch(`/agents/${encodeURIComponent(agentId)}/a2a`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from: "board", text: brief, async: true }),
+    });
+  } finally {
+    load();
+  }
+}
+
+/** Compact relative time — a board is scanned, not read. */
+function age(ms) {
+  const s = Math.max(0, (Date.now() - Number(ms)) / 1000);
+  if (s < 60) return `${Math.floor(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+$("compose").onsubmit = async (e) => {
+  e.preventDefault();
+  const goal = $("goal").value.trim();
+  if (!goal) return;
+  const repo = $("repo").value.trim();
+  await fetch("/api/fleet/tasks", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ goal, repo: repo || undefined, createdBy: "you" }),
+  });
+  $("goal").value = "";
+  load();
+};
+
+async function refresh() { await loadAgents(); await load(); }
+refresh();
+
+// A running task changes state without anyone touching this page, so poll
+// while it is being watched — and stop when it is not, since an unwatched
+// board is a request every few seconds for nobody.
+let timer = setInterval(refresh, 5000);
+document.addEventListener("visibilitychange", () => {
+  clearInterval(timer);
+  if (!document.hidden) { refresh(); timer = setInterval(refresh, 5000); }
+});
+</script>
+</body>
+</html>

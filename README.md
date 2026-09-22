@@ -14,8 +14,13 @@ Agents need a model key before they can reply — add one as a secret after the
 first deploy:
 
 ```sh
-wrangler secret put SOCHEAP_API_KEY
+wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # a Claude subscription, for claude-code
+# or
+wrangler secret put MOONSHOT_API_KEY          # for the pi harness
 ```
+
+Set `FLEET_TOKEN` too on anything reachable from the internet — without it,
+anyone with the URL can launch agents and spend those keys.
 
 See [DEPLOY.md](./DEPLOY.md).
 
@@ -27,22 +32,42 @@ It sleeps when idle and you pay nothing while it does.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note:** a model key is required. Without `SOCHEAP_API_KEY` set, `send`
+> **Note:** a model key is required. Set either `CLAUDE_CODE_OAUTH_TOKEN` (a
+> Claude subscription) or `MOONSHOT_API_KEY` (for pi). Without one, `send`
 > returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 
 ## Try it
 
 - **Your agents dashboard:** `/agents/` (`/` redirects here)
+- **Task board:** `/agents/board.html`
 - **Agent builder (one click):** `/agents/new.html`
 - **Web chat:** `/chat?id=<agent>`
 
 ## Features
 
-- **A real agent CLI, not a chat loop** — every agent runs Claude Code inside
-  its own micro-VM, with its own shell, filesystem, and editing tools.
+- **A real agent CLI, not a chat loop** — every agent runs a coding CLI inside
+  its own micro-VM, with its own shell, filesystem, and editing tools. Two
+  harnesses today: **Claude Code** (on a Claude subscription token) and **pi**
+  (on any provider it has a key for, so agents can run cheaper models).
+- **Agents that talk to each other** — `send_to_agent` and `list_agents` are
+  capabilities like any other, so a supervisor delegating to workers, two
+  agents reviewing each other, or a pipeline are all the same primitive. See
+  [docs/topologies.md](./docs/topologies.md).
 - **Capabilities the CLI can actually reach** — `search_web`, `browse_page`,
   `remember` and `recall` are installed into the VM as commands that call back
   into the Worker, so the agent uses them like any other program.
+- **Tasks, not just messages** — hand an agent a goal and close the tab. A task
+  carries a branch, a pull request and a terminal *settled* state, and outlives
+  the request that filed it. Nothing has to stay running for it to finish,
+  which is the whole reason for an agent that lives in a Durable Object rather
+  than on your laptop.
+- **Real git** — an agent clones, branches, commits, pushes and opens a pull
+  request from inside its own VM. The GitHub token reaches `git` through a
+  credential helper, so it is never written to `.git/config` or a remote URL.
+- **Model handoff** — hit a rate limit, or find a cheap model is not up to the
+  job, and move the agent to another harness or model mid-conversation. History
+  lives in the agent's SQLite, so the next model starts knowing what the last
+  one did.
 - **Persistent memory** — history and notes in Durable Object SQLite. The VM's
   filesystem is discarded between sessions; what the agent chose to `remember`
   is not.
@@ -62,10 +87,10 @@ npm run dev       # local dev server
 npm run deploy    # deploy to your Cloudflare account
 ```
 
-Set the model key (required — agents cannot reply without it):
+Set a model key (required — agents cannot reply without it):
 
 ```bash
-npx wrangler secret put SOCHEAP_API_KEY
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # or MOONSHOT_API_KEY
 ```
 
 ## API
@@ -80,6 +105,18 @@ POST /agents/:id/restore     { spec, history, kv }
 POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }
 POST /agents/:id/wake
 POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capabilities)
+POST /agents/:id/a2a         { from, text, async? }  -> { reply } or { accepted }
+POST /agents/:id/handoff     { harness?, model?, reason? } -> { from, spec }
+
+# the work queue
+POST /api/fleet/tasks        { goal, repo?, createdBy? }   -> a task
+POST /api/fleet/tasks        { claim: "<agent>" }          -> the next queued task
+GET  /api/fleet/tasks        ?state=queued|running|settled|failed
+POST /api/fleet/tasks/:id    { assignedTo } | { branch } | { prUrl }
+                             | { state: "settled"|"failed"|"queued", result? }
+GET  /api/fleet/tasks/:id
+DELETE /api/fleet/tasks/:id
+GET  /api/fleet/status       -> counts per state
 
 # channel webhooks
 POST /channels/telegram/:id
@@ -119,11 +156,26 @@ API does.
 Deleting an agent stops its container immediately rather than leaving it to
 time out. See `Dockerfile` for the image.
 
+## Multi-agent
+
+Agents reach each other with `send_to_agent` and `list_agents`, enabled per
+agent like any other capability. There is no supervisor type and no worker
+type — a supervisor is an agent whose instructions tell it to delegate, which
+is why peer review and pipelines cost nothing extra. `from` is stamped by the
+Worker from the sending agent's own spec, so an agent cannot claim to be
+another one, and hops are capped so two agents cannot message each other
+forever.
+
+See [docs/topologies.md](./docs/topologies.md) for three worked examples.
+
 ## Roadmap
 
-An OpenAI-compatible harness: pi and opencode both worked locally and failed
-inside the VM, so the GPT models are in the catalog but unselectable until one
-of them (or a replacement) runs there.
+**More harnesses.** A `codex` row exists in `CLI_HARNESSES` but is not offered
+in the catalog: it speaks OpenAI's wire format, so it cannot use a Claude
+subscription, leaving it the one harness needing a key nothing else here needs.
+Re-enabling it is two catalog lines. OpenCode is one more row, once its
+contract is confirmed — note it ships `bin/opencode.exe`, so check that
+resolves on Linux first.
 
 ## License
 

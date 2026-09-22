@@ -21,5 +21,10 @@
   },
   "dependencies": {
     "@cloudflare/sandbox": "^0.12.9"
+  },
+  "allowScripts": {
+    "workerd@1.20260815.1": true,
+    "workerd@1.20260820.1": true,
+    "esbuild@0.28.1": true
   }
 }

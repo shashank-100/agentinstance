@@ -64,9 +64,46 @@ describe("capabilities", () => {
   it("every catalog capability has an implementation", async () => {
     const { CAPABILITIES } = await import("../src/catalog");
     const { getCapability } = await import("../src/capabilities/index");
+    // Some capabilities cannot be ordinary Capability objects, which receive
+    // only `env`. These need the agent itself — its SQLite, its sandbox, or
+    // its own name — so they live in AgentInstance.runTool and are absent from
+    // this registry by design.
+    const onTheAgent = new Set([
+      "run_shell", // needs the agent's sandbox
+      "remember", // needs the agent's SQLite
+      "recall",
+      "send_to_agent", // needs the agent's name, so `from` cannot be forged
+      "list_agents",
+      "fleet_task",
+      "git_repo",
+      "open_pr",
+    ]);
     for (const name of Object.keys(CAPABILITIES)) {
+      if (onTheAgent.has(name)) continue;
       expect(getCapability(name), name).not.toBeNull();
     }
+  });
+
+  it("capabilities implemented on the agent are reachable through runTool", async () => {
+    // The counterpart to the exemption above: those capabilities are absent
+    // from the registry but must still answer, or the exemption would hide a
+    // capability that is advertised and does nothing.
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({
+        id: "ontheagent",
+        harness: "claude-code",
+        model: "claude-opus-4.8",
+        capabilities: ["remember", "recall", "list_agents"],
+      }),
+    });
+    const res = await SELF.fetch("https://x/agents/ontheagent/tool/list_agents", {
+      method: "POST",
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { result?: { agents?: unknown[] } };
+    expect(Array.isArray(body.result?.agents)).toBe(true);
   });
 
   it("remember and recall persist notes across calls", async () => {
@@ -75,7 +112,7 @@ describe("capabilities", () => {
       body: JSON.stringify({
         id: "memo",
         harness: "claude-code",
-        model: "gpt-5.6-terra",
+        model: "claude-opus-4.8",
         capabilities: ["remember", "recall"],
       }),
     });
@@ -106,7 +143,7 @@ describe("capabilities", () => {
   it("AGENTS.md is stored on the agent and survives a VM restart", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "md1", harness: "claude-code", model: "gpt-5.6-terra" }),
+      body: JSON.stringify({ id: "md1", harness: "claude-code", model: "claude-opus-4.8" }),
     });
 
     await SELF.fetch("https://x/agents/md1/agents-md", {
