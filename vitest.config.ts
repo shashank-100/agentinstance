@@ -14,5 +14,10 @@ export default defineConfig({
   test: {
     // The UI suite runs in node via vitest.ui.config.ts; keep it out of here.
     exclude: ["test/ui/**", "node_modules/**"],
+    // singleWorker means every file shares one worker, so parallel file
+    // runners deadlock competing to start it: the suite hangs until the
+    // pool times out and reports "no tests" with a zero exit code. Serial
+    // is also simply faster here — the whole suite is ~12s.
+    fileParallelism: false,
   },
 });
