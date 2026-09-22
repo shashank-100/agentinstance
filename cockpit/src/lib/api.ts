@@ -161,6 +161,26 @@ export async function fetchAgentHistory(
   }
 }
 
+/**
+ * What the CLI printed, as it printed it.
+ *
+ * The transcript records what the agent decided; this is what it was doing
+ * while deciding, and it is the only view of a run still in progress. `since`
+ * returns just the new rows, so following a run does not re-read it.
+ */
+export async function fetchAgentOutput(
+  agentId: string,
+  since = 0,
+): Promise<{ seq: number; text: string; ts: number }[]> {
+  try {
+    return await get<{ seq: number; text: string; ts: number }[]>(
+      `/agents/${encodeURIComponent(agentId)}/output?since=${since}`,
+    );
+  } catch {
+    return [];
+  }
+}
+
 /** Counts per state, for the overview. */
 export async function fetchStatus(): Promise<Record<string, number>> {
   return get<Record<string, number>>("/api/fleet/status");

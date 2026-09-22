@@ -216,10 +216,19 @@ export async function tokenForRepo(
   };
 }
 
-/** True when either credential is configured — what the catalog gates on. */
+/**
+ * True when either credential is configured — what the catalog gates on.
+ *
+ * Takes an open record so the catalog can pass its own `KeyEnv` without a
+ * cast. A blank string counts as absent: an unset `wrangler secret` and one
+ * set to "" are the same thing to every caller, and treating the second as
+ * configured offers a capability that fails on first use.
+ */
 export const hasGitHubCredentials = (env: {
-  GITHUB_APP_ID?: string;
-  GITHUB_APP_PRIVATE_KEY?: string;
-  GITHUB_TOKEN?: string;
-}): boolean =>
-  Boolean((env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) || env.GITHUB_TOKEN);
+  GITHUB_APP_ID?: unknown;
+  GITHUB_APP_PRIVATE_KEY?: unknown;
+  GITHUB_TOKEN?: unknown;
+}): boolean => {
+  const set = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
+  return (set(env.GITHUB_APP_ID) && set(env.GITHUB_APP_PRIVATE_KEY)) || set(env.GITHUB_TOKEN);
+};

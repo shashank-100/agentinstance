@@ -372,7 +372,11 @@ async function fleetRoute(
   id: string | undefined,
 ): Promise<Response> {
   const f = fleet(env);
-  const write = request.method !== "GET";
+  // `sweep` changes state whatever the method: it requeues abandoned tasks and,
+  // at the attempt limit, fails them permanently. Reads are deliberately open
+  // here, so the method alone cannot decide — a GET to sweep would otherwise
+  // let anyone strip a running agent's claim without a token.
+  const write = request.method !== "GET" || section === "sweep";
   if (write && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
 
   if (section === "status") return json(await f.stats());

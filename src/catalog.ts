@@ -1,5 +1,6 @@
 // Catalog of models, harnesses, machine tiers, capabilities.
 // Prices are USD per 1M tokens (input / output).
+import { hasGitHubCredentials } from "./github-app.js";
 
 export interface ModelInfo {
   id: string;
@@ -83,10 +84,14 @@ const has = (env: KeyEnv, key: string): boolean => {
   return typeof v === "string" && v.trim() !== "";
 };
 
-/** Either credential will do: the App is preferred, a PAT still works. */
-const gitHubReady = (env: KeyEnv): boolean =>
-  (has(env, "GITHUB_APP_ID") && has(env, "GITHUB_APP_PRIVATE_KEY")) ||
-  has(env, "GITHUB_TOKEN");
+/**
+ * Either credential will do: the App is preferred, a PAT still works.
+ *
+ * Delegates to github-app.ts rather than repeating the rule. Both existed for
+ * a while — this one gating the catalog, the other exported and tested — which
+ * meant the tested copy was the one nothing ran.
+ */
+const gitHubReady = (env: KeyEnv): boolean => hasGitHubCredentials(env);
 
 /**
  * Can this deployment serve any model this harness drives?

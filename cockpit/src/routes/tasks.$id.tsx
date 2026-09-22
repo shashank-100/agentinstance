@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { harnessLabel, runtimeLabel, type DiffLine } from "@/lib/mock-data";
-import { useTask, useAgentHistory } from "@/lib/use-tasks";
+import { useTask, useAgentHistory, useAgentOutput } from "@/lib/use-tasks";
 import { Shell } from "@/components/cockpit/Shell";
 import {
   CheckIcon,
@@ -49,6 +49,7 @@ function TaskView() {
   const { id } = Route.useLoaderData();
   const { task, loading } = useTask(id);
   const agentId = task && task.vm !== "—" ? task.vm : null;
+  const { rows: outputRows } = useAgentOutput(agentId, task?.status === "running");
   const { messages, loading: historyLoading } = useAgentHistory(
     agentId,
     task?.status === "running",
@@ -222,6 +223,11 @@ function TaskView() {
                           ? "Loading…"
                           : "The agent has not said anything yet."}
                     </p>
+                  )}
+                  {outputRows.length > 0 && (
+                    <pre className="mb-3 whitespace-pre-wrap break-words border-b border-border/40 pb-3 text-foreground">
+                      {outputRows.map((r) => r.text).join("")}
+                    </pre>
                   )}
                   {messages.map((m, i) => (
                     <div key={i} className="flex gap-3 border-b border-border/40 py-1.5 last:border-0">

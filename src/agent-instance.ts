@@ -17,17 +17,17 @@ import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/
  *
  * Enough to follow a run and scroll back through it; small enough that a CLI
  * printing a verbose build log cannot grow one agent's storage without limit.
- * Bytes rather than rows, because a row is anything from one character to a
+ * Length rather than rows, because a row is anything from one character to a
  * 50KB stack trace and a row count bounds neither.
+ *
+ * Measured in the same unit throughout — SQLite's `LENGTH()`, which counts
+ * characters. An earlier version added JavaScript's `text.length` (UTF-16 code
+ * units) to a total it then overwrote from `SUM(LENGTH(text))`, so the two
+ * disagreed on any text outside the BMP and the stored figure drifted.
  */
-const OUTPUT_BYTE_LIMIT = 256 * 1024;
+const OUTPUT_CHAR_LIMIT = 256 * 1024;
 
-/** Chunks arriving within this long of the previous one are appended to it
- *  rather than inserted: a streaming CLI emits fragments, and one row each
- *  costs more in keys and timestamps than the text is worth. */
-const OUTPUT_COALESCE_MS = 1000;
-
-/** Ceiling on a coalesced row, so one long-running line cannot become a single
+/** Ceiling on one stored row, so a single long line cannot become an
  *  unbounded row that trimming can only remove wholesale. */
 const OUTPUT_CHUNK_MAX = 8 * 1024;
 
@@ -200,7 +200,7 @@ export class AgentInstance extends DurableObject<Env> {
     text: string,
     channel = "core",
     origin?: string,
-    depth = 0,
+    depth?: number,
   ): Promise<{ reply?: string; missing?: boolean }> {
     // Cloudflare routes any name to a Durable Object, so an agent that was
     // never launched is indistinguishable from one that was — it just has no
@@ -209,7 +209,14 @@ export class AgentInstance extends DurableObject<Env> {
     if (!this.configured) return { missing: true };
     // The VM's send_to_agent runs mid-turn and has no way to know how many
     // hops preceded it, so the count is parked here for this turn to read.
-    this.setKV("a2a_depth", depth);
+    //
+    // Only a caller that actually knows the hop count writes it. This used to
+    // default to 0 and write unconditionally, which meant every ordinary
+    // message — a channel webhook, a scheduled wakeup, a plain /send — reset
+    // the counter. Two agents replying to each other through any non-a2a path
+    // therefore never reached MAX_A2A_DEPTH, and each hop is a model call on a
+    // booted container.
+    if (depth !== undefined) this.setKV("a2a_depth", depth);
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
@@ -337,7 +344,7 @@ export class AgentInstance extends DurableObject<Env> {
    * poll, the more they miss. A row per chunk costs a little more and is the
    * only shape that can be followed incrementally.
    *
-   * Bounded by bytes rather than rows: a row is anything from one character to
+   * Bounded by length rather than rows: a row is anything from one character to
    * a 50KB stack trace, so a row count bounds nothing.
    */
   recordOutput(text: string): void {
@@ -355,44 +362,58 @@ export class AgentInstance extends DurableObject<Env> {
       );
     }
 
-    const total = this.getKV<number>("output_bytes", 0) + text.length;
-    if (total <= OUTPUT_BYTE_LIMIT) {
-      this.setKV("output_bytes", total);
-      return;
-    }
     this.trimOutput();
   }
 
   /**
    * Evict oldest rows until the buffer is back inside its budget.
    *
-   * A loop, not a single pass: one `DELETE` of a fraction of the rows does not
-   * restore the invariant, it only approaches it — and with a few large rows
-   * `COUNT(*)/4` floors to zero, so each pass would evict a single row while
-   * the stored total stayed above the limit indefinitely.
+   * Eviction is driven by accumulated length rather than a row fraction. The
+   * old version dropped `COUNT(*)/4` rows per pass, which says nothing about
+   * how much text that removes: a handful of large rows floors that quotient
+   * to zero, so each pass evicted a single row and the loop leant on its
+   * `count <= 1` escape — exiting with a row far over budget while recording
+   * it as compliant. Choosing rows by their length ends in one pass and
+   * actually restores the invariant.
    *
    * The newest row is never evicted. Trimming to nothing would mean a large
    * write blanks the screen of whoever is watching, which is worse than being
    * briefly over budget.
    */
   private trimOutput(): void {
-    for (;;) {
-      const row = this.sql
-        .exec("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(text)), 0) AS b FROM output")
-        .toArray()[0] as { n: number; b: number } | undefined;
-      const bytes = row?.b ?? 0;
-      const count = row?.n ?? 0;
-      if (bytes <= OUTPUT_BYTE_LIMIT || count <= 1) {
-        this.setKV("output_bytes", bytes);
-        return;
-      }
-      // At least one row, and never the newest.
-      const drop = Math.max(1, Math.min(Math.floor(count / 4), count - 1));
-      this.sql.exec(
-        "DELETE FROM output WHERE seq IN (SELECT seq FROM output ORDER BY seq ASC LIMIT ?)",
-        drop,
-      );
+    const total = this.sql
+      .exec("SELECT COALESCE(SUM(LENGTH(text)), 0) AS n FROM output")
+      .toArray()[0] as { n: number } | undefined;
+    let over = (total?.n ?? 0) - OUTPUT_CHAR_LIMIT;
+    if (over <= 0) {
+      this.setKV("output_chars", total?.n ?? 0);
+      return;
     }
+
+    // Oldest first, stopping as soon as enough has been reclaimed. The newest
+    // row is excluded from the candidates rather than special-cased, so the
+    // "never blank the screen" rule holds however far over budget we are.
+    const rows = this.sql
+      .exec(
+        "SELECT seq, LENGTH(text) AS n FROM output " +
+          "WHERE seq < (SELECT MAX(seq) FROM output) ORDER BY seq ASC",
+      )
+      .toArray() as unknown as { seq: number; n: number }[];
+
+    let cutoff: number | null = null;
+    for (const row of rows) {
+      cutoff = row.seq;
+      over -= row.n;
+      if (over <= 0) break;
+    }
+    if (cutoff !== null) {
+      this.sql.exec("DELETE FROM output WHERE seq <= ?", cutoff);
+    }
+
+    const after = this.sql
+      .exec("SELECT COALESCE(SUM(LENGTH(text)), 0) AS n FROM output")
+      .toArray()[0] as { n: number } | undefined;
+    this.setKV("output_chars", after?.n ?? 0);
   }
 
   /** Live output, oldest first. `since` returns only what is new. */
