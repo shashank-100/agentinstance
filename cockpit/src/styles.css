@@ -1,0 +1,173 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Cockpit design system — Stelo-inspired editorial utility.
+ * Bright canvas, near-black type, soft cool-gray surfaces, restrained status tones.
+ */
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-text: var(--diff-add-text);
+  --color-diff-del: var(--diff-del);
+  --color-diff-del-text: var(--diff-del-text);
+
+  --color-harness-claude: var(--harness-claude);
+  --color-harness-pi: var(--harness-pi);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0.005 285);
+  --surface: oklch(0.985 0.002 285);
+  --surface-2: oklch(0.955 0.004 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.005 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.005 285);
+
+  --primary: oklch(0.15 0.005 285);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.004 285);
+  --secondary-foreground: oklch(0.2 0.005 285);
+  --muted: oklch(0.965 0.003 285);
+  --muted-foreground: oklch(0.52 0.008 285);
+  --accent: oklch(0.945 0.004 285);
+  --accent-foreground: oklch(0.15 0.005 285);
+  --destructive: oklch(0.56 0.18 25);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(0.91 0.004 285);
+  --border-strong: oklch(0.81 0.006 285);
+  --input: oklch(0.88 0.005 285);
+  --ring: oklch(0.24 0.006 285);
+
+  --success: oklch(0.53 0.11 155);
+  --success-foreground: oklch(0.98 0.01 155);
+  --warning: oklch(0.62 0.13 72);
+  --warning-foreground: oklch(0.18 0.03 72);
+  --info: oklch(0.5 0.12 245);
+  --info-foreground: oklch(0.98 0.01 245);
+
+  --diff-add: oklch(0.92 0.035 150);
+  --diff-add-text: oklch(0.36 0.1 150);
+  --diff-del: oklch(0.94 0.035 25);
+  --diff-del-text: oklch(0.48 0.14 25);
+
+  --harness-claude: oklch(0.51 0.1 45);
+  --harness-pi: oklch(0.46 0.09 285);
+
+  --chart-1: oklch(0.15 0.005 285);
+  --chart-2: oklch(0.5 0.12 245);
+  --chart-3: oklch(0.53 0.11 155);
+  --chart-4: oklch(0.62 0.13 72);
+  --chart-5: oklch(0.56 0.18 25);
+
+  --sidebar: oklch(0.985 0.002 285);
+  --sidebar-foreground: oklch(0.15 0.005 285);
+  --sidebar-primary: oklch(0.15 0.005 285);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.945 0.004 285);
+  --sidebar-accent-foreground: oklch(0.15 0.005 285);
+  --sidebar-border: oklch(0.91 0.004 285);
+  --sidebar-ring: oklch(0.24 0.006 285);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv05", "cv08", "cv10";
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: oklch(0.82 0.006 285);
+  }
+}
+
+/* Quiet micro-labels keep dense controls legible without terminal theatrics. */
+@utility rule-label {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: var(--color-muted-foreground);
+}
+
+@utility kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding-inline: 0.3rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface-2);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+
+@utility grid-rail {
+  background-image: linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 4%) 0 1px,
+    transparent 1px 100%
+  );
+  background-size: 100% 28px;
+}
