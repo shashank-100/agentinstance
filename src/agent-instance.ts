@@ -32,6 +32,14 @@ export class AgentInstance extends DurableObject<Env> {
         CREATE TABLE IF NOT EXISTS notes (
           key TEXT PRIMARY KEY, value TEXT NOT NULL, ts INTEGER NOT NULL
         );
+        -- What the CLI printed, as it printed it. The transcript records what
+        -- the agent decided; this records what it was doing while deciding,
+        -- which is the only view of a run that is still in progress.
+        CREATE TABLE IF NOT EXISTS output (
+          seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          text TEXT NOT NULL,
+          ts INTEGER NOT NULL
+        );
       `);
     });
   }
@@ -192,6 +200,8 @@ export class AgentInstance extends DurableObject<Env> {
       sandbox: getSandbox(this.env, this.spec.machine),
       agentId: this.ctx.id.toString(), // stable per-agent workspace key
       agentsMd: this.getKV<string | null>("agents_md", null) ?? undefined,
+      // Persisted as it arrives, so /output shows a run in progress.
+      onOutput: (text: string) => this.recordOutput(text),
       capabilities: this.spec.capabilities,
       // The VM's tools call back in over the public URL: a container has no
       // route to a Durable Object except through the Worker's own front door.
@@ -295,6 +305,27 @@ export class AgentInstance extends DurableObject<Env> {
 
   async getHistory(): Promise<Message[]> {
     return this.history();
+  }
+
+  /**
+   * Record a chunk of live output.
+   *
+   * Capped rather than unbounded: a chatty CLI would otherwise grow an agent's
+   * storage without limit, and nobody scrolls back through a megabyte of build
+   * log. The newest lines are the ones being watched.
+   */
+  recordOutput(text: string): void {
+    this.sql.exec("INSERT INTO output (text, ts) VALUES (?, ?)", text, Date.now());
+    this.sql.exec(
+      "DELETE FROM output WHERE seq <= (SELECT MAX(seq) - 500 FROM output)",
+    );
+  }
+
+  /** Live output, oldest first. `since` returns only what is new. */
+  async getOutput(since = 0): Promise<{ seq: number; text: string; ts: number }[]> {
+    return this.sql
+      .exec("SELECT seq, text, ts FROM output WHERE seq > ? ORDER BY seq ASC", since)
+      .toArray() as unknown as { seq: number; text: string; ts: number }[];
   }
 
   /** Standing instructions for this agent, written into its VM as AGENTS.md. */

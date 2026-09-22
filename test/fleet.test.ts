@@ -88,3 +88,21 @@ describe("a claim whose agent is alive", () => {
     expect(still.state).toBe("running");
   });
 });
+
+describe("a board nobody is using", () => {
+  it("still reclaims abandoned work, without waiting for the next claim", async () => {
+    // The reclaim inside `claim` only helps a busy queue. This is the quiet
+    // case: one task died and no further work ever arrives, so nothing would
+    // call `claim` again — and the task would stay `running` forever.
+    const task = await file("work abandoned on an otherwise idle board");
+    await claim("agent-that-dies");
+    await age(task.id, 20);
+
+    // The alarm, not a claim, is what runs here.
+    await SELF.fetch("https://x/api/fleet/sweep", { method: "POST" });
+
+    const after = await get(task.id);
+    expect(after.state).toBe("queued");
+    expect(after.assignedTo).toBeNull();
+  });
+});
