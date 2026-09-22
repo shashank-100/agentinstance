@@ -321,7 +321,12 @@ export class FleetDO extends DurableObject<Env> {
    */
   async release(id: string): Promise<Task | null> {
     const task = await this.get(id);
-    if (!task || task.state !== "running") return null;
+    // `failed` is releasable too, not just `running`. Most failures are about
+    // the environment rather than the work — a cold container, a timeout, a
+    // missing key — and once that is fixed the task is perfectly good again.
+    // Without this the only way back onto the queue is to retype the goal,
+    // which loses the task's history and its id.
+    if (!task || (task.state !== "running" && task.state !== "failed")) return null;
     this.sql.exec(
       "UPDATE tasks SET state='queued', assignedTo=NULL, updatedAt=? WHERE id=?",
       Date.now(),
