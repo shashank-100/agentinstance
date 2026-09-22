@@ -16,14 +16,8 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "moonshotai" | "anthropic";
+export type Provider = "anthropic";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
-  // `moonshotai` is what pi's own catalog calls this provider. A bare
-  // `moonshot` exists too, but only on a machine with local pi config — in a
-  // clean container it does not, and naming it there fails with "Unknown
-  // provider". The harness passes this name straight to the CLI, so it has to
-  // be the portable one.
-  moonshotai: { baseUrl: "https://api.moonshot.ai/v1", keyVar: "MOONSHOT_API_KEY" },
   // Anthropic's own endpoint. Claude Code reaches it with a subscription token
   // and no base URL; pi reaches it with this key, which is why a Claude model
   // can be served either way depending on which harness is running.
@@ -32,8 +26,6 @@ export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = 
 
 // Only models a configured provider can actually serve.
 export const MODELS: Record<string, ModelInfo> = {
-  "kimi-k3": { id: "kimi-k3", label: "Kimi K3", priceIn: 3, priceOut: 15, provider: "moonshotai" },
-
   // Claude Code authenticates with a subscription OAuth token, so the model
   // comes from whatever that token grants rather than from a provider key.
   // There is no base URL and no per-token rate to quote here.
@@ -55,20 +47,17 @@ export const MODELS: Record<string, ModelInfo> = {
 /**
  * Which models each harness can actually drive.
  *
- * Claude Code speaks Anthropic's /v1/messages, so it runs Claude and nothing
- * else. Kimi is listed in no harness at all: the two CLIs that could drive an
- * OpenAI-compatible model (pi, opencode) both worked locally and failed inside
- * the VM, so they were removed rather than shipped broken. It stays in the
- * catalog, rendered unselectable, so the provider wiring survives for whichever
- * harness replaces them.
+ * Both harnesses speak to Anthropic, so both run Claude and nothing else.
+ *
+ * Kimi (and the moonshotai provider behind it) is gone: an agent launched on it
+ * got `401 Incorrect API key` from Moonshot, and a model that cannot answer is
+ * worse than a model that is not offered. Restoring it means restoring the
+ * provider entry, the model entry, and a working MOONSHOT_API_KEY together —
+ * the wiring alone was what made a dead option look selectable.
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
-  // pi carries its own model catalog and speaks each provider's API directly,
-  // so it drives the OpenAI-compatible models Claude Code cannot reach.
-  // pi carries its own catalog covering both providers, so it is the one
-  // harness that runs everything here.
-  pi: ["kimi-k3", "claude-opus-4.8"],
+  pi: ["claude-opus-4.8"],
 };
 
 /**

@@ -24,7 +24,7 @@ describe("builder API", () => {
       body: JSON.stringify({
         id: "builtA",
         harness: "pi",
-        model: "kimi-k3",
+        model: "claude-opus-4.8",
         capabilities: ["scrape_web"],
         machine: "half-cpu",
       }),
@@ -32,7 +32,7 @@ describe("builder API", () => {
     const data = (await res.json()) as { id: string; usdPerHour: number; spec: { model: string } };
     expect(res.status).toBe(200);
     expect(data.id).toBe("builtA");
-    expect(data.spec.model).toBe("kimi-k3");
+    expect(data.spec.model).toBe("claude-opus-4.8");
     expect(data.usdPerHour).toBeGreaterThan(0);
   });
 
@@ -41,7 +41,7 @@ describe("builder API", () => {
       method: "POST",
       body: JSON.stringify({
         harness: "pi",
-        model: "kimi-k3",
+        model: "claude-opus-4.8",
         capabilities: ["not_a_capability"],
         machine: "two-cpu",
       }),

@@ -320,10 +320,9 @@ const CLI_HARNESSES: Record<
     oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
   },
 
-  // pi ships its own model catalog — `pi --list-models` already lists
-  // `moonshot/kimi-k3` — and reads each provider's key straight from the
-  // environment under that provider's own name. So it needs no base URL and no
-  // config file: naming the provider and model is enough.
+  // pi ships its own model catalog and reads each provider's key straight from
+  // the environment under that provider's own name. So it needs no base URL and
+  // no config file: naming the provider and model is enough.
   //
   // An earlier version of this harness wrote ~/.pi/agent/models.json to define
   // a custom provider, which is why `configFile` exists on this type. That is

@@ -23,7 +23,7 @@ describe("agent registry", () => {
   it("DELETE removes an agent from the listing and wipes state", async () => {
     await SELF.fetch("https://x/api/launch", {
       method: "POST",
-      body: JSON.stringify({ id: "reg-del", harness: "pi", model: "kimi-k3" }),
+      body: JSON.stringify({ id: "reg-del", harness: "pi", model: "claude-opus-4.8" }),
     });
     await SELF.fetch("https://x/agents/reg-del/send", {
       method: "POST",
