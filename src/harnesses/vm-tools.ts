@@ -110,7 +110,16 @@ function scriptBody(endpoint: string, tool: string, fields: string[]): string {
     "    },",
     ")",
     "try:",
-    "    with urllib.request.urlopen(req, timeout=60) as r:",
+    // No timeout. A tool call from inside the VM can land on an agent whose
+    // container is asleep, and the Worker does not answer until that container
+    // has booted — so any fixed number is really a guess about boot time, not
+    // about the work. 60s guessed wrong: a `git_repo clone` of a 100KB repo
+    // failed six times in a row, reading as "git is broken" rather than "the
+    // machine was still starting".
+    //
+    // The harness already caps the whole CLI session, so a call that truly
+    // never returns is bounded there rather than here.
+    "    with urllib.request.urlopen(req) as r:",
     "        body = json.load(r)",
     "except Exception as e:",
     "    print(f'{e}', file=sys.stderr)",
