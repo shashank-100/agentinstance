@@ -14,6 +14,21 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./types.js";
 
 /**
+ * How long a claim is good for without progress.
+ *
+ * Generous on purpose: a real task runs for minutes, and reclaiming one that is
+ * merely slow would hand the same work to a second agent while the first is
+ * still doing it. `update` and `settle` both refresh the clock, so an agent
+ * that reports anything keeps its claim.
+ */
+const LEASE_MS = 15 * 60 * 1000;
+
+/** How many times a task may be abandoned before it is failed rather than
+ *  requeued. Three is enough to ride out a cold start or a flaky container,
+ *  and few enough that a task which cannot succeed stops consuming workers. */
+const ATTEMPT_LIMIT = 3;
+
+/**
  * Where a task is in its life.
  *
  * `settled` rather than `done` because a task can finish without succeeding —
@@ -41,6 +56,8 @@ export interface Task {
   result: string | null;
   createdAt: number;
   updatedAt: number;
+  /** How many times this task has been claimed and abandoned. */
+  attempts?: number;
 }
 
 export class FleetDO extends DurableObject<Env> {
@@ -68,6 +85,14 @@ export class FleetDO extends DurableObject<Env> {
         -- hot path once more than a couple of agents are working.
         CREATE INDEX IF NOT EXISTS tasks_by_state ON tasks (state, createdAt);
       `);
+      // Added after the table shipped, so CREATE TABLE above will not add it
+      // to a deployment that already has rows. Failing is the normal path on
+      // every boot after the first — there is no IF NOT EXISTS for a column.
+      try {
+        this.sql.exec("ALTER TABLE tasks ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0");
+      } catch {
+        // already there
+      }
     });
   }
 
@@ -139,6 +164,13 @@ export class FleetDO extends DurableObject<Env> {
    * the platform is handing us for free.
    */
   async claim(agentId: string): Promise<Task | null> {
+    // An agent that claims a task and then dies — a timeout, a crash, a
+    // container that went to sleep — leaves the task `running` with nobody
+    // working it, and the queue quietly loses it forever. Nothing else in the
+    // system notices, so the claim itself is where it has to be caught:
+    // whoever asks for work first puts the abandoned work back.
+    this.reclaimStale();
+
     const row = this.sql
       .exec("SELECT id FROM tasks WHERE state = 'queued' ORDER BY createdAt ASC LIMIT 1")
       .toArray()[0] as { id: string } | undefined;
@@ -151,6 +183,57 @@ export class FleetDO extends DurableObject<Env> {
       row.id,
     );
     return this.get(row.id);
+  }
+
+  /**
+   * Put abandoned work back on the queue.
+   *
+   * A task is abandoned when it has sat in `running` past the lease without
+   * anything touching it — `update` and `settle` both bump `updatedAt`, so an
+   * agent that is still working keeps its claim alive just by making progress.
+   *
+   * Retries are bounded. A task that is claimed, abandoned, and requeued
+   * forever is worse than one that stops: it occupies a worker every cycle and
+   * never completes, so the queue does its work more and more slowly while
+   * looking busy. After ATTEMPT_LIMIT it fails with the reason recorded.
+   */
+  private reclaimStale(): void {
+    const cutoff = Date.now() - LEASE_MS;
+    const stale = this.sql
+      .exec(
+        "SELECT id, attempts, assignedTo FROM tasks WHERE state='running' AND updatedAt < ?",
+        cutoff,
+      )
+      .toArray() as unknown as { id: string; attempts: number; assignedTo: string | null }[];
+
+    for (const t of stale) {
+      const attempts = (t.attempts ?? 0) + 1;
+      if (attempts >= ATTEMPT_LIMIT) {
+        this.sql.exec(
+          "UPDATE tasks SET state='failed', attempts=?, result=?, updatedAt=? WHERE id=?",
+          attempts,
+          `abandoned ${attempts}× (last by ${t.assignedTo ?? "unknown"}) — giving up`,
+          Date.now(),
+          t.id,
+        );
+      } else {
+        this.sql.exec(
+          "UPDATE tasks SET state='queued', assignedTo=NULL, attempts=?, updatedAt=? WHERE id=?",
+          attempts,
+          Date.now(),
+          t.id,
+        );
+      }
+    }
+  }
+
+  /**
+   * Move a task's clock backwards. Only a test calls this: a lease expiring is
+   * the behaviour worth covering, and waiting fifteen real minutes to see it
+   * is not a test anyone runs.
+   */
+  async backdate(id: string, ms: number): Promise<void> {
+    this.sql.exec("UPDATE tasks SET updatedAt = updatedAt - ? WHERE id = ?", ms, id);
   }
 
   /** Record progress without ending the task — a branch, or a PR. */

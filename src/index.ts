@@ -363,7 +363,16 @@ async function fleetRoute(
       result?: string;
       state?: TaskState;
       assignedTo?: string;
+      backdateMs?: number;
     }>(request);
+    // Ageing a task is a test affordance: a lease expiring is worth covering,
+    // and waiting fifteen real minutes for it is not a test anyone runs. Gated
+    // on the echo-model flag, which only the test environment sets, so it
+    // cannot be used against a real deployment to steal another agent's claim.
+    if (body.backdateMs && env.USE_ECHO_MODEL) {
+      await f.backdate(id, body.backdateMs);
+      return finished(await f.get(id), id);
+    }
     // Ending a task is a state change, not a patch: settle and fail record why.
     // Assigning is a state change too: it moves the task to `running` under a
     // named agent, rather than waiting for one to claim it.
