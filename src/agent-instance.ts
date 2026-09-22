@@ -329,44 +329,30 @@ export class AgentInstance extends DurableObject<Env> {
   /**
    * Record a chunk of live output.
    *
-   * Three things make this cheap enough to call on every write from a CLI that
-   * streams token by token.
+   * Append-only, deliberately. An earlier version coalesced small chunks into
+   * the previous row to save on keys and timestamps — which quietly broke the
+   * only thing this table is for. Watchers follow with `?since=<seq>`, and
+   * appending to an existing row leaves its `seq` unchanged, so every byte
+   * added that way is invisible to anyone already watching. The faster they
+   * poll, the more they miss. A row per chunk costs a little more and is the
+   * only shape that can be followed incrementally.
    *
-   * **Bounded by bytes, not rows.** A row is anything from one character to a
-   * 50KB stack trace, so a row count is not a bound on anything — the same
-   * "500 rows" is a few KB of one run and many megabytes of another.
-   *
-   * **Trimmed only when over.** The running total lives in kv, so the common
-   * write does no scan at all. Deleting on every chunk meant a subquery over
-   * the whole table hundreds of times a second.
-   *
-   * **Coalesced.** A streaming CLI emits fragments; one row each costs more in
-   * keys and timestamps than the text is worth. Small recent chunks are
-   * appended to the previous row instead.
+   * Bounded by bytes rather than rows: a row is anything from one character to
+   * a 50KB stack trace, so a row count bounds nothing.
    */
   recordOutput(text: string): void {
     if (!text) return;
 
-    const last = this.sql
-      .exec("SELECT seq, text, ts FROM output ORDER BY seq DESC LIMIT 1")
-      .toArray()[0] as { seq: number; text: string; ts: number } | undefined;
-
-    // Same second, still small: this is the tail of the line already being
-    // written, not a new event worth its own row and timestamp.
-    const coalesce =
-      last &&
-      Date.now() - last.ts < OUTPUT_COALESCE_MS &&
-      last.text.length + text.length <= OUTPUT_CHUNK_MAX;
-
-    if (coalesce) {
+    // One oversized chunk is split rather than stored whole. A single row
+    // larger than the budget cannot be trimmed down to fit — evicting it takes
+    // the entire buffer with it, so a `cat` of a big file would blank the very
+    // output someone is watching.
+    for (let i = 0; i < text.length; i += OUTPUT_CHUNK_MAX) {
       this.sql.exec(
-        "UPDATE output SET text = text || ?, ts = ? WHERE seq = ?",
-        text,
+        "INSERT INTO output (text, ts) VALUES (?, ?)",
+        text.slice(i, i + OUTPUT_CHUNK_MAX),
         Date.now(),
-        last.seq,
       );
-    } else {
-      this.sql.exec("INSERT INTO output (text, ts) VALUES (?, ?)", text, Date.now());
     }
 
     const total = this.getKV<number>("output_bytes", 0) + text.length;
@@ -374,19 +360,39 @@ export class AgentInstance extends DurableObject<Env> {
       this.setKV("output_bytes", total);
       return;
     }
+    this.trimOutput();
+  }
 
-    // Over the limit: drop oldest rows until back under, and recount from what
-    // actually survived rather than trusting the arithmetic.
-    this.sql.exec(
-      `DELETE FROM output WHERE seq IN (
-         SELECT seq FROM output ORDER BY seq ASC
-         LIMIT MAX(1, (SELECT COUNT(*) FROM output) / 4)
-       )`,
-    );
-    const row = this.sql
-      .exec("SELECT COALESCE(SUM(LENGTH(text)), 0) AS n FROM output")
-      .toArray()[0] as { n: number } | undefined;
-    this.setKV("output_bytes", row?.n ?? 0);
+  /**
+   * Evict oldest rows until the buffer is back inside its budget.
+   *
+   * A loop, not a single pass: one `DELETE` of a fraction of the rows does not
+   * restore the invariant, it only approaches it — and with a few large rows
+   * `COUNT(*)/4` floors to zero, so each pass would evict a single row while
+   * the stored total stayed above the limit indefinitely.
+   *
+   * The newest row is never evicted. Trimming to nothing would mean a large
+   * write blanks the screen of whoever is watching, which is worse than being
+   * briefly over budget.
+   */
+  private trimOutput(): void {
+    for (;;) {
+      const row = this.sql
+        .exec("SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(text)), 0) AS b FROM output")
+        .toArray()[0] as { n: number; b: number } | undefined;
+      const bytes = row?.b ?? 0;
+      const count = row?.n ?? 0;
+      if (bytes <= OUTPUT_BYTE_LIMIT || count <= 1) {
+        this.setKV("output_bytes", bytes);
+        return;
+      }
+      // At least one row, and never the newest.
+      const drop = Math.max(1, Math.min(Math.floor(count / 4), count - 1));
+      this.sql.exec(
+        "DELETE FROM output WHERE seq IN (SELECT seq FROM output ORDER BY seq ASC LIMIT ?)",
+        drop,
+      );
+    }
   }
 
   /** Live output, oldest first. `since` returns only what is new. */
@@ -440,6 +446,11 @@ export class AgentInstance extends DurableObject<Env> {
     this.sql.exec("DELETE FROM messages");
     this.sql.exec("DELETE FROM kv");
     this.sql.exec("DELETE FROM notes");
+    // Live output belongs to the run that produced it, not to the snapshot.
+    // Leaving it while kv is wiped desyncs the byte counter from the table —
+    // the counter resets to zero, the rows stay, and nothing trims until a
+    // fresh budget has been counted on top of what is already stored.
+    this.sql.exec("DELETE FROM output");
     if (snap.spec) this.setKV("spec", snap.spec);
     for (const [k, v] of Object.entries(snap.kv ?? {})) this.setKV(k, v);
     for (const m of snap.history ?? []) this.record(m);
