@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell } from "@/components/cockpit/Shell";
+import { GitHubConnect } from "@/components/cockpit/GitHubConnect";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 
@@ -55,6 +56,10 @@ function Overview() {
             <Link to="/dispatch">Dispatch task</Link>
           </Button>
         </section>
+
+        <div className="mx-auto mt-4 max-w-2xl">
+          <GitHubConnect />
+        </div>
       </div>
     </Shell>
   );

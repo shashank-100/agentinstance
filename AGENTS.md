@@ -34,6 +34,31 @@ Tests run serially on purpose (`fileParallelism: false`). `singleWorker: true`
 means every file shares one worker, and parallel runners deadlock competing to
 start it — the suite hangs until the pool times out and reports "no tests".
 
+## How to test
+
+**Never write unit tests after writing the code.** A test written to cover code
+that already exists is shaped by that code, so it agrees with whatever the code
+does — including the bugs. It reports success and proves nothing.
+
+**Prefer end-to-end tests as the sole testing mechanism.** Drive the real thing:
+file a task, dispatch it, watch the output, read the result. Use them to verify
+that complex features actually work rather than that their parts are callable.
+
+**End an E2E test with a verifiable, repeatable artifact** — a created task with
+an id, a branch, a pull request, a row you can query. "The assertion passed" is
+not an artifact; something you can go and look at afterwards is.
+
+**If a system must be tested in isolation, write down every way it could fail
+first, then write the code.** The failure list is the specification. Deriving it
+from finished code inverts the order and produces tests that cannot fail.
+
+A worked example of why, from this repo: the output buffer shipped with a test
+asserting its byte bound. The test posted to a capability that did not exist, so
+every write returned 400, the table stayed empty, and `0 <= 262144` passed. The
+feature was entirely untested and two real bugs — a coalesce that hid data from
+watchers, and a large chunk that wiped the whole buffer — shipped behind a green
+suite.
+
 ## Git
 
 Work goes **direct to `main`**: merge locally, push. No PR, no branch
