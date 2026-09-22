@@ -2,25 +2,40 @@
 
 **Open-source, self-hostable always-on AI agents on Cloudflare.**
 
-## 🚀 Deploy in one click
+## Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/shashank-100/agentinstance)
+Every agent runs a coding CLI inside its own container, so deploying builds a
+container image and pushes it to Cloudflare's registry. That needs three things
+a one-click button cannot provide:
 
-Click the button → sign in to Cloudflare → it forks this repo to your account,
-provisions the Durable Objects, and deploys the Worker with CI wired up. No
-local setup.
-
-Agents need a model key before they can reply — add one as a secret after the
-first deploy:
+- **A paid Workers plan.** Containers are not on the free tier.
+- **A running Docker daemon.** `wrangler deploy` builds the image locally.
+  Docker Desktop works; on macOS [colima](https://github.com/abiosoft/colima)
+  is lighter (`brew install colima && colima start`).
+- **A Claude subscription token**, which is what agents run on.
 
 ```sh
-wrangler secret put CLAUDE_CODE_OAUTH_TOKEN
+git clone https://github.com/shashank-100/agentinstance
+cd agentinstance && npm install
+npx wrangler login
+npm run deploy          # builds the image and pushes it — the slow part
 ```
 
-Set `FLEET_TOKEN` too on anything reachable from the internet — without it,
-anyone with the URL can launch agents and spend those keys.
+Then the secrets. A model key is required; everything else is optional, and
+each capability is offered to agents only when its key is present:
 
-See [DEPLOY.md](./DEPLOY.md).
+```sh
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # required: the model
+
+# Strongly recommended. Without it EVERY route is open — anyone with the URL
+# can launch agents billed to your account. Any long random string.
+npx wrangler secret put FLEET_TOKEN
+```
+
+To let agents clone, push and open pull requests, install a GitHub App
+(preferred — permissions are granted by a consent screen rather than picked
+by hand) or set `GITHUB_TOKEN`. See [DEPLOY.md](./DEPLOY.md), which covers the
+App setup, the registry push failures worth knowing about, and the rest.
 
 
 Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
