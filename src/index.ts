@@ -118,7 +118,28 @@ const registry = (env: Env): RegistryStub =>
 const fleet = (env: Env): FleetStub =>
   env.FLEET.get(env.FLEET.idFromName("global")) as FleetStub;
 
-const json = (body: unknown, status = 200) => Response.json(body, { status });
+/**
+ * Every JSON reply is readable cross-origin.
+ *
+ * The API and the UI that reads it are separate Workers, so a dashboard on its
+ * own origin is a browser request from somewhere else — and without these
+ * headers the browser discards a perfectly good 200 before the page sees it.
+ *
+ * `*` rather than a named origin: what protects this deployment is FLEET_TOKEN
+ * on every mutating route, not the browser's guess about who is asking. An
+ * origin allowlist here would imply a protection that is not how this is
+ * actually defended, while breaking every other client — curl, a script, a
+ * second dashboard — for no gain.
+ */
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+  "access-control-allow-headers": "authorization,content-type",
+  "access-control-max-age": "86400",
+};
+
+const json = (body: unknown, status = 200) =>
+  Response.json(body, { status, headers: CORS });
 
 /**
  * Is this request allowed to change things?
@@ -173,6 +194,13 @@ export default {
         }
       });
 
+    // A cross-origin request carrying an Authorization header is preflighted,
+    // so this has to answer before any routing: the browser never sends the
+    // real request until it does.
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS });
+    }
+
     if (url.pathname === "/") {
       // No landing page, so the agent list is the front door.
       return Response.redirect(new URL("/agents/", url).toString(), 302);
@@ -187,7 +215,7 @@ export default {
       return listAgentsRoute(env);
     }
     if (first === "api" && second === "fleet") {
-      return fleetRoute(request, env, third, fourth);
+      return fleetRoute(request, env, ctx, third, fourth);
     }
     if (first === "channels" && second) return channelRoute(request, env, second);
 
@@ -335,6 +363,7 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
 async function fleetRoute(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   section: string | undefined,
   id: string | undefined,
 ): Promise<Response> {
@@ -389,7 +418,16 @@ async function fleetRoute(
   }
 
   // POST /api/fleet/tasks — file one, or claim the next.
-  const body = await bodyOf<{ goal?: string; repo?: string; createdBy?: string; claim?: string }>(
+  const body = await bodyOf<{
+    goal?: string;
+    repo?: string;
+    createdBy?: string;
+    claim?: string;
+    dispatch?: boolean;
+    harness?: string;
+    model?: string;
+    machine?: string;
+  }>(
     request,
   );
   if (body.claim) {
@@ -397,7 +435,61 @@ async function fleetRoute(
     return json(task ?? { task: null, reason: "nothing queued" });
   }
   if (!body.goal) return json({ error: "goal required" }, 400);
-  return json(await f.enqueue({ goal: body.goal, repo: body.repo, createdBy: body.createdBy }));
+  const task = await f.enqueue({
+    goal: body.goal,
+    repo: body.repo,
+    createdBy: body.createdBy,
+  });
+
+  // `dispatch` is the difference between filing work and starting it. Without
+  // it a task sits queued until somebody thinks to point an agent at the
+  // board, which is a queue that needs a human to run it. With it, the task
+  // gets an agent of its own and begins immediately.
+  //
+  // The agent runs in `waitUntil` rather than inline: the work takes minutes,
+  // and holding the request open for it would time out long before the agent
+  // finished, reporting a failure for a task that is running perfectly well.
+  if (body.dispatch) {
+    const agentId = `task-${task.id}`;
+    const spec = defaultSpec({
+      harness: body.harness ?? "claude-code",
+      model: body.model ?? "claude-opus-4.8",
+      capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr"],
+      machine: body.machine ?? "one-cpu",
+    });
+    const agent = agentStub(env, agentId);
+    await agent.configure({ ...spec, name: agentId }, true);
+    await registry(env).register({
+      id: agentId,
+      model: spec.model,
+      harness: spec.harness,
+      machine: spec.machine,
+      createdAt: Date.now(),
+    });
+    await f.assign(task.id, agentId);
+
+    const origin = new URL(request.url).origin;
+    ctx.waitUntil(
+      agent
+        .send(
+          `You have been given this task: ${task.goal}\n\n` +
+            (task.repo ? `It is against the repository ${task.repo}.\n\n` : "") +
+            `Do it. Clone with git_repo, make the change, commit, push the branch, ` +
+            `and open a pull request with open_pr. Record the branch and PR on task ` +
+            `${task.id} with fleet_task as you go, then settle it. If you cannot ` +
+            `finish, mark the task failed with the reason.`,
+          undefined,
+          origin,
+        )
+        .catch(async (e: unknown) => {
+          // A crash here is invisible otherwise — nothing is awaiting this.
+          await f.fail(task.id, e instanceof Error ? e.message : "agent failed to start");
+        }),
+    );
+    return json({ ...task, state: "running", assignedTo: agentId, dispatched: true });
+  }
+
+  return json(task);
 }
 
 const finished = (task: unknown, id: string) =>
