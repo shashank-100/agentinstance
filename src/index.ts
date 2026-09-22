@@ -3,7 +3,7 @@
 // Routing is deliberately plain — a handful of `if`s over the path segments,
 // no framework. Each route group gets its own function so the shape of a URL is
 // visible at the top and the handling is separate from the matching.
-import { Sandbox as CloudflareSandbox } from "@cloudflare/sandbox";
+import { Sandbox as CloudflareSandbox, ContainerProxy } from "@cloudflare/sandbox";
 import type { AgentInstance } from "./agent-instance.js";
 import type { RegistryDO } from "./registry-do.js";
 import type { FleetDO, TaskState } from "./fleet-do.js";
@@ -27,6 +27,11 @@ import {
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
 import { toText, type Part } from "./parts.js";
 
+// The containers runtime reaches for this by name on the worker entrypoint to
+// route a container's outbound requests; without the re-export it is undefined
+// and interception fails at construction.
+export { ContainerProxy };
+
 export { AgentInstance } from "./agent-instance.js";
 export { RegistryDO } from "./registry-do.js";
 export { FleetDO } from "./fleet-do.js";
@@ -46,6 +51,31 @@ export { FleetDO } from "./fleet-do.js";
  */
 class TieredSandbox extends CloudflareSandbox {
   sleepAfter = "5m";
+
+  constructor(ctx: ConstructorParameters<typeof CloudflareSandbox>[0], env: Env) {
+    // The container runtime sets `ctx.container`; miniflare never does, and the
+    // base constructor throws without it. The test pool constructs every DO
+    // class just to enumerate its RPC methods, so that throw surfaces as an
+    // unhandled rejection in a suite that is not testing containers at all.
+    //
+    // Presenting a fake container would be a lie — there is nothing to talk to,
+    // and a sandbox that silently does nothing is worse than one that fails. A
+    // bare `ctx.container` shaped enough to get past the base constructor's
+    // `=== undefined` guard keeps construction quiet; every method on it throws,
+    // so any code that actually tries to use a container still fails loudly.
+    if (ctx.container === undefined) {
+      const unavailable = (): never => {
+        throw new Error(
+          "No container runtime: containers do not exist under miniflare.",
+        );
+      };
+      Object.defineProperty(ctx, "container", {
+        value: new Proxy({ running: false }, { get: () => unavailable }),
+        configurable: true,
+      });
+    }
+    super(ctx, env);
+  }
 }
 
 export class SandboxSmall extends TieredSandbox {}
