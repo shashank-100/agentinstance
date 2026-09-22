@@ -7,6 +7,8 @@ import type { Env } from "../types.js";
 import { MACHINES, DEFAULT_MACHINE } from "../catalog.js";
 import {
   getSandbox as getCloudflareSandbox,
+  parseSSEStream,
+  type ExecEvent,
   type Sandbox as CfSandbox,
 } from "@cloudflare/sandbox";
 
@@ -71,6 +73,13 @@ export class ContainerSandbox implements Sandbox {
    * `onChunk` is called as output arrives. It is deliberately fire-and-forget
    * from the command's point of view: a slow consumer must not stall the agent,
    * and a consumer that throws must not kill the run.
+   *
+   * The stream is SSE carrying typed events, not raw bytes. Decoding it as
+   * bytes — which this did — was wrong twice over: watchers were shown the SSE
+   * envelope rather than the command's output, and the exit code was reported
+   * as a hardcoded 0. The harness branches on that code to detect a timeout
+   * (124) or a crash, so every failed run was being reported as a successful
+   * one, with whatever partial text it printed becoming the agent's reply.
    */
   async execStreaming(
     agentId: string,
@@ -88,24 +97,57 @@ export class ContainerSandbox implements Sandbox {
     }
 
     const stream = await box.execStream(command);
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
     let stdout = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      if (!text) continue;
-      stdout += text;
-      try {
-        onChunk(text);
-      } catch {
-        // A failed observer is not a failed command.
+    let stderr = "";
+    // Undefined until the `complete` event names one. A stream that ends
+    // without it did not report how the command finished, which is itself a
+    // failure — see the fallback below.
+    let exitCode: number | undefined;
+
+    for await (const event of parseSSEStream<ExecEvent>(stream)) {
+      const text = event.data ?? "";
+      switch (event.type) {
+        case "stdout":
+          stdout += text;
+          break;
+        case "stderr":
+          // stderr is kept apart: the harness reports it when a command fails,
+          // and folding it into stdout would put diagnostics in the reply.
+          stderr += text;
+          break;
+        case "complete":
+          exitCode = event.exitCode ?? event.result?.exitCode ?? 0;
+          break;
+        case "error":
+          // The runner itself failed, as distinct from the command exiting
+          // non-zero. Surface the reason rather than an empty result.
+          stderr += event.error ?? "the sandbox reported an error";
+          exitCode = exitCode ?? 1;
+          break;
+      }
+      // Watchers follow both streams — a CLI writes its progress to stderr as
+      // often as stdout, and showing only one leaves a run looking stalled.
+      if (text && (event.type === "stdout" || event.type === "stderr")) {
+        try {
+          onChunk(text);
+        } catch {
+          // A failed observer is not a failed command.
+        }
       }
     }
-    // The stream carries output, not an exit status; a command that produced
-    // nothing on stderr and ran to completion is treated as successful.
-    return { stdout, stderr: "", exitCode: 0, success: true };
+
+    // No `complete` event: the stream ended without saying how the command
+    // finished. Treating that as success is the bug this method just fixed, so
+    // it is reported as a failure with the reason said plainly.
+    if (exitCode === undefined) {
+      return {
+        stdout,
+        stderr: stderr || "the output stream ended before the command reported an exit status",
+        exitCode: 1,
+        success: false,
+      };
+    }
+    return { stdout, stderr, exitCode, success: exitCode === 0 };
   }
 
   async writeFile(agentId: string, path: string, content: string): Promise<void> {

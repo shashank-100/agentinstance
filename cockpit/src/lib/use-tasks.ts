@@ -5,7 +5,7 @@
 // the only difference is that it arrives over the network and refreshes itself.
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { fetchTasks, fetchStatus, fetchAgentHistory } from "./api";
+import { fetchTasks, fetchStatus, fetchAgentHistory, fetchAgentOutput } from "./api";
 import type { Task } from "./mock-data";
 
 /**
@@ -84,4 +84,21 @@ export function useAgentHistory(agentId: string | null, live: boolean) {
     refetchInterval: live ? 3000 : false,
   });
   return { messages: q.data ?? [], loading: q.isLoading };
+}
+
+/**
+ * An agent's live CLI output.
+ *
+ * Polled faster than the board while a run is in flight — this is the thing
+ * being watched, and a slow poll turns a live feed into a log.
+ */
+export function useAgentOutput(agentId: string | null, live: boolean) {
+  const mounted = useMounted();
+  const q = useQuery({
+    queryKey: ["agent", agentId, "output"],
+    queryFn: () => fetchAgentOutput(agentId!),
+    enabled: mounted && Boolean(agentId),
+    refetchInterval: live ? 2000 : false,
+  });
+  return { rows: q.data ?? [], loading: q.isLoading };
 }
