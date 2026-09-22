@@ -16,10 +16,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { useTasks } from "@/lib/use-tasks";
+import { useTasks, useFleetStatus } from "@/lib/use-tasks";
 import { Kbd } from "./atoms";
-import { Terminal, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 export function CommandBar() {
   const { tasks } = useTasks();
@@ -76,6 +75,10 @@ export function CommandBar() {
             <CommandList>
               <CommandEmpty>No matches.</CommandEmpty>
               <CommandGroup heading="Actions">
+                {/* "Take over terminal (latest run)" sat here and reported
+                    attaching to a hardcoded `vm-1c7ba0` without making a
+                    request. There is no attach endpoint, so the honest
+                    version of it is not to offer it. */}
                 <CommandItem
                   onSelect={() => {
                     setPaletteOpen(false);
@@ -83,14 +86,6 @@ export function CommandBar() {
                   }}
                 >
                   <Plus className="size-3.5" /> Dispatch new task
-                </CommandItem>
-                <CommandItem
-                  onSelect={() => {
-                    setPaletteOpen(false);
-                    toast.success("Attached to live bash session on vm-1c7ba0");
-                  }}
-                >
-                  <Terminal className="size-3.5" /> Take over terminal (latest run)
                 </CommandItem>
               </CommandGroup>
               <CommandGroup heading="Sessions">
@@ -116,6 +111,20 @@ export function CommandBar() {
   );
 }
 
+/** Live counts from the queue. Renders nothing until they arrive, so the bar
+ *  never shows a zero it has not actually read. */
+function FleetSummary() {
+  const { status } = useFleetStatus();
+  const running = status["running"] ?? 0;
+  const queued = status["queued"] ?? 0;
+  if (!Object.keys(status).length) return null;
+  return (
+    <span className="rule-label hidden sm:inline">
+      {running} running · {queued} queued
+    </span>
+  );
+}
+
 export function TopBar() {
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/90 backdrop-blur">
@@ -125,10 +134,12 @@ export function TopBar() {
             ⇥
           </span>
           <span className="font-display text-[15px] font-medium">
-            Relay <span className="font-normal text-muted-foreground">relay.sh</span>
+            agentinstance
           </span>
         </Link>
-        <span className="rule-label hidden sm:inline">acme · 3 microVMs warm</span>
+        {/* The real queue, not a fixed string. This read "acme · 3 microVMs
+            warm" whatever the board was doing. */}
+        <FleetSummary />
         <div className="ml-auto">
           <CommandBar />
         </div>

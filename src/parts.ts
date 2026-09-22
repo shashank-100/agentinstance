@@ -9,16 +9,6 @@ export interface TextPart {
 }
 export type Part = TextPart | { type: string; index: number; [k: string]: unknown };
 
-/** Build a single text part array from a plain string. */
-export function textParts(text: string): Part[] {
-  return [{ type: "text", index: 0, text }];
-}
-
-/** Reindex parts so `index` is 0..n-1 in order (mirrors AgentSky's mapping). */
-export function reindex(parts: Part[]): Part[] {
-  return parts.map((p, index) => ({ ...p, index }));
-}
-
 /** Collapse parts down to a plain string (text parts joined). */
 export function textFromParts(parts: Part[]): string {
   return parts

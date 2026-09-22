@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Github, ExternalLink, AlertTriangle, Check } from "lucide-react";
+import { Github, ExternalLink, AlertTriangle } from "lucide-react";
 
 /**
  * How this deployment reaches GitHub, and how to change it.
@@ -46,6 +46,25 @@ export function GitHubConnect() {
   const connected = data.credential !== "none";
   const viaApp = data.credential === "github-app";
 
+  // A working connection is not news. Once the App is installed there is
+  // nothing here to act on, so the panel shrinks to a line that confirms it
+  // and offers the only thing still worth reaching — which repositories are
+  // granted. The full panel is for the states that need a decision.
+  if (viaApp) {
+    return (
+      <p className="flex items-center gap-2 px-1 font-mono text-[11px] text-muted-foreground">
+        <Github className="size-3" />
+        <span className="text-success">GitHub connected</span>
+        <a
+          href={`${BASE}${data.installUrl ?? "/github/install"}`}
+          className="ml-auto underline-offset-2 hover:text-foreground hover:underline"
+        >
+          Manage repositories
+        </a>
+      </p>
+    );
+  }
+
   return (
     <section className="rounded-lg border border-border bg-surface p-5">
       <div className="flex items-start gap-3">
@@ -56,31 +75,21 @@ export function GitHubConnect() {
             <span
               className={
                 "rounded-sm px-1.5 py-0.5 font-mono text-[10px] " +
-                (viaApp
-                  ? "bg-success/10 text-success"
-                  : connected
-                    ? "bg-warning/10 text-warning"
-                    : "bg-destructive/10 text-destructive")
+                (connected ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive")
               }
             >
-              {viaApp ? "app installed" : connected ? "token" : "not connected"}
+              {connected ? "token" : "not connected"}
             </span>
           </div>
 
-          {viaApp ? (
-            <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-muted-foreground">
-              <Check className="mt-0.5 size-3 shrink-0 text-success" />
-              Agents can clone, push and open pull requests on the repositories
-              you granted. Tokens are minted per run and expire in an hour.
-            </p>
-          ) : connected ? (
+          {connected ? (
             <>
               <p className="mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed text-muted-foreground">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0 text-warning" />
-                Using a personal access token. Its permissions cannot be checked
-                from here — if it lacks <span className="font-mono">Contents</span>{" "}
-                and <span className="font-mono">Pull requests</span> write access,
-                agents will clone and commit fine and then fail at push with a 403.
+                Using a personal access token. Its permissions cannot be checked from here — if it
+                lacks <span className="font-mono">Contents</span> and{" "}
+                <span className="font-mono">Pull requests</span> write access, agents will clone and
+                commit fine and then fail at push with a 403.
               </p>
               <ul className="mt-2 space-y-0.5 pl-4 font-mono text-[11px] text-muted-foreground">
                 <li>· Contents: Read and write</li>
@@ -91,16 +100,15 @@ export function GitHubConnect() {
             <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
               Agents cannot reach GitHub. Until this is connected,{" "}
               <span className="font-mono">git_repo</span> and{" "}
-              <span className="font-mono">open_pr</span> are not offered to them
-              at all.
+              <span className="font-mono">open_pr</span> are not offered to them at all.
             </p>
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">
             {data.installUrl ? (
-              <Button asChild size="sm" variant={viaApp ? "outline" : "default"}>
+              <Button asChild size="sm">
                 <a href={`${BASE}${data.installUrl}`}>
-                  {viaApp ? "Manage repositories" : "Connect GitHub"}
+                  Connect GitHub
                   <ExternalLink className="ml-1.5 size-3" />
                 </a>
               </Button>
@@ -108,12 +116,11 @@ export function GitHubConnect() {
               // No app configured on this deployment, so there is nothing to
               // send the user to. Saying so beats a button that 400s.
               <p className="font-mono text-[11px] text-muted-foreground">
-                No GitHub App on this deployment — set GITHUB_APP_ID,
-                GITHUB_APP_PRIVATE_KEY and GITHUB_APP_SLUG to offer one-click
-                connect.
+                No GitHub App on this deployment — set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY and
+                GITHUB_APP_SLUG to offer one-click connect.
               </p>
             )}
-            {connected && !viaApp && (
+            {connected && (
               <Button asChild size="sm" variant="outline">
                 <a
                   href="https://github.com/settings/personal-access-tokens"

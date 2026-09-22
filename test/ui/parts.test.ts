@@ -1,20 +1,8 @@
 // parts[] message format (pure functions, node env).
 import { describe, it, expect } from "vitest";
-import { textParts, reindex, textFromParts, toText } from "../../src/parts.js";
+import { textFromParts, toText } from "../../src/parts.js";
 
 describe("parts", () => {
-  it("textParts wraps a string", () => {
-    expect(textParts("hi")).toEqual([{ type: "text", index: 0, text: "hi" }]);
-  });
-
-  it("reindex fixes indices in order", () => {
-    const out = reindex([
-      { type: "text", index: 9, text: "a" },
-      { type: "text", index: 3, text: "b" },
-    ]);
-    expect(out.map((p) => p.index)).toEqual([0, 1]);
-  });
-
   it("textFromParts joins text parts and skips others", () => {
     expect(
       textFromParts([

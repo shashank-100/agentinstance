@@ -21,8 +21,19 @@ export interface ExecResult {
 
 export interface Sandbox {
   name: string;
-  /** Run a shell command in the sandbox for this agent id. */
-  exec(agentId: string, command: string): Promise<ExecResult>;
+  /**
+   * Run a shell command in the sandbox for this agent id.
+   *
+   * `env` sets variables for that one invocation. Credentials belong here and
+   * never in the command string: a `VAR=secret sh -c ...` assignment puts the
+   * value in the process's argv, where anything else in the container can read
+   * it out of the process list.
+   */
+  exec(
+    agentId: string,
+    command: string,
+    env?: Record<string, string>,
+  ): Promise<ExecResult>;
   /** As `exec`, but calls `onChunk` with output as it is produced. Optional:
    *  not every implementation can stream, and callers fall back to `exec`. */
   execStreaming?(
@@ -53,8 +64,12 @@ export class ContainerSandbox implements Sandbox {
     return getCloudflareSandbox(this.ns, agentId.slice(0, 63));
   }
 
-  async exec(agentId: string, command: string): Promise<ExecResult> {
-    const r = await this.box(agentId).exec(command);
+  async exec(
+    agentId: string,
+    command: string,
+    env?: Record<string, string>,
+  ): Promise<ExecResult> {
+    const r = await this.box(agentId).exec(command, env ? { env } : undefined);
     return {
       stdout: r.stdout ?? "",
       stderr: r.stderr ?? "",

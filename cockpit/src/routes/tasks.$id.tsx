@@ -1,10 +1,12 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { harnessLabel, runtimeLabel, type DiffLine } from "@/lib/mock-data";
+import { runtimeLabel, type DiffLine } from "@/lib/mock-data";
+import { releaseTask } from "@/lib/api";
 import { useTask, useAgentHistory, useAgentOutput } from "@/lib/use-tasks";
 import { Shell } from "@/components/cockpit/Shell";
 import {
@@ -14,7 +16,7 @@ import {
   NodeKindDot,
   StatusPill,
 } from "@/components/cockpit/atoms";
-import { ArrowLeft, GitBranch, Terminal } from "lucide-react";
+import { ArrowLeft, GitBranch } from "lucide-react";
 
 export const Route = createFileRoute("/tasks/$id")({
   // No fetch in the loader: it runs during SSR, where an unreachable API turns
@@ -23,13 +25,10 @@ export const Route = createFileRoute("/tasks/$id")({
   head: ({ loaderData }) => {
     if (!loaderData) {
       return {
-        meta: [
-          { title: "Task unavailable — Relay" },
-          { name: "robots", content: "noindex" },
-        ],
+        meta: [{ title: "Task unavailable — agentinstance" }, { name: "robots", content: "noindex" }],
       };
     }
-    const title = `Task ${loaderData.id} — Relay`;
+    const title = `Task ${loaderData.id} — agentinstance`;
     const description = "An agent run on the work queue.";
     return {
       meta: [
@@ -50,17 +49,23 @@ function TaskView() {
   const { task, loading } = useTask(id);
   const agentId = task && task.vm !== "—" ? task.vm : null;
   const { rows: outputRows } = useAgentOutput(agentId, task?.status === "running");
-  const { messages, loading: historyLoading } = useAgentHistory(
-    agentId,
-    task?.status === "running",
-  );
+  const { messages } = useAgentHistory(agentId, task?.status === "running");
   const [activeFile, setActiveFile] = useState("");
+  const [releasing, setReleasing] = useState(false);
+  const queryClient = useQueryClient();
+  // The API allows a requeue from `running` or `failed` only, so the button is
+  // gated on the queue's own state rather than the UI's mapped status — which
+  // folds `settled` into `merged` and would offer the action on a finished task.
+  const canRelease = task?.state === "running" || task?.state === "failed";
 
   if (!task) {
     return (
       <Shell>
         <div className="px-4 py-6 sm:px-6 lg:px-8">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
             <ArrowLeft className="size-3" /> sessions
           </Link>
           <p className="mt-6 font-mono text-sm text-muted-foreground">
@@ -86,9 +91,7 @@ function TaskView() {
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="flex items-baseline gap-2.5 font-display text-2xl font-medium leading-snug sm:text-3xl">
-              <span className="font-mono text-sm text-muted-foreground">
-                #{task.number}
-              </span>
+              <span className="font-mono text-sm text-muted-foreground">#{task.number}</span>
               <span className="min-w-0 lg:truncate">{task.title}</span>
             </h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted-foreground">
@@ -110,28 +113,45 @@ function TaskView() {
             </div>
           </div>
 
+          {/* Only what the deployment can actually do. "Take over terminal",
+              "Request rework" and "Approve & merge" lived here and each fired
+              a success toast without making a request — the last of those was
+              also permanently disabled, since nothing on the queue ever
+              reaches a `review` state. A button that reports work it did not
+              do is worse than no button. */}
           <div className="flex flex-wrap gap-2">
+            {task.prUrl && (
+              <Button asChild variant="outline" size="sm" className="gap-2">
+                <a href={task.prUrl} target="_blank" rel="noreferrer">
+                  <GitBranch className="size-3.5" /> View pull request
+                </a>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
-              onClick={() => toast.success(`Attached to live bash session on ${task.vm}`)}
+              disabled={releasing || !canRelease}
+              title={
+                canRelease
+                  ? "Put this task back on the queue for another agent"
+                  : "Only a running or failed task can be requeued"
+              }
+              onClick={() => {
+                setReleasing(true);
+                releaseTask(task.id)
+                  .then(() => {
+                    void queryClient.invalidateQueries({ queryKey: ["fleet"] });
+                    toast.success("Task requeued", {
+                      description: `${task.id} is back on the queue`,
+                    });
+                  })
+                  .catch((e: Error) =>
+                    toast.error("Could not requeue the task", { description: e.message }),
+                  )
+                  .finally(() => setReleasing(false));
+              }}
             >
-              <Terminal className="size-3.5" /> Take over terminal
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast("Rework requested", { description: "Harness re-dispatched on the same branch." })}
-            >
-              Request rework
-            </Button>
-            <Button
-              size="sm"
-              disabled={task.status !== "review"}
-              onClick={() => toast.success(`#${task.number} approved and squash-merged`)}
-            >
-              Approve &amp; merge
+              {releasing ? "Requeueing…" : "Requeue task"}
             </Button>
           </div>
         </div>
@@ -210,44 +230,58 @@ function TaskView() {
                   <span className="size-1.5 rounded-full bg-success" />
                   {task.vm} · {task.repo}
                 </div>
-                {/* The agent's own transcript. The container's stdout is not
-                    captured anywhere — `sandbox.exec` returns only when the
-                    command ends — so what the agent *says* is the live record
-                    of what it is doing. Polled every 3s while it runs. */}
+                {/* What the CLI actually printed, streamed into the agent's DO
+                    as it ran and followed here with `?since=`. This tab used
+                    to render the transcript alone, on the since-outdated basis
+                    that container stdout was never captured — so a run in
+                    progress showed nothing until its turn had ended. */}
                 <div className="max-h-[520px] overflow-y-auto p-3 font-mono text-[11.5px] leading-6">
-                  {messages.length === 0 && (
+                  {outputRows.length === 0 && (
                     <p className="text-muted-foreground">
                       {task.vm === "—"
                         ? "No agent has claimed this task yet."
-                        : historyLoading
-                          ? "Loading…"
-                          : "The agent has not said anything yet."}
+                        : task.status === "running"
+                          ? "Waiting for the first output…"
+                          : "This run printed nothing, or its output has aged out."}
                     </p>
                   )}
                   {outputRows.length > 0 && (
-                    <pre className="mb-3 whitespace-pre-wrap break-words border-b border-border/40 pb-3 text-foreground">
+                    <pre className="whitespace-pre-wrap break-words text-foreground">
                       {outputRows.map((r) => r.text).join("")}
                     </pre>
                   )}
-                  {messages.map((m, i) => (
-                    <div key={i} className="flex gap-3 border-b border-border/40 py-1.5 last:border-0">
-                      <span className="w-16 shrink-0 text-muted-foreground">
-                        {new Date(m.ts).toISOString().slice(11, 19)}
-                      </span>
-                      <span
-                        className={cn(
-                          "min-w-0 whitespace-pre-wrap break-words",
-                          m.role === "user" ? "text-muted-foreground" : "text-foreground",
-                        )}
-                      >
-                        {m.content}
-                      </span>
-                    </div>
-                  ))}
                   {task.status === "running" && (
                     <div className="mt-1 inline-block h-4 w-2 animate-pulse bg-primary align-middle" />
                   )}
                 </div>
+
+                {/* The turns themselves: what the agent concluded, as opposed
+                    to what it printed on the way there. */}
+                {messages.length > 0 && (
+                  <div className="border-t border-border">
+                    <p className="rule-label px-3 pt-2.5">Transcript</p>
+                    <div className="max-h-56 overflow-y-auto p-3 font-mono text-[11.5px] leading-6">
+                      {messages.map((m, i) => (
+                        <div
+                          key={i}
+                          className="flex gap-3 border-b border-border/40 py-1.5 last:border-0"
+                        >
+                          <span className="w-16 shrink-0 text-muted-foreground">
+                            {new Date(m.ts).toISOString().slice(11, 19)}
+                          </span>
+                          <span
+                            className={cn(
+                              "min-w-0 whitespace-pre-wrap break-words",
+                              m.role === "user" ? "text-muted-foreground" : "text-foreground",
+                            )}
+                          >
+                            {m.content}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -309,7 +343,6 @@ function TaskView() {
                 ))}
               </ul>
             </div>
-
           </aside>
         </div>
       </div>
