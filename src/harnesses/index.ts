@@ -49,9 +49,19 @@ export interface Harness {
   run(model: Model, history: Message[], system: string, ctx?: HarnessContext): Promise<string>;
 }
 
-/** How long a CLI harness may run before it is killed. Comfortably above a
- *  normal run (a few seconds) and safely inside the request's own lifetime. */
-const CLI_TIMEOUT_SECONDS = 120;
+/**
+ * How long a CLI harness may run before it is killed.
+ *
+ * The backstop is for a *hung* CLI, not a busy one, so this has to clear the
+ * slowest honest run. 120s did not: a cold container has to start, clone, and
+ * boot the CLI before any work begins, and a first message on a sleeping agent
+ * was killed mid-task with a timeout that looked like a bug in the agent.
+ *
+ * It still has to sit inside the request's own lifetime — a reply is returned
+ * over HTTP, so this cannot grow without bound. Work that genuinely needs
+ * longer belongs on the alarm path, where nothing is holding a request open.
+ */
+const CLI_TIMEOUT_SECONDS = 600;
 
 /**
  * Runs a real agent CLI inside the agent's VM — Claude Code — rather than
