@@ -13,7 +13,10 @@ export default defineConfig({
   ],
   test: {
     // The UI suite runs in node via vitest.ui.config.ts; keep it out of here.
-    exclude: ["test/ui/**", "node_modules/**"],
+    // `node_modules/**` matches only the top level, so a nested install — the
+    // cockpit UI has its own — drags thousands of dependency tests into the
+    // run and reports them as this project's failures.
+    exclude: ["test/ui/**", "**/node_modules/**", "cockpit/**"],
     // singleWorker means every file shares one worker, so parallel file
     // runners deadlock competing to start it: the suite hangs until the
     // pool times out and reports "no tests" with a zero exit code. Serial
