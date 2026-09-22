@@ -11,8 +11,6 @@
 # Get one with: claude setup-token
 CLAUDE_CODE_OAUTH_TOKEN=
 
-# Moonshot (Kimi). Serves kimi-k3, which the pi harness drives.
-MOONSHOT_API_KEY=
 
 # --- capabilities --------------------------------------------------------
 # search_web. Without it that capability is offered as not ready.

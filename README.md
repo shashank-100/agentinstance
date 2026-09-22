@@ -14,9 +14,7 @@ Agents need a model key before they can reply — add one as a secret after the
 first deploy:
 
 ```sh
-wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # a Claude subscription, for claude-code
-# or
-wrangler secret put MOONSHOT_API_KEY          # for the pi harness
+wrangler secret put CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 Set `FLEET_TOKEN` too on anything reachable from the internet — without it,
@@ -32,8 +30,8 @@ It sleeps when idle and you pay nothing while it does.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note:** a model key is required. Set either `CLAUDE_CODE_OAUTH_TOKEN` (a
-> Claude subscription) or `MOONSHOT_API_KEY` (for pi). Without one, `send`
+> **Note:** a model key is required. Set `CLAUDE_CODE_OAUTH_TOKEN`.
+> Without one, `send`
 > returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 
 ## Try it
@@ -90,7 +88,7 @@ npm run deploy    # deploy to your Cloudflare account
 Set a model key (required — agents cannot reply without it):
 
 ```bash
-npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # or MOONSHOT_API_KEY
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 ## API
