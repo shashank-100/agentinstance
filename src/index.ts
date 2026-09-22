@@ -70,7 +70,14 @@ class TieredSandbox extends CloudflareSandbox {
         );
       };
       Object.defineProperty(ctx, "container", {
-        value: new Proxy({ running: false }, { get: () => unavailable }),
+        // Properties the stand-in defines answer from it: the base class reads
+        // `running` as a plain truthiness guard, and a thrower returned there
+        // is a *function*, so the guard would pass and go on to call a method.
+        // Only what the stand-in does not define throws.
+        value: new Proxy({ running: false }, {
+          get: (target, prop) =>
+            prop in target ? target[prop as keyof typeof target] : unavailable,
+        }),
         configurable: true,
       });
     }
