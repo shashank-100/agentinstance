@@ -40,6 +40,17 @@ export interface Env {
    * the command's environment, for the life of that command only.
    */
   GITHUB_TOKEN?: string;
+  /**
+   * GitHub App credentials, preferred over GITHUB_TOKEN. The App declares its
+   * own permissions and mints hour-long installation tokens, so nobody hand-
+   * picks permission boxes and a leaked credential expires by itself.
+   * The key must be PKCS#8 ("BEGIN PRIVATE KEY") — WebCrypto imports no other.
+   */
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
+  /** The app's URL name, e.g. `my-agents` in github.com/apps/my-agents.
+   *  Only needed to offer /github/install; tokens do not depend on it. */
+  GITHUB_APP_SLUG?: string;
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;
   // Capability keys.

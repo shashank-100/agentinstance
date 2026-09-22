@@ -9,6 +9,7 @@ import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
 import { getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
 import { MODELS, PROVIDERS } from "./catalog.js";
+import { tokenForRepo } from "./github-app.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
 export class AgentInstance extends DurableObject<Env> {
@@ -628,8 +629,6 @@ export class AgentInstance extends DurableObject<Env> {
   private async gitRepo(
     input: Record<string, unknown>,
   ): Promise<{ result?: Record<string, unknown>; error?: string }> {
-    const token = this.env.GITHUB_TOKEN;
-    if (!token) return { error: "GITHUB_TOKEN is not set" };
     const { getSandbox } = await import("./sandbox/index.js");
     const sandbox = getSandbox(this.env, this.spec.machine);
     if (!sandbox) return { error: "no sandbox is configured for this agent" };
@@ -638,7 +637,13 @@ export class AgentInstance extends DurableObject<Env> {
     // The VM sends one generic `arg`; the REST API may name the field for the
     // action instead. Accept either, so both callers work.
     const arg = String(input.arg ?? "").trim();
-    const repo = String(input.repo ?? arg).trim();
+    // Only `clone` is given a repo, but a GitHub App token is scoped to the
+    // installation covering one — so `push` needs to know what was cloned.
+    // Remembering it here keeps the tool's shape unchanged: an agent still
+    // pushes without repeating itself.
+    const named = String(input.repo ?? arg).trim();
+    const repo = action === "clone" ? named : named || this.getKV<string>("git_repo_last", "");
+    if (action === "clone" && repo) this.setKV("git_repo_last", repo);
     const dir = "/workspace/repo";
 
     // A credential helper that prints the token, so it never lands in a file
@@ -691,6 +696,18 @@ export class AgentInstance extends DurableObject<Env> {
         return { error: `unknown git_repo action '${action}'` };
     }
 
+    // Only the actions that reach GitHub need a credential; `status` and
+    // `diff` read the checkout and would fail for no reason without one.
+    let token = "";
+    if (action === "clone" || action === "push") {
+      if (!repo) {
+        return { error: `git_repo ${action} needs a repo — clone one first` };
+      }
+      const got = await tokenForRepo(this.env, repo);
+      if (got.error) return { error: got.error };
+      token = got.token!;
+    }
+
     const out = await sandbox.exec(this.ctx.id.toString(), `GH_TOKEN=${shellArg(token)} sh -c ${shellArg(cmd)}`);
     return {
       result: {
@@ -711,13 +728,14 @@ export class AgentInstance extends DurableObject<Env> {
   private async openPr(
     input: Record<string, unknown>,
   ): Promise<{ result?: Record<string, unknown>; error?: string }> {
-    const token = this.env.GITHUB_TOKEN;
-    if (!token) return { error: "GITHUB_TOKEN is not set" };
     const repo = String(input.repo ?? "").trim();
     const head = String(input.head ?? "").trim();
     if (!repo || !head) {
       return { error: "open_pr requires { repo: 'owner/name', head: 'branch' }" };
     }
+    const got = await tokenForRepo(this.env, repo);
+    if (got.error) return { error: got.error };
+    const token = got.token!;
 
     const res = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
       method: "POST",

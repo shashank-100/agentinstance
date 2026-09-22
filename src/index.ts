@@ -178,6 +178,7 @@ export default {
       return Response.redirect(new URL("/agents/", url).toString(), 302);
     }
     if (first === "catalog") return catalogRoute(env);
+    if (first === "github") return githubRoute(request, env, second);
     if (first === "api" && second === "launch" && request.method === "POST") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       return launchRoute(request, env);
@@ -205,6 +206,61 @@ export default {
     return env.ASSETS.fetch(request); // static assets
   },
 } satisfies ExportedHandler<Env>;
+
+/**
+ * The GitHub App install flow.
+ *
+ * `/github/install` sends someone to GitHub's own consent screen, which is the
+ * point of the App: GitHub asks which repositories to grant, and the
+ * permissions being granted are the ones the App declares. Nobody ticks boxes
+ * by hand, and nobody pastes a token anywhere.
+ *
+ * `/github/status` reports what this deployment is actually running on, so a
+ * 403 at push time can be diagnosed without reading the source.
+ *
+ * GitHub redirects back to `/github/installed` after an install. There is
+ * nothing to store: which repositories were granted lives on GitHub, and
+ * `tokenForRepo` asks it per repo. That is deliberate — an installation id
+ * cached here would go stale the moment someone changed the grant.
+ */
+function githubRoute(request: Request, env: Env, action?: string): Response {
+  const appSlug = env.GITHUB_APP_SLUG;
+  switch (action) {
+    case "install": {
+      if (!appSlug) {
+        return json(
+          { error: "GITHUB_APP_SLUG is not set, so there is no app to install" },
+          400,
+        );
+      }
+      return Response.redirect(
+        `https://github.com/apps/${appSlug}/installations/new`,
+        302,
+      );
+    }
+    case "installed":
+      return json({
+        ok: true,
+        message:
+          "installed — agents can now reach the repositories you granted. " +
+          "Check /github/status to confirm.",
+      });
+    case "status": {
+      const app = Boolean(env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY);
+      return json({
+        credential: app ? "github-app" : env.GITHUB_TOKEN ? "personal-access-token" : "none",
+        // A PAT's permissions cannot be checked without using it: the repo
+        // API's `permissions` block describes the *account's* access, not the
+        // token's grants, so a read-only token looks identical to a writable
+        // one until a push fails. The App has no such ambiguity.
+        canVerifyPermissions: app,
+        installUrl: appSlug ? `/github/install` : null,
+      });
+    }
+    default:
+      return json({ error: `unknown github action '${action ?? ""}'` }, 404);
+  }
+}
 
 // --- what an agent can be built from -----------------------------------------
 function catalogRoute(env: Env): Response {

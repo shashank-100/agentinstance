@@ -83,6 +83,11 @@ const has = (env: KeyEnv, key: string): boolean => {
   return typeof v === "string" && v.trim() !== "";
 };
 
+/** Either credential will do: the App is preferred, a PAT still works. */
+const gitHubReady = (env: KeyEnv): boolean =>
+  (has(env, "GITHUB_APP_ID") && has(env, "GITHUB_APP_PRIVATE_KEY")) ||
+  has(env, "GITHUB_TOKEN");
+
 /**
  * Can this deployment serve any model this harness drives?
  *
@@ -190,15 +195,16 @@ const CAPABILITY_DEFS: Record<string, Described> = {
   // The work queue, from inside the VM: claim a task, record a branch or a
   // pull request against it, and settle it.
   fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
-  // Git against a real remote. Without a token an agent can still clone a
-  // public repo but cannot push, so this is offered only when one is set.
+  // Git against a real remote. Without a credential an agent can still clone a
+  // public repo but cannot push, so these are offered only when one is set —
+  // either a GitHub App (preferred) or a personal access token.
   git_repo: {
     desc: "Clone, branch, commit and push a repository.",
-    needs: (env) => has(env, "GITHUB_TOKEN"),
+    needs: gitHubReady,
   },
   open_pr: {
     desc: "Open a pull request on GitHub.",
-    needs: (env) => has(env, "GITHUB_TOKEN"),
+    needs: gitHubReady,
   },
 };
 
