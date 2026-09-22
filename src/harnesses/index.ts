@@ -29,6 +29,9 @@ export interface HarnessContext {
   capabilities?: string[];
   /** This agent's own REST base, so tools in the VM can call back to it. */
   agentUrl?: string;
+  /** Called with CLI output as it is produced, so a run can be watched while
+   *  it happens rather than only read once it ends. */
+  onOutput?: (text: string) => void;
   /** Provider credentials for the CLI: taken from the agent's own model. */
   cliKey?: string;
   cliBaseUrl?: string;
@@ -214,7 +217,12 @@ export class AgentCliHarness implements Harness {
       `chown -R agent /workspace /home/agent && ` +
       `timeout ${CLI_TIMEOUT_SECONDS} runuser -u agent -- sh -c ${shellQuote(inner)}`;
 
-    const out = await sandbox.exec(agentId, cmd);
+    // Streamed when someone is listening: `exec` resolves only at the end, so
+    // a run that takes minutes shows nothing until it is over.
+    const out =
+      ctx?.onOutput && sandbox.execStreaming
+        ? await sandbox.execStreaming(agentId, cmd, ctx.onOutput)
+        : await sandbox.exec(agentId, cmd);
     // 124 is what `timeout` returns when it kills the command.
     if (out.exitCode === 124) {
       return `${this.name} timed out after ${CLI_TIMEOUT_SECONDS}s.`;

@@ -74,7 +74,11 @@ class TieredSandbox extends CloudflareSandbox {
         // `running` as a plain truthiness guard, and a thrower returned there
         // is a *function*, so the guard would pass and go on to call a method.
         // Only what the stand-in does not define throws.
-        value: new Proxy({ running: false }, {
+        // `destroy` resolves instead of throwing: stopping a container that
+        // does not exist is the goal already met, and the sandbox stores the
+        // teardown promise before awaiting it — so a rejection there is
+        // unhandled no matter what the caller does with its own copy.
+        value: new Proxy({ running: false, destroy: async () => {} }, {
           get: (target, prop) =>
             prop in target ? target[prop as keyof typeof target] : unavailable,
         }),
@@ -373,6 +377,11 @@ async function fleetRoute(
 
   if (section === "status") return json(await f.stats());
 
+  // Run the sweep now rather than waiting for the alarm. The alarm covers the
+  // unattended case; this is for when someone is looking at a stuck board and
+  // would otherwise have to file a task just to trigger a reclaim.
+  if (section === "sweep") return json(await f.sweep());
+
   if (section !== "tasks") return json({ error: "unknown fleet route" }, 404);
 
   // One task: read it, patch its branch/PR, or drop it.
@@ -567,10 +576,17 @@ async function agentRoute(
       // Reading an agent that was never launched should say so, rather than
       // describing the empty Durable Object that exists for every name.
       case "history":
+      case "output":
       case "status":
       case "snapshot": {
         if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
         if (route.action === "history") return json(await agent.getHistory());
+        // Live CLI output. `since` returns only what is new, so a watcher
+        // polls without re-reading the whole run each time.
+        if (route.action === "output") {
+          const since = Number(new URL(request.url).searchParams.get("since") ?? 0);
+          return json(await agent.getOutput(Number.isFinite(since) ? since : 0));
+        }
         if (route.action === "status") return json(await agent.status());
         return json(await agent.snapshot());
       }

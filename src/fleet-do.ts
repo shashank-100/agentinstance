@@ -23,6 +23,14 @@ import type { Env } from "./types.js";
  */
 const LEASE_MS = 15 * 60 * 1000;
 
+/**
+ * How often the board checks itself for abandoned work.
+ *
+ * A third of the lease, so a dead claim is noticed within a few minutes of
+ * expiring rather than at some arbitrary later point.
+ */
+const SWEEP_MS = 5 * 60 * 1000;
+
 /** How many times a task may be abandoned before it is failed rather than
  *  requeued. Three is enough to ride out a cold start or a flaky container,
  *  and few enough that a task which cannot succeed stops consuming workers. */
@@ -151,6 +159,7 @@ export class FleetDO extends DurableObject<Env> {
       Date.now(),
       id,
     );
+    await this.armSweep();
     return this.get(id);
   }
 
@@ -182,6 +191,7 @@ export class FleetDO extends DurableObject<Env> {
       Date.now(),
       row.id,
     );
+    await this.armSweep();
     return this.get(row.id);
   }
 
@@ -225,6 +235,48 @@ export class FleetDO extends DurableObject<Env> {
         );
       }
     }
+  }
+
+  /**
+   * Sweep abandoned work on a timer, not only when somebody asks for a task.
+   *
+   * `claim` reclaims before it hands anything out, which covers a busy queue —
+   * but it is exactly backwards for a quiet one. A board with no incoming work
+   * never calls `claim`, so the one task that died stays `running` forever and
+   * nothing notices. The failure mode is worst precisely when no one is
+   * watching, which is the case this whole system exists for.
+   *
+   * The alarm re-arms itself only while something is running: an idle board
+   * should cost nothing, and a DO with no alarm set is free.
+   */
+  async alarm(): Promise<void> {
+    await this.sweep();
+  }
+
+  /** Reclaim now, and keep sweeping while anything is still running. */
+  async sweep(): Promise<{ swept: true; running: number }> {
+    this.reclaimStale();
+    await this.armSweep();
+    const row = this.sql
+      .exec("SELECT COUNT(*) AS n FROM tasks WHERE state='running'")
+      .toArray()[0] as { n: number } | undefined;
+    return { swept: true, running: row?.n ?? 0 };
+  }
+
+  /**
+   * Set the next sweep, if there is anything worth sweeping.
+   *
+   * Called after every claim and assign rather than on a fixed schedule: those
+   * are the only two ways a task enters `running`, so they are the only moments
+   * a sweep becomes necessary. `setAlarm` overwrites, so repeated calls simply
+   * keep the next sweep one interval out.
+   */
+  private async armSweep(): Promise<void> {
+    const running = this.sql
+      .exec("SELECT COUNT(*) AS n FROM tasks WHERE state='running'")
+      .toArray()[0] as { n: number } | undefined;
+    if (!running?.n) return; // nothing in flight: let the alarm lapse
+    await this.ctx.storage.setAlarm(Date.now() + SWEEP_MS);
   }
 
   /**
