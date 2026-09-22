@@ -40,10 +40,17 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # the capabilities installed onto its PATH are reachable. Same extension, same
 # token, same prompt; only the version differs. Re-test tool use before
 # raising this.
-RUN npm install -g \
-      @anthropic-ai/claude-code@2.1.278 \
-      @earendil-works/pi-coding-agent@0.84.0 \
-      @openai/codex@0.155.1
+# One CLI per layer, rather than one `npm install -g` for all three. Together
+# they are ~765MB, and a single RUN makes that a single blob: the push sends it
+# as one request, so a connection reset at 90% discards the whole thing and the
+# retry starts from zero. Split, each pushes independently and a reset costs
+# only the layer it interrupted — the rest are already uploaded and skipped.
+#
+# The order is smallest first, so the layer most likely to survive a flaky link
+# is also the one the other two build on.
+RUN npm install -g @earendil-works/pi-coding-agent@0.84.0
+RUN npm install -g @anthropic-ai/claude-code@2.1.278
+RUN npm install -g @openai/codex@0.155.1
 
 # pi-anthropic-oauth makes pi authenticate the way Claude Code does, so an
 # ANTHROPIC_OAUTH_TOKEN bills against a Claude subscription instead of API
