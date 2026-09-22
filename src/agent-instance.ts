@@ -12,6 +12,25 @@ import { MODELS, PROVIDERS } from "./catalog.js";
 import { tokenForRepo } from "./github-app.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
+/**
+ * How much live output an agent keeps.
+ *
+ * Enough to follow a run and scroll back through it; small enough that a CLI
+ * printing a verbose build log cannot grow one agent's storage without limit.
+ * Bytes rather than rows, because a row is anything from one character to a
+ * 50KB stack trace and a row count bounds neither.
+ */
+const OUTPUT_BYTE_LIMIT = 256 * 1024;
+
+/** Chunks arriving within this long of the previous one are appended to it
+ *  rather than inserted: a streaming CLI emits fragments, and one row each
+ *  costs more in keys and timestamps than the text is worth. */
+const OUTPUT_COALESCE_MS = 1000;
+
+/** Ceiling on a coalesced row, so one long-running line cannot become a single
+ *  unbounded row that trimming can only remove wholesale. */
+const OUTPUT_CHUNK_MAX = 8 * 1024;
+
 export class AgentInstance extends DurableObject<Env> {
   private sql: SqlStorage;
 
@@ -310,15 +329,64 @@ export class AgentInstance extends DurableObject<Env> {
   /**
    * Record a chunk of live output.
    *
-   * Capped rather than unbounded: a chatty CLI would otherwise grow an agent's
-   * storage without limit, and nobody scrolls back through a megabyte of build
-   * log. The newest lines are the ones being watched.
+   * Three things make this cheap enough to call on every write from a CLI that
+   * streams token by token.
+   *
+   * **Bounded by bytes, not rows.** A row is anything from one character to a
+   * 50KB stack trace, so a row count is not a bound on anything — the same
+   * "500 rows" is a few KB of one run and many megabytes of another.
+   *
+   * **Trimmed only when over.** The running total lives in kv, so the common
+   * write does no scan at all. Deleting on every chunk meant a subquery over
+   * the whole table hundreds of times a second.
+   *
+   * **Coalesced.** A streaming CLI emits fragments; one row each costs more in
+   * keys and timestamps than the text is worth. Small recent chunks are
+   * appended to the previous row instead.
    */
   recordOutput(text: string): void {
-    this.sql.exec("INSERT INTO output (text, ts) VALUES (?, ?)", text, Date.now());
+    if (!text) return;
+
+    const last = this.sql
+      .exec("SELECT seq, text, ts FROM output ORDER BY seq DESC LIMIT 1")
+      .toArray()[0] as { seq: number; text: string; ts: number } | undefined;
+
+    // Same second, still small: this is the tail of the line already being
+    // written, not a new event worth its own row and timestamp.
+    const coalesce =
+      last &&
+      Date.now() - last.ts < OUTPUT_COALESCE_MS &&
+      last.text.length + text.length <= OUTPUT_CHUNK_MAX;
+
+    if (coalesce) {
+      this.sql.exec(
+        "UPDATE output SET text = text || ?, ts = ? WHERE seq = ?",
+        text,
+        Date.now(),
+        last.seq,
+      );
+    } else {
+      this.sql.exec("INSERT INTO output (text, ts) VALUES (?, ?)", text, Date.now());
+    }
+
+    const total = this.getKV<number>("output_bytes", 0) + text.length;
+    if (total <= OUTPUT_BYTE_LIMIT) {
+      this.setKV("output_bytes", total);
+      return;
+    }
+
+    // Over the limit: drop oldest rows until back under, and recount from what
+    // actually survived rather than trusting the arithmetic.
     this.sql.exec(
-      "DELETE FROM output WHERE seq <= (SELECT MAX(seq) - 500 FROM output)",
+      `DELETE FROM output WHERE seq IN (
+         SELECT seq FROM output ORDER BY seq ASC
+         LIMIT MAX(1, (SELECT COUNT(*) FROM output) / 4)
+       )`,
     );
+    const row = this.sql
+      .exec("SELECT COALESCE(SUM(LENGTH(text)), 0) AS n FROM output")
+      .toArray()[0] as { n: number } | undefined;
+    this.setKV("output_bytes", row?.n ?? 0);
   }
 
   /** Live output, oldest first. `since` returns only what is new. */

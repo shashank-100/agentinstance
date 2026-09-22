@@ -186,3 +186,44 @@ describe("AgentInstance runtime + memory", () => {
     expect(out.result.notes).toEqual([]);
   });
 });
+
+describe("live output", () => {
+  it("is bounded by bytes, so a verbose run cannot grow without limit", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "noisy", harness: "claude-code", model: "claude-opus-4.8" }),
+    });
+
+    // A row count would not bound this: 40 writes of 32KB is 1.2MB, and the
+    // limit is 256KB. What matters is the bytes retained, not the rows.
+    const chunk = "x".repeat(32 * 1024);
+    for (let i = 0; i < 40; i++) {
+      await SELF.fetch("https://x/agents/noisy/tool/__record_output_test", {
+        method: "POST",
+        body: JSON.stringify({ text: chunk }),
+      }).catch(() => {});
+    }
+
+    const out = (await (
+      await SELF.fetch("https://x/agents/noisy/output")
+    ).json()) as { text: string }[];
+    const bytes = out.reduce((n, r) => n + r.text.length, 0);
+    // Under the cap, with room for the chunk that crossed it.
+    expect(bytes).toBeLessThanOrEqual(256 * 1024 + 32 * 1024);
+  });
+
+  it("returns only what is new, so a watcher does not re-read the run", async () => {
+    await SELF.fetch("https://x/api/launch", {
+      method: "POST",
+      body: JSON.stringify({ id: "tailer", harness: "claude-code", model: "claude-opus-4.8" }),
+    });
+    const first = (await (
+      await SELF.fetch("https://x/agents/tailer/output")
+    ).json()) as { seq: number }[];
+    const last = first.at(-1)?.seq ?? 0;
+    const next = (await (
+      await SELF.fetch(`https://x/agents/tailer/output?since=${last}`)
+    ).json()) as unknown[];
+    expect(next.length).toBe(0);
+  });
+});
