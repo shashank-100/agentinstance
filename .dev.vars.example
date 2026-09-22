@@ -18,6 +18,12 @@ MOONSHOT_API_KEY=
 # search_web. Without it that capability is offered as not ready.
 TAVILY_API_KEY=
 
+# Lets an agent clone, branch, commit, push and open pull requests. Without it
+# the git_repo and open_pr capabilities are not offered to an agent at all, so
+# an agent simply cannot see GitHub. A fine-grained PAT scoped to the repos the
+# agents may touch, with Contents: read+write and Pull requests: read+write.
+GITHUB_TOKEN=
+
 # --- channels ------------------------------------------------------------
 # Telegram bot token, for POST /channels/telegram/:id
 TELEGRAM_BOT_TOKEN=
