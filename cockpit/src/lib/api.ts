@@ -196,6 +196,29 @@ export async function createTask(
   return adapt((await res.json()) as ApiTask, 0);
 }
 
+/**
+ * Send a message to a task's agent and get its reply.
+ *
+ * A dispatch is the first message, not a one-shot job: the agent keeps its
+ * history and its checkout, so a follow-up continues the same run rather than
+ * starting over. This is what makes "also handle unicode" cost a sentence
+ * instead of a second task.
+ *
+ * Slow by nature — the reply arrives when the agent has finished thinking, so
+ * the caller shows the message as pending until it resolves.
+ */
+export async function sendToAgent(agentId: string, text: string): Promise<string> {
+  const res = await fetch(`${BASE}/agents/${encodeURIComponent(agentId)}/send`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`the agent did not accept the message (${res.status})`);
+  const body = (await res.json()) as { reply?: string; error?: string };
+  if (body.error) throw new Error(body.error);
+  return body.reply ?? "";
+}
+
 /** One chunk of live CLI output, as the agent's DO stored it. */
 export interface OutputRow {
   seq: number;
