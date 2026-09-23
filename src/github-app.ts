@@ -232,3 +232,64 @@ export const hasGitHubCredentials = (env: {
   const set = (v: unknown): boolean => typeof v === "string" && v.trim() !== "";
   return (set(env.GITHUB_APP_ID) && set(env.GITHUB_APP_PRIVATE_KEY)) || set(env.GITHUB_TOKEN);
 };
+
+/** One file a pull request touches, as GitHub reports it. */
+export interface ChangedFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  /** The unified diff for this file. Absent on binaries and very large files,
+   *  which GitHub omits rather than inlining. */
+  patch?: string;
+}
+
+/**
+ * What a pull request changed.
+ *
+ * The queue records that a PR exists, not what is in it — a diff belongs to
+ * GitHub, and copying one into a task row would be a second copy to keep in
+ * step with the branch. Fetching it when someone looks costs a request and is
+ * always current.
+ *
+ * Read through the App the deployment already holds, so the credential stays
+ * on this side: a browser asking GitHub directly would need a token of its own.
+ */
+export async function pullRequestFiles(
+  env: { GITHUB_APP_ID?: string; GITHUB_APP_PRIVATE_KEY?: string; GITHUB_TOKEN?: string },
+  repo: string,
+  number: number,
+): Promise<{ files?: ChangedFile[]; error?: string }> {
+  const got = await tokenForRepo(env, repo);
+  if (got.error) return { error: got.error };
+
+  // 100 is GitHub's page limit. A pull request with more files than that is
+  // not one anybody reads in a tab, so the first page is the whole story here.
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/pulls/${number}/files?per_page=100`,
+    { headers: { ...GH_HEADERS, authorization: `Bearer ${got.token}` } },
+  );
+  const body = (await res.json().catch(() => ({}))) as
+    | { message?: string }
+    | {
+        filename: string;
+        status: string;
+        additions: number;
+        deletions: number;
+        patch?: string;
+      }[];
+  if (!res.ok || !Array.isArray(body)) {
+    return {
+      error: (body as { message?: string }).message ?? `github returned ${res.status}`,
+    };
+  }
+  return {
+    files: body.map((f) => ({
+      path: f.filename,
+      status: f.status,
+      additions: f.additions,
+      deletions: f.deletions,
+      patch: f.patch,
+    })),
+  };
+}

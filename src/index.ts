@@ -25,6 +25,7 @@ import {
   hourlyCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
+import { pullRequestFiles } from "./github-app.js";
 import { toText, type Part } from "./parts.js";
 
 // The containers runtime reaches for this by name on the worker entrypoint to
@@ -385,6 +386,28 @@ async function fleetRoute(
   // unattended case; this is for when someone is looking at a stuck board and
   // would otherwise have to file a task just to trigger a reclaim.
   if (section === "sweep") return json(await f.sweep());
+
+  // What a task's pull request changed. Served here rather than fetched by the
+  // browser because the GitHub credential lives on this side — a page asking
+  // GitHub directly would need a token of its own, and the only one available
+  // to it would be one baked into its bundle.
+  if (section === "files") {
+    if (!id) return json({ error: "which task?" }, 400);
+    const task = await f.get(id);
+    if (!task) return json({ error: `no task '${id}'` }, 404);
+    if (!task.prUrl || !task.repo) {
+      // Not an error: a task that has not opened a pull request has no diff,
+      // and saying so beats an empty list that looks like "changed nothing".
+      return json({ files: [], reason: "this task has not opened a pull request" });
+    }
+    const number = Number(task.prUrl.split("/").pop());
+    if (!Number.isFinite(number)) {
+      return json({ files: [], reason: `could not read a PR number from ${task.prUrl}` });
+    }
+    const out = await pullRequestFiles(env, task.repo, number);
+    if (out.error) return json({ error: out.error }, 502);
+    return json({ files: out.files ?? [], prUrl: task.prUrl });
+  }
 
   if (section !== "tasks") return json({ error: "unknown fleet route" }, 404);
 
