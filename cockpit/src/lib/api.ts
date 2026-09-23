@@ -222,6 +222,33 @@ export async function fetchAgentOutput(agentId: string, since = 0): Promise<Outp
 }
 
 /**
+ * Start a task that is sitting queued.
+ *
+ * Nothing polls the board, so a queued task never begins on its own — an agent
+ * has to be pointed at it. This is the only way to move a task the cockpit
+ * shows as "unclaimed" into running work.
+ */
+export async function dispatchTask(
+  id: string,
+  opts: { harness?: string; machine?: string } = {},
+): Promise<void> {
+  const res = await fetch(`${BASE}/api/fleet/tasks/${encodeURIComponent(id)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ dispatch: true, ...opts }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(
+      body.error ??
+        (res.status === 404
+          ? "the task is no longer on the board"
+          : `the queue refused to dispatch it (${res.status})`),
+    );
+  }
+}
+
+/**
  * Put a task back on the queue.
  *
  * The API allows this from `running` or `failed` only, and most failures are

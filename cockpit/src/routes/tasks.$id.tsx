@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { runtimeLabel, type DiffLine } from "@/lib/mock-data";
-import { releaseTask } from "@/lib/api";
+import { releaseTask, dispatchTask } from "@/lib/api";
 import { useTask, useAgentHistory, useAgentOutput } from "@/lib/use-tasks";
 import { Shell } from "@/components/cockpit/Shell";
 import {
@@ -25,7 +25,10 @@ export const Route = createFileRoute("/tasks/$id")({
   head: ({ loaderData }) => {
     if (!loaderData) {
       return {
-        meta: [{ title: "Task unavailable — agentinstance" }, { name: "robots", content: "noindex" }],
+        meta: [
+          { title: "Task unavailable — agentinstance" },
+          { name: "robots", content: "noindex" },
+        ],
       };
     }
     const title = `Task ${loaderData.id} — agentinstance`;
@@ -52,7 +55,11 @@ function TaskView() {
   const { messages } = useAgentHistory(agentId, task?.status === "running");
   const [activeFile, setActiveFile] = useState("");
   const [releasing, setReleasing] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
   const queryClient = useQueryClient();
+  // Nothing claims a queued task on its own, so this is the only way one
+  // starts. Offered exactly when the task is waiting for an agent.
+  const canDispatch = task?.state === "queued";
   // The API allows a requeue from `running` or `failed` only, so the button is
   // gated on the queue's own state rather than the UI's mapped status — which
   // folds `settled` into `merged` and would offer the action on a finished task.
@@ -120,6 +127,28 @@ function TaskView() {
               reaches a `review` state. A button that reports work it did not
               do is worse than no button. */}
           <div className="flex flex-wrap gap-2">
+            {canDispatch && (
+              <Button
+                size="sm"
+                disabled={dispatching}
+                onClick={() => {
+                  setDispatching(true);
+                  dispatchTask(task.id)
+                    .then(() => {
+                      void queryClient.invalidateQueries({ queryKey: ["fleet"] });
+                      toast.success("Agent dispatched", {
+                        description: `an agent is starting on ${task.id}`,
+                      });
+                    })
+                    .catch((e: Error) =>
+                      toast.error("Could not dispatch the task", { description: e.message }),
+                    )
+                    .finally(() => setDispatching(false));
+                }}
+              >
+                {dispatching ? "Dispatching…" : "Dispatch agent"}
+              </Button>
+            )}
             {task.prUrl && (
               <Button asChild variant="outline" size="sm" className="gap-2">
                 <a href={task.prUrl} target="_blank" rel="noreferrer">
