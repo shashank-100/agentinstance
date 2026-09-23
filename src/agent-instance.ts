@@ -8,7 +8,15 @@ import { DurableObject } from "cloudflare:workers";
 import type { Env, Message, Role } from "./types.js";
 import { makeMessage } from "./types.js";
 import { getHarness, type AgentSpec, defaultSpec } from "./harnesses/index.js";
-import { MODELS, PROVIDERS } from "./catalog.js";
+import {
+  MODELS,
+  PROVIDERS,
+  HARNESSES,
+  HARNESS_MODELS,
+  harnessCatalog,
+  localBaseUrl,
+  type KeyEnv,
+} from "./catalog.js";
 import { tokenForRepo } from "./github-app.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
@@ -133,10 +141,20 @@ export class AgentInstance extends DurableObject<Env> {
     // itself with a subscription token and never consults this object. Return a
     // model that throws only if something actually tries to call it.
     if (info.oauth) return new UnusedModel(info.id);
-    const { baseUrl, keyVar } = PROVIDERS[info.provider];
+    // A self-hosted server lives wherever its operator put it, so its base URL
+    // and the model it serves are configuration rather than constants.
+    const { keyVar } = PROVIDERS[info.provider];
+    const baseUrl =
+      info.provider === "local" ? localBaseUrl(this.env as unknown as KeyEnv) : PROVIDERS[info.provider].baseUrl;
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
     if (!key) throw new Error(`${keyVar} is not set — cannot run '${info.id}'`);
-    return new OpenAICompatModel(info.provider, key, info.upstreamId ?? info.id, baseUrl);
+    const modelId =
+      info.provider === "local"
+        ? ((this.env as unknown as Record<string, string | undefined>)["LOCAL_MODEL_ID"] ??
+          info.upstreamId ??
+          info.id)
+        : (info.upstreamId ?? info.id);
+    return new OpenAICompatModel(info.provider, key, modelId, baseUrl);
   }
 
   // --- history -------------------------------------------------------------
@@ -172,7 +190,11 @@ export class AgentInstance extends DurableObject<Env> {
   } {
     const info = MODELS[this.spec.model];
     if (!info) return {};
-    const { baseUrl, keyVar } = PROVIDERS[info.provider];
+    // A self-hosted server lives wherever its operator put it, so its base URL
+    // and the model it serves are configuration rather than constants.
+    const { keyVar } = PROVIDERS[info.provider];
+    const baseUrl =
+      info.provider === "local" ? localBaseUrl(this.env as unknown as KeyEnv) : PROVIDERS[info.provider].baseUrl;
     const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
 
     // `oauth` says a subscription token *can* serve this model, not that the
@@ -481,13 +503,112 @@ export class AgentInstance extends DurableObject<Env> {
     return { spec: this.spec, history: this.history(), kv, notes };
   }
 
+  /**
+   * Is this snapshot complete enough to restore, and what would be lost?
+   *
+   * A backup you have not checked is a backup you are guessing about. Restore
+   * is destructive — it deletes the agent's messages, kv and notes before
+   * writing — so "will this work?" has to be answerable without performing it.
+   *
+   * Two different things are reported. `errors` mean the snapshot cannot be
+   * restored into a working agent: no spec, or a spec naming a harness or
+   * model this deployment cannot run. `warnings` mean it will restore but
+   * something is absent or will be dropped — an agent with no history, a
+   * schedule with no prompt to run, keys the snapshot carries that restore
+   * deliberately will not write back.
+   *
+   * Checked against *this* deployment's catalog on purpose: a snapshot taken
+   * where `pi` was configured is not restorable somewhere it is not, and the
+   * honest moment to say so is before the delete, not after.
+   */
+  async validateSnapshot(snap: {
+    spec?: AgentSpec;
+    history?: Message[];
+    kv?: Record<string, unknown>;
+    notes?: { key: string; value: string; ts: number }[];
+  }): Promise<{
+    ok: boolean;
+    errors: string[];
+    warnings: string[];
+    counts: { history: number; notes: number; kv: number; restorableKv: number };
+  }> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!snap.spec) {
+      // Without a spec there is no agent — only a Durable Object that exists
+      // because something addressed its name.
+      errors.push("no spec: a snapshot without one restores nothing runnable");
+    } else {
+      const { harness, model } = snap.spec;
+      if (!HARNESSES[harness]) {
+        errors.push(`harness '${harness}' is not one this deployment has`);
+      } else if (!harnessCatalog(this.env as unknown as KeyEnv)[harness]?.ready) {
+        // A warning, not an error. Whether a key happens to be set right now
+        // says nothing about whether the snapshot is complete, and refusing
+        // here would block recovery during exactly the outage — a missing or
+        // rotated key — that makes someone reach for a backup. The agent
+        // restores; it cannot run until the key is back.
+        warnings.push(`harness '${harness}' has no key set here — the agent will restore but not run`);
+      }
+      if (!MODELS[model]) {
+        errors.push(`model '${model}' is not in this deployment's catalog`);
+      } else if (!(HARNESS_MODELS[harness] ?? []).includes(model)) {
+        errors.push(`harness '${harness}' cannot drive model '${model}'`);
+      }
+    }
+
+    const history = snap.history ?? [];
+    const notes = snap.notes ?? [];
+    const kv = snap.kv ?? {};
+
+    if (history.length === 0) {
+      warnings.push("no history: the restored agent starts with an empty transcript");
+    }
+    // A message missing its fields restores as a hole in the conversation the
+    // next model reads, which is worse than a shorter history.
+    const malformed = history.filter((m) => !m?.role || typeof m?.content !== "string").length;
+    if (malformed) errors.push(`${malformed} message(s) missing a role or content`);
+
+    // A schedule is two halves. Either alone is a restored agent that wakes up
+    // with nothing to do, or knows what to do and never wakes.
+    const wake = kv["next_wake"];
+    const prompt = kv["wakeup_prompt"];
+    if (wake && !prompt) warnings.push("a wake time with no prompt: the agent will wake and do nothing");
+    if (prompt && !wake) warnings.push("a wakeup prompt with no wake time: nothing will fire it");
+
+    const dropped = Object.keys(kv).filter((k) => k !== "spec" && !RESTORABLE_KV.has(k));
+    if (dropped.length) {
+      warnings.push(`${dropped.length} kv key(s) will not be restored: ${dropped.join(", ")}`);
+    }
+
+    return {
+      ok: errors.length === 0,
+      errors,
+      warnings,
+      counts: {
+        history: history.length,
+        notes: notes.length,
+        kv: Object.keys(kv).length,
+        restorableKv: Object.keys(kv).filter((k) => RESTORABLE_KV.has(k)).length,
+      },
+    };
+  }
+
   /** Restore from a snapshot (best-effort recovery — replaces current state). */
   async restore(snap: {
     spec?: AgentSpec;
     history?: Message[];
     kv?: Record<string, unknown>;
     notes?: { key: string; value: string; ts: number }[];
-  }): Promise<void> {
+  }): Promise<{ ok: boolean; errors: string[]; warnings: string[]; restored?: { history: number; notes: number; kv: number } }> {
+    // Validate before deleting anything. Restore replaces state, so a snapshot
+    // that cannot produce a working agent must not be allowed to destroy the
+    // one that is there — "it failed and took the agent with it" is the worst
+    // outcome a recovery path can have.
+    const check = await this.validateSnapshot(snap);
+    if (!check.ok) return { ok: false, errors: check.errors, warnings: check.warnings };
+
     this.sql.exec("DELETE FROM messages");
     this.sql.exec("DELETE FROM kv");
     this.sql.exec("DELETE FROM notes");
@@ -511,6 +632,12 @@ export class AgentInstance extends DurableObject<Env> {
       this.sql.exec("INSERT INTO notes (key,value,ts) VALUES (?,?,?)", n.key, n.value, n.ts);
     }
     await this.rearmAlarm();
+    return {
+      ok: true,
+      errors: [],
+      warnings: check.warnings,
+      restored: check.counts,
+    };
   }
 
   /**

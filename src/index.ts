@@ -406,6 +406,10 @@ async function fleetRoute(
       state?: TaskState;
       assignedTo?: string;
       backdateMs?: number;
+      dispatch?: boolean;
+      harness?: string;
+      model?: string;
+      machine?: string;
     }>(request);
     // Ageing a task is a test affordance: a lease expiring is worth covering,
     // and waiting fifteen real minutes for it is not a test anyone runs. Gated
@@ -414,6 +418,21 @@ async function fleetRoute(
     if (body.backdateMs && env.USE_ECHO_MODEL) {
       await f.backdate(id, body.backdateMs);
       return finished(await f.get(id), id);
+    }
+    // Start a task that was filed without `dispatch`. Nothing polls the queue,
+    // so a queued task has no other way to begin — this is what turns the
+    // board's "unclaimed" rows into running work.
+    if (body.dispatch) {
+      const task = await f.get(id);
+      if (!task) return json({ error: `no task '${id}'` }, 404);
+      // Dispatching a task that already has an agent would create a second one
+      // for the same work, with both pushing to the same branch.
+      if (task.state === "running") {
+        return json({ error: `task '${id}' is already running on ${task.assignedTo}` }, 409);
+      }
+      return json(
+        await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body),
+      );
     }
     // Ending a task is a state change, not a patch: settle and fail record why.
     // Assigning is a state change too: it moves the task to `running` under a
@@ -458,48 +477,8 @@ async function fleetRoute(
   // it a task sits queued until somebody thinks to point an agent at the
   // board, which is a queue that needs a human to run it. With it, the task
   // gets an agent of its own and begins immediately.
-  //
-  // The agent runs in `waitUntil` rather than inline: the work takes minutes,
-  // and holding the request open for it would time out long before the agent
-  // finished, reporting a failure for a task that is running perfectly well.
   if (body.dispatch) {
-    const agentId = `task-${task.id}`;
-    const spec = defaultSpec({
-      harness: body.harness ?? "claude-code",
-      model: body.model ?? "claude-opus-4.8",
-      capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr"],
-      machine: body.machine ?? "one-cpu",
-    });
-    const agent = agentStub(env, agentId);
-    await agent.configure({ ...spec, name: agentId }, true);
-    await registry(env).register({
-      id: agentId,
-      model: spec.model,
-      harness: spec.harness,
-      machine: spec.machine,
-      createdAt: Date.now(),
-    });
-    await f.assign(task.id, agentId);
-
-    const origin = new URL(request.url).origin;
-    ctx.waitUntil(
-      agent
-        .send(
-          `You have been given this task: ${task.goal}\n\n` +
-            (task.repo ? `It is against the repository ${task.repo}.\n\n` : "") +
-            `Do it. Clone with git_repo, make the change, commit, push the branch, ` +
-            `and open a pull request with open_pr. Record the branch and PR on task ` +
-            `${task.id} with fleet_task as you go, then settle it. If you cannot ` +
-            `finish, mark the task failed with the reason.`,
-          undefined,
-          origin,
-        )
-        .catch(async (e: unknown) => {
-          // A crash here is invisible otherwise — nothing is awaiting this.
-          await f.fail(task.id, e instanceof Error ? e.message : "agent failed to start");
-        }),
-    );
-    return json({ ...task, state: "running", assignedTo: agentId, dispatched: true });
+    return json(await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body));
   }
 
   return json(task);
@@ -507,6 +486,66 @@ async function fleetRoute(
 
 const finished = (task: unknown, id: string) =>
   task ? json(task) : json({ error: `no task '${id}'` }, 404);
+
+/**
+ * Give a task an agent of its own and set it going.
+ *
+ * Shared by filing-with-dispatch and starting an already-queued task, because
+ * they are the same act at different moments. It used to live inline in the
+ * create path only, so a task filed without `dispatch` could never be started
+ * from the API at all: nothing polls the queue, and `claim` has to be called
+ * by an agent that is already running. Tasks filed without it simply sat in
+ * `queued` forever with no way to move them.
+ *
+ * The agent runs in `waitUntil` rather than inline: the work takes minutes,
+ * and holding the request open for it would time out long before the agent
+ * finished, reporting a failure for a task that is running perfectly well.
+ */
+async function dispatchTask(
+  env: Env,
+  ctx: ExecutionContext,
+  f: FleetStub,
+  task: { id: string; goal: string; repo: string | null },
+  origin: string,
+  opts: { harness?: string; model?: string; machine?: string },
+): Promise<Record<string, unknown>> {
+  const agentId = `task-${task.id}`;
+  const spec = defaultSpec({
+    harness: opts.harness ?? "claude-code",
+    model: opts.model ?? "claude-opus-4.8",
+    capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr"],
+    machine: opts.machine ?? "one-cpu",
+  });
+  const agent = agentStub(env, agentId);
+  await agent.configure({ ...spec, name: agentId }, true);
+  await registry(env).register({
+    id: agentId,
+    model: spec.model,
+    harness: spec.harness,
+    machine: spec.machine,
+    createdAt: Date.now(),
+  });
+  await f.assign(task.id, agentId);
+
+  ctx.waitUntil(
+    agent
+      .send(
+        `You have been given this task: ${task.goal}\n\n` +
+          (task.repo ? `It is against the repository ${task.repo}.\n\n` : "") +
+          `Do it. Clone with git_repo, make the change, commit, push the branch, ` +
+          `and open a pull request with open_pr. Record the branch and PR on task ` +
+          `${task.id} with fleet_task as you go, then settle it. If you cannot ` +
+          `finish, mark the task failed with the reason.`,
+        undefined,
+        origin,
+      )
+      .catch(async (e: unknown) => {
+        // A crash here is invisible otherwise — nothing is awaiting this.
+        await f.fail(task.id, e instanceof Error ? e.message : "agent failed to start");
+      }),
+  );
+  return { ...task, state: "running", assignedTo: agentId, dispatched: true };
+}
 
 // --- dashboard listing: registry records plus each agent's live status -------
 async function listAgentsRoute(env: Env): Promise<Response> {
@@ -554,7 +593,18 @@ async function agentRoute(
   // Actions that change something must not run on GET. A GET that boots a VM
   // and spends the model quota is triggered by anything that follows links —
   // a crawler, a prefetch, a chat client generating a preview.
-  const WRITES = new Set(["send", "a2a", "restore", "wake", "tool", "configure", "handoff"]);
+  const WRITES = new Set([
+    "send",
+    "a2a",
+    "restore",
+    "wake",
+    "tool",
+    "configure",
+    "handoff",
+    // Not a write, but it is a POST: listing it keeps the method check from
+    // rejecting it as a GET-only route.
+    "validate-snapshot",
+  ]);
   if (WRITES.has(route.action) && request.method === "GET") {
     return json({ error: `${route.action} requires POST` }, 405);
   }
@@ -579,6 +629,14 @@ async function agentRoute(
 
       // Reading an agent that was never launched should say so, rather than
       // describing the empty Durable Object that exists for every name.
+      // Check a snapshot without restoring it. POST because the snapshot is
+      // the body, but it changes nothing — the point is to answer "would this
+      // restore?" while the agent that is there stays untouched.
+      case "validate-snapshot": {
+        if (!(await agent.exists())) return json({ error: `no agent '${route.id}'` }, 404);
+        return json(await agent.validateSnapshot(await bodyOf(request)));
+      }
+
       case "history":
       case "output":
       case "status":
@@ -634,7 +692,10 @@ async function agentRoute(
         // Restore may create: putting a backup under a fresh name is the point
         // of having one. It registers the result, so a restored agent is a
         // listed, deletable agent rather than one only its creator can find.
-        await agent.restore(await bodyOf(request));
+        const outcome = await agent.restore(await bodyOf(request));
+        // A snapshot that cannot restore is reported rather than half-applied:
+        // nothing was deleted, and the agent that was there is untouched.
+        if (!outcome.ok) return json({ error: "snapshot cannot be restored", ...outcome }, 400);
         const spec = await agent.getSpec();
         await registry(env).register({
           id: route.id,
@@ -643,7 +704,10 @@ async function agentRoute(
           machine: spec.machine,
           createdAt: Date.now(),
         });
-        return json({ ok: true });
+        // What was actually taken, and anything the snapshot carried that
+        // restore declined to write. A silent `{ok:true}` gives no way to tell
+        // a full recovery from one that quietly dropped half its input.
+        return json(outcome);
       }
       case "wake": {
         const out = await agent.fireWakeup();

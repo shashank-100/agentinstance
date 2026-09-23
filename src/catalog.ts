@@ -17,13 +17,31 @@ export interface ModelInfo {
 
 /** OpenAI-compatible providers, reached by swapping base_url (no lock-in).
  *  Add one here plus its key in Env to offer its models. */
-export type Provider = "anthropic";
+export type Provider = "anthropic" | "local";
 export const PROVIDERS: Record<Provider, { baseUrl: string; keyVar: string }> = {
   // Anthropic's own endpoint. Claude Code reaches it with a subscription token
   // and no base URL; pi reaches it with this key, which is why a Claude model
   // can be served either way depending on which harness is running.
   anthropic: { baseUrl: "https://api.anthropic.com/v1", keyVar: "ANTHROPIC_API_KEY" },
+  // An OpenAI-compatible server the operator runs themselves — LM Studio,
+  // Ollama, vLLM, llama.cpp. They all speak the same wire format, so one
+  // provider entry covers the lot and the base URL is what distinguishes a
+  // deployment rather than the code.
+  //
+  // The URL is configuration, not a constant: `LOCAL_MODEL_BASE_URL` overrides
+  // it, because a self-hosted endpoint lives at whatever address its operator
+  // gave it. The default is LM Studio's, which is the common case.
+  //
+  // Most such servers ignore the key entirely; `LOCAL_API_KEY` exists because
+  // some are put behind a proxy that does not, and a client that cannot send
+  // one is unusable there.
+  local: { baseUrl: "http://localhost:1234/v1", keyVar: "LOCAL_API_KEY" },
 };
+
+/** Where the local server actually is, when it is not LM Studio's default. */
+export const localBaseUrl = (env: KeyEnv): string =>
+  (typeof env["LOCAL_MODEL_BASE_URL"] === "string" && env["LOCAL_MODEL_BASE_URL"].trim()) ||
+  PROVIDERS.local.baseUrl;
 
 // Only models a configured provider can actually serve.
 export const MODELS: Record<string, ModelInfo> = {
@@ -43,6 +61,24 @@ export const MODELS: Record<string, ModelInfo> = {
     upstreamId: "claude-opus-4-8",
     oauth: true,
   },
+
+  // Whatever the operator's own server is serving.
+  //
+  // One entry rather than a row per model: which weights are loaded is the
+  // server's business and changes without this file knowing, so the id names
+  // the *endpoint* and `LOCAL_MODEL_ID` names the model to ask it for. A
+  // catalog that enumerated local models would be wrong on any machine but the
+  // one it was written on.
+  //
+  // Offered only when a key is set, like every other model here — so a
+  // deployment with no local server never sees it.
+  "local-model": {
+    id: "local-model",
+    label: "Local model",
+    priceIn: 0,
+    priceOut: 0,
+    provider: "local",
+  },
 };
 
 /**
@@ -58,7 +94,9 @@ export const MODELS: Record<string, ModelInfo> = {
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
   "claude-code": ["claude-opus-4.8"],
-  pi: ["claude-opus-4.8"],
+  // pi speaks the OpenAI wire format as well as Anthropic's, so it is the
+  // harness that can drive a self-hosted server.
+  pi: ["claude-opus-4.8", "local-model"],
 };
 
 /**
