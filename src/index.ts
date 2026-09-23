@@ -304,7 +304,7 @@ function githubRoute(request: Request, env: Env, action?: string): Response {
   }
 }
 
-// --- provider keys entered from the cockpit ------------------------------------
+// --- provider keys entered from the board ------------------------------------
 /**
  * GET says which keys are set and where from; it never returns a key, only
  * its last four characters so someone can tell which one is in use.
@@ -318,7 +318,7 @@ async function keysRoute(request: Request, env: Env): Promise<Response> {
       Object.fromEntries(
         SETTABLE_KEYS.map((name) => {
           const value = stored[name] ?? secrets[name];
-          const source = stored[name] ? "cockpit" : secrets[name] ? "secret" : null;
+          const source = stored[name] ? "board" : secrets[name] ? "secret" : null;
           return [name, { set: !!value, source, last4: value ? value.slice(-4) : null }];
         }),
       ),

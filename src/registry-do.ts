@@ -36,7 +36,7 @@ export class RegistryDO extends DurableObject<Env> {
     });
   }
 
-  /** Provider keys entered from the cockpit, by env var name. */
+  /** Provider keys entered from the board, by env var name. */
   async storedKeys(): Promise<Record<string, string>> {
     const rows = this.sql.exec("SELECT name, value FROM keys").toArray() as {
       name: string;

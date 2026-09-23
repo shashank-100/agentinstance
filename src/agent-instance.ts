@@ -267,7 +267,7 @@ export class AgentInstance extends DurableObject<Env> {
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
-    // Keys saved from the cockpit, laid over the Worker's secrets.
+    // Keys saved from the board, laid over the Worker's secrets.
     const env = await withStoredKeys(this.env);
 
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {

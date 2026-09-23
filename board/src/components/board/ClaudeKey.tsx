@@ -98,7 +98,7 @@ export function ClaudeKey() {
             <Button type="submit" size="sm" disabled={saving || !draft.trim()}>
               {saving ? "Checking…" : data.set ? "Replace" : "Save"}
             </Button>
-            {data.source === "cockpit" && (
+            {data.source === "board" && (
               <Button
                 type="button"
                 size="sm"

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Shell } from "@/components/cockpit/Shell";
-import { ClaudeKey } from "@/components/cockpit/ClaudeKey";
+import { Shell } from "@/components/board/Shell";
+import { ClaudeKey } from "@/components/board/ClaudeKey";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 

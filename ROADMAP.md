@@ -29,7 +29,7 @@ GitHub App is already installed, agents already push to the same repositories,
 and it closes the loop — issue in, pull request out, nobody dispatching by hand.
 
 **4. Slack or email out.**
-"A pull request is ready" reaches someone without opening the cockpit.
+"A pull request is ready" reaches someone without opening the board.
 
 ## Then — a browser the agent can use
 

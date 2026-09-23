@@ -8,15 +8,15 @@ import { cn } from "@/lib/utils";
 import { runtimeLabel, type DiffLine } from "@/lib/mock-data";
 import { releaseTask, dispatchTask } from "@/lib/api";
 import { useTask, useAgentHistory, useAgentOutput, useTaskFiles } from "@/lib/use-tasks";
-import { Shell } from "@/components/cockpit/Shell";
-import { Conversation } from "@/components/cockpit/Conversation";
+import { Shell } from "@/components/board/Shell";
+import { Conversation } from "@/components/board/Conversation";
 import {
   CheckIcon,
   DiffStat,
   HarnessTag,
   NodeKindDot,
   StatusPill,
-} from "@/components/cockpit/atoms";
+} from "@/components/board/atoms";
 import { ArrowLeft, GitBranch } from "lucide-react";
 
 export const Route = createFileRoute("/tasks/$id")({

@@ -76,13 +76,13 @@ type(scope): what changed, in the imperative
 ```
 
 `type` is one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
-`scope` is the area — `fleet`, `agent`, `cockpit`, `github`, `harness`,
+`scope` is the area — `fleet`, `agent`, `board`, `github`, `harness`,
 `sandbox`, `catalog` — and is omitted when a change is genuinely repo-wide.
 
 ```
 feat(fleet): sweep abandoned work on a timer
 fix(agent): stop a failed restore from deleting the agent it replaces
-refactor(cockpit): read the diff from the pull request instead of the task
+refactor(board): read the diff from the pull request instead of the task
 docs: say what deploying actually needs
 ```
 

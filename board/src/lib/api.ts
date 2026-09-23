@@ -1,4 +1,4 @@
-// The real work queue, in the shape the cockpit already expects.
+// The real work queue, in the shape the board already expects.
 //
 // The UI was built against `mock-data.ts`, which describes a richer task than
 // the API actually stores: diffs, logs, check runs, token counts. Those are not
@@ -26,7 +26,7 @@ interface ApiTask {
 /**
  * Where the deployment lives, and the token that may change it.
  *
- * Same-origin by default, so the cockpit served from the Worker needs no
+ * Same-origin by default, so the board served from the Worker needs no
  * configuration. `VITE_AGENT_URL` points a local `vite dev` at a deployment.
  */
 const BASE = import.meta.env["VITE_AGENT_URL"] ?? "";
@@ -57,7 +57,7 @@ const titleOf = (goal: string): string => {
 };
 
 /**
- * One API task, as the cockpit's Task.
+ * One API task, as the board's Task.
  *
  * `number` is positional rather than stored: the queue has no issue numbers,
  * and the rail wants something short to show. Everything the API does not know
@@ -278,7 +278,7 @@ export async function fetchAgentOutput(agentId: string, since = 0): Promise<Outp
  * Start a task that is sitting queued.
  *
  * Nothing polls the board, so a queued task never begins on its own — an agent
- * has to be pointed at it. This is the only way to move a task the cockpit
+ * has to be pointed at it. This is the only way to move a task the board
  * shows as "unclaimed" into running work.
  */
 export async function dispatchTask(
@@ -355,7 +355,7 @@ export async function fetchStatus(): Promise<Record<string, number>> {
  *  comes back, only its last four characters. */
 export interface KeyStatus {
   set: boolean;
-  source: "cockpit" | "secret" | null;
+  source: "board" | "secret" | null;
   last4: string | null;
 }
 

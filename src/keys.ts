@@ -1,13 +1,13 @@
-// Provider keys a user enters from the cockpit, rather than through
+// Provider keys a user enters from the board, rather than through
 // `wrangler secret put`.
 //
 // They live in the registry, which is one per deployment, so a key saved
 // once applies to every agent. A saved key overrides a secret with the same
-// name: whoever pasted it into the cockpit most recently meant it.
+// name: whoever pasted it into the board most recently meant it.
 import type { Env } from "./types.js";
 import type { RegistryDO } from "./registry-do.js";
 
-/** Keys that can be set from the cockpit. Only Anthropic's for now. */
+/** Keys that can be set from the board. Only Anthropic's for now. */
 export const SETTABLE_KEYS = ["ANTHROPIC_API_KEY"] as const;
 export type SettableKey = (typeof SETTABLE_KEYS)[number];
 

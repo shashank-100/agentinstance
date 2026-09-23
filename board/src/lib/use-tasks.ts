@@ -1,4 +1,4 @@
-// Live task data, shaped like the static array the cockpit was built against.
+// Live task data, shaped like the static array the board was built against.
 //
 // The screens import `tasks` from mock-data as a plain array. Swapping that for
 // a hook keeps their bodies unchanged: `useTasks()` returns the same list, and
