@@ -18,6 +18,7 @@ import {
   type KeyEnv,
 } from "./catalog.js";
 import { tokenForRepo } from "./github-app.js";
+import { withStoredKeys } from "./keys.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
 /**
@@ -181,7 +182,7 @@ export class AgentInstance extends DurableObject<Env> {
    * program at this, so Claude Code runs on whatever model the agent is
    * configured with rather than requiring an Anthropic subscription.
    */
-  private provider(): {
+  private provider(env: Env): {
     key?: string;
     baseUrl?: string;
     model?: string;
@@ -194,8 +195,8 @@ export class AgentInstance extends DurableObject<Env> {
     // and the model it serves are configuration rather than constants.
     const { keyVar } = PROVIDERS[info.provider];
     const baseUrl =
-      info.provider === "local" ? localBaseUrl(this.env as unknown as KeyEnv) : PROVIDERS[info.provider].baseUrl;
-    const key = (this.env as unknown as Record<string, string | undefined>)[keyVar];
+      info.provider === "local" ? localBaseUrl(env as unknown as KeyEnv) : PROVIDERS[info.provider].baseUrl;
+    const key = (env as unknown as Record<string, string | undefined>)[keyVar];
 
     // `oauth` says a subscription token *can* serve this model, not that the
     // model has no provider key: Claude is reachable either way. When a token
@@ -206,7 +207,7 @@ export class AgentInstance extends DurableObject<Env> {
     // The provider *name* and model survive regardless. A CLI that resolves
     // its endpoint from a name (pi) still needs that name on the command line,
     // and dropping it here rendered `--provider '' --model ''`.
-    if (info.oauth && this.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    if (info.oauth && env.CLAUDE_CODE_OAUTH_TOKEN) {
       return { model: info.upstreamId ?? info.id, provider: info.provider };
     }
     // The provider's name and key var travel alongside the base URL: a CLI
@@ -266,7 +267,8 @@ export class AgentInstance extends DurableObject<Env> {
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
-
+    // Keys saved from the cockpit, laid over the Worker's secrets.
+    const env = await withStoredKeys(this.env);
 
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
       sandbox: getSandbox(this.env, this.spec.machine),
@@ -286,14 +288,14 @@ export class AgentInstance extends DurableObject<Env> {
       // request host (a proxy, a custom domain).
       agentUrl: this.agentUrl(origin),
       ...(() => {
-        const p = this.provider();
+        const p = this.provider(env);
         return {
           cliKey: p.key,
           cliBaseUrl: p.baseUrl,
           cliModel: p.model,
           cliProvider: p.provider,
           cliKeyVar: p.keyVar,
-          oauthToken: this.env.CLAUDE_CODE_OAUTH_TOKEN,
+          oauthToken: env.CLAUDE_CODE_OAUTH_TOKEN,
           // The subscription is Anthropic's, so it can only serve a Claude
           // model. `oauth` marks exactly those.
           cliOauthOk: MODELS[this.spec.model]?.oauth === true,
@@ -543,7 +545,7 @@ export class AgentInstance extends DurableObject<Env> {
       const { harness, model } = snap.spec;
       if (!HARNESSES[harness]) {
         errors.push(`harness '${harness}' is not one this deployment has`);
-      } else if (!harnessCatalog(this.env as unknown as KeyEnv)[harness]?.ready) {
+      } else if (!harnessCatalog((await withStoredKeys(this.env)) as unknown as KeyEnv)[harness]?.ready) {
         // A warning, not an error. Whether a key happens to be set right now
         // says nothing about whether the snapshot is complete, and refusing
         // here would block recovery during exactly the outage — a missing or

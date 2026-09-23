@@ -12,7 +12,8 @@ a one-click button cannot provide:
 - **A running Docker daemon.** `wrangler deploy` builds the image locally.
   Docker Desktop works; on macOS [colima](https://github.com/abiosoft/colima)
   is lighter (`brew install colima && colima start`).
-- **A Claude subscription token**, which is what agents run on.
+- **An Anthropic API key**, which is what agents run on. Paste it into the
+  cockpit after deploying, or set it as a secret.
 
 ```sh
 git clone https://github.com/shashank-100/agentinstance
@@ -21,11 +22,14 @@ npx wrangler login
 npm run deploy          # builds the image and pushes it — the slow part
 ```
 
-Then the secrets. A model key is required; everything else is optional, and
-each capability is offered to agents only when its key is present:
+Then the key agents run on. Paste an Anthropic API key into the cockpit's
+home screen, which checks it with Anthropic before saving it. Or set it as a
+secret, or use a Claude subscription token instead. Everything else is
+optional, and each capability is offered to agents only when its key is
+present:
 
 ```sh
-npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # required: the model
+npx wrangler secret put ANTHROPIC_API_KEY         # or paste it in the cockpit
 
 # Strongly recommended. Without it EVERY route is open — anyone with the URL
 # can launch agents billed to your account. Any long random string.
@@ -45,7 +49,8 @@ It sleeps when idle and you pay nothing while it does.
 Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
 with SQLite storage — one coordination atom, strongly consistent, always recoverable.
 
-> **Note:** a model key is required. Set `CLAUDE_CODE_OAUTH_TOKEN`.
+> **Note:** a model key is required: an Anthropic API key, saved from the
+> cockpit or set as `ANTHROPIC_API_KEY`, or a `CLAUDE_CODE_OAUTH_TOKEN`.
 > Without one, `send`
 > returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
 

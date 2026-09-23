@@ -25,6 +25,14 @@ import {
   hourlyCost,
 } from "./catalog.js";
 import { checkCompatible, defaultSpec, IncompatibleSpec } from "./harnesses/index.js";
+import {
+  SETTABLE_KEYS,
+  type SettableKey,
+  anthropicRejects,
+  setStoredKey,
+  storedKeys,
+  withStoredKeys,
+} from "./keys.js";
 import { pullRequestFiles } from "./github-app.js";
 import { toText, type Part } from "./parts.js";
 
@@ -210,12 +218,13 @@ export default {
       // No landing page, so the agent list is the front door.
       return Response.redirect(new URL("/agents/", url).toString(), 302);
     }
-    if (first === "catalog") return catalogRoute(env);
+    if (first === "catalog") return catalogRoute(await withStoredKeys(env));
     if (first === "github") return githubRoute(request, env, second);
     if (first === "api" && second === "launch" && request.method === "POST") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
       return launchRoute(request, env);
     }
+    if (first === "api" && second === "keys") return keysRoute(request, env);
     if (first === "api" && second === "agents" && request.method === "GET") {
       return listAgentsRoute(env);
     }
@@ -293,6 +302,56 @@ function githubRoute(request: Request, env: Env, action?: string): Response {
     default:
       return json({ error: `unknown github action '${action ?? ""}'` }, 404);
   }
+}
+
+// --- provider keys entered from the cockpit ------------------------------------
+/**
+ * GET says which keys are set and where from; it never returns a key, only
+ * its last four characters so someone can tell which one is in use.
+ * POST `{ ANTHROPIC_API_KEY: "sk-ant-..." }` saves one; `null` removes it.
+ */
+async function keysRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method === "GET") {
+    const stored = await storedKeys(env);
+    const secrets = env as unknown as Record<string, string | undefined>;
+    return json(
+      Object.fromEntries(
+        SETTABLE_KEYS.map((name) => {
+          const value = stored[name] ?? secrets[name];
+          const source = stored[name] ? "cockpit" : secrets[name] ? "secret" : null;
+          return [name, { set: !!value, source, last4: value ? value.slice(-4) : null }];
+        }),
+      ),
+    );
+  }
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+  if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+
+  const body = await parsedBody<Record<string, unknown>>(request);
+  if (!body) return json({ error: "body is not valid JSON" }, 400);
+  for (const [name, raw] of Object.entries(body)) {
+    if (!(SETTABLE_KEYS as readonly string[]).includes(name)) {
+      return json({ error: `'${name}' cannot be set here` }, 400);
+    }
+    if (raw !== null && typeof raw !== "string") {
+      return json({ error: `${name} must be a string, or null to remove it` }, 400);
+    }
+  }
+  for (const [name, raw] of Object.entries(body) as [SettableKey, string | null][]) {
+    const value = typeof raw === "string" ? raw.trim() : null;
+    if (value === null || value === "") {
+      await setStoredKey(env, name, null);
+      continue;
+    }
+    if (!value.startsWith("sk-ant-")) {
+      return json({ error: "That isn't an Anthropic API key. Keys start with sk-ant-." }, 400);
+    }
+    if (await anthropicRejects(value)) {
+      return json({ error: "Anthropic rejected this key. Check it and try again." }, 400);
+    }
+    await setStoredKey(env, name, value);
+  }
+  return keysRoute(new Request(request.url), env);
 }
 
 // --- what an agent can be built from -----------------------------------------
@@ -535,7 +594,7 @@ async function dispatchTask(
   const agentId = `task-${task.id}`;
   const spec = defaultSpec({
     harness: opts.harness ?? "claude-code",
-    model: opts.model ?? "claude-opus-4.8",
+    model: opts.model ?? "claude-opus-5",
     capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr"],
     machine: opts.machine ?? "one-cpu",
   });

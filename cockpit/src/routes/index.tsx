@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell } from "@/components/cockpit/Shell";
+import { ClaudeKey } from "@/components/cockpit/ClaudeKey";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 
@@ -32,7 +33,8 @@ const examples = [
 function Overview() {
   return (
     <Shell>
-      <div className="px-5 py-10 sm:px-8 lg:px-10">
+      <div className="space-y-4 px-5 py-10 sm:px-8 lg:px-10">
+        <ClaudeKey />
         <section className="max-w-3xl rounded-lg border border-border bg-surface p-6 sm:p-8">
           <h1 className="font-display text-2xl font-medium leading-snug">
             Describe the change. Pick the harness.

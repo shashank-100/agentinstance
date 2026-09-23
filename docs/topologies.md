@@ -36,7 +36,7 @@ each other.
 
 ```
         ┌─────────────┐
-        │ supervisor  │   claude-code / claude-opus-4.8
+        │ supervisor  │   claude-code / claude-opus-5
         └──┬───┬───┬──┘
            │   │   │      send_to_agent
       ┌────┘   │   └────┐
@@ -49,7 +49,7 @@ Launch them:
 
 ```sh
 curl -X POST $URL/api/launch -d '{
-  "id": "supervisor", "harness": "claude-code", "model": "claude-opus-4.8",
+  "id": "supervisor", "harness": "claude-code", "model": "claude-opus-5",
   "capabilities": ["send_to_agent", "list_agents", "remember", "recall"]
 }'
 
@@ -156,7 +156,7 @@ at launch rather than failing later:
 
 | Harness | Models | Auth |
 |---|---|---|
-| `claude-code` | `claude-opus-4.8` | `CLAUDE_CODE_OAUTH_TOKEN` (a subscription) |
+| `claude-code` | `claude-opus-5` | `CLAUDE_CODE_OAUTH_TOKEN` (a subscription) |
 | `pi` | `kimi-k3` | `MOONSHOT_API_KEY` |
 
 A common split is a strong model where judgement matters — planning, review,

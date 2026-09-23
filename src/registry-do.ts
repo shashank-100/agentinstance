@@ -27,7 +27,35 @@ export class RegistryDO extends DurableObject<Env> {
           createdAt INTEGER NOT NULL
         )
       `);
+      this.sql.exec(`
+        CREATE TABLE IF NOT EXISTS keys (
+          name TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      `);
     });
+  }
+
+  /** Provider keys entered from the cockpit, by env var name. */
+  async storedKeys(): Promise<Record<string, string>> {
+    const rows = this.sql.exec("SELECT name, value FROM keys").toArray() as {
+      name: string;
+      value: string;
+    }[];
+    return Object.fromEntries(rows.map((r) => [r.name, r.value]));
+  }
+
+  /** Save a key, or remove it with null. */
+  async setKey(name: string, value: string | null): Promise<void> {
+    if (value === null) {
+      this.sql.exec("DELETE FROM keys WHERE name = ?", name);
+    } else {
+      this.sql.exec(
+        "INSERT INTO keys (name, value) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value",
+        name,
+        value,
+      );
+    }
   }
 
   async register(rec: AgentRecord): Promise<void> {

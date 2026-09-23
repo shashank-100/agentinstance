@@ -51,6 +51,16 @@ export const MODELS: Record<string, ModelInfo> = {
   // Served two ways: claude-code authenticates with a subscription token and
   // never consults the provider, while pi calls Anthropic directly with a key.
   // `oauth` marks the first case — there is no per-token rate to quote for it.
+  // Opus 5 needs no upstreamId: its catalog id is already Anthropic's name.
+  "claude-opus-5": {
+    id: "claude-opus-5",
+    label: "Claude Opus 5",
+    priceIn: 5,
+    priceOut: 25,
+    provider: "anthropic",
+    oauth: true,
+  },
+  // Kept so agents launched on it before Opus 5 still resolve.
   "claude-opus-4.8": {
     id: "claude-opus-4.8",
     label: "Claude Opus 4.8",
@@ -93,10 +103,10 @@ export const MODELS: Record<string, ModelInfo> = {
  * the wiring alone was what made a dead option look selectable.
  */
 export const HARNESS_MODELS: Record<string, string[]> = {
-  "claude-code": ["claude-opus-4.8"],
+  "claude-code": ["claude-opus-5", "claude-opus-4.8"],
   // pi speaks the OpenAI wire format as well as Anthropic's, so it is the
   // harness that can drive a self-hosted server.
-  pi: ["claude-opus-4.8", "local-model"],
+  pi: ["claude-opus-5", "claude-opus-4.8", "local-model"],
 };
 
 /**
