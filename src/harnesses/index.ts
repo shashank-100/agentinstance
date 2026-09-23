@@ -326,15 +326,14 @@ const CLI_HARNESSES: Record<
   }
 > = {
   "claude-code": {
-    template: "claude --dangerously-skip-permissions -p {task}",
-    env: {
-      key: "ANTHROPIC_AUTH_TOKEN",
-      baseUrl: "ANTHROPIC_BASE_URL",
-      model: "ANTHROPIC_MODEL",
-    },
-    // Claude Code speaks Anthropic's /v1/messages, which OpenAI-compatible
-    // providers do not serve. A subscription OAuth token bypasses that: it
-    // authenticates against Anthropic directly, so no base URL is passed.
+    template: "claude --dangerously-skip-permissions --model {model} -p {task}",
+    env: { key: "", baseUrl: "", model: "" },
+    // Claude Code only runs Claude, and knows Anthropic's endpoint itself, so
+    // an API key is all it needs, under ANTHROPIC_API_KEY. It used to get
+    // ANTHROPIC_AUTH_TOKEN plus the provider's base URL. That sent the key as
+    // a bearer token, which the API refuses, and requested /v1/v1/messages.
+    providerKeyVar: true,
+    // A subscription OAuth token also authenticates against Anthropic directly.
     oauthVar: "CLAUDE_CODE_OAUTH_TOKEN",
   },
 
@@ -451,7 +450,7 @@ export function defaultSpec(partial: Partial<AgentSpec> = {}): AgentSpec {
   );
   return {
     harness: "claude-code",
-    model: "claude-opus-4.8",
+    model: "claude-opus-5",
     capabilities: [],
     machine: DEFAULT_MACHINE,
     system: "You are a helpful always-on agent.",

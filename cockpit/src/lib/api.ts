@@ -350,3 +350,29 @@ export async function fetchAgentHistory(
 export async function fetchStatus(): Promise<Record<string, number>> {
   return get<Record<string, number>>("/api/fleet/status");
 }
+
+/** Whether the Anthropic key is set, and where from. The key itself never
+ *  comes back, only its last four characters. */
+export interface KeyStatus {
+  set: boolean;
+  source: "cockpit" | "secret" | null;
+  last4: string | null;
+}
+
+export async function fetchAnthropicKey(): Promise<KeyStatus> {
+  const body = await get<Record<string, KeyStatus>>("/api/keys");
+  return body["ANTHROPIC_API_KEY"] ?? { set: false, source: null, last4: null };
+}
+
+/** Save the Anthropic key, or remove it with null. The server checks it with
+ *  Anthropic first, and its error says why a key was refused. */
+export async function saveAnthropicKey(key: string | null): Promise<KeyStatus> {
+  const res = await fetch(`${BASE}/api/keys`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ANTHROPIC_API_KEY: key }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Record<string, KeyStatus> & { error?: string };
+  if (!res.ok) throw new Error(body.error ?? `could not save the key (${res.status})`);
+  return body["ANTHROPIC_API_KEY"] ?? { set: false, source: null, last4: null };
+}

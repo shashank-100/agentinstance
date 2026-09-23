@@ -36,18 +36,25 @@ describe("agent CLI harnesses", () => {
       agentId: "a1",
       cliKey: "sk-test",
       cliBaseUrl: "https://api.anthropic.com/v1",
-      cliModel: "claude-opus-4.8",
+      cliModel: "claude-opus-4-8",
+      cliProvider: "anthropic",
+      cliKeyVar: "ANTHROPIC_API_KEY",
     });
     expect(out).toBe("done");
     expect(capture.cmd).toContain("claude");
     expect(capture.cmd).toContain("fix the bug");
-    // Credentials ride the command's environment, never the prompt. Pointing
-    // the CLI at the agent's own provider is what makes it model-agnostic.
+    // Credentials ride the command's environment, never the prompt.
     // Nested inside runuser's quoting, so match the names and values loosely.
-    expect(capture.cmd).toContain("ANTHROPIC_AUTH_TOKEN=");
-    expect(capture.cmd).toContain("ANTHROPIC_BASE_URL=");
-    expect(capture.cmd).toContain("https://api.anthropic.com/v1");
-    expect(capture.cmd).toContain("claude-opus-4.8");
+    //
+    // An API key goes in ANTHROPIC_API_KEY, which Claude Code sends as
+    // x-api-key. ANTHROPIC_AUTH_TOKEN is sent as a bearer token, which the API
+    // refuses for a key. No base URL either: Claude Code appends /v1 itself, so
+    // passing the provider's .../v1 requested /v1/v1/messages.
+    expect(capture.cmd).toContain("ANTHROPIC_API_KEY=");
+    expect(capture.cmd).toContain("sk-test");
+    expect(capture.cmd).not.toContain("ANTHROPIC_AUTH_TOKEN=");
+    expect(capture.cmd).not.toContain("ANTHROPIC_BASE_URL=");
+    expect(capture.cmd).toContain("claude-opus-4-8");
     // The CLI must not run as root — it refuses to skip permission prompts.
     expect(capture.cmd).toContain("runuser -u agent");
   });
