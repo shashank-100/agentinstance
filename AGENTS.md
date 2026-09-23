@@ -65,7 +65,32 @@ Work goes **direct to `main`**: merge locally, push. No PR, no branch
 protection, no CI. That means `npm test` is the only gate there is, which is
 the whole reason the point above matters.
 
-Commit messages are one line, no body, no trailers.
+**One commit, one change.** A subject with an "and" in it is usually two
+commits: `git log` stops being a record of what happened and becomes a list of
+afternoons. Reverting one of them takes the other with it.
+
+Commit messages are one line, no body, no trailers, in the form:
+
+```
+type(scope): what changed, in the imperative
+```
+
+`type` is one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
+`scope` is the area — `fleet`, `agent`, `cockpit`, `github`, `harness`,
+`sandbox`, `catalog` — and is omitted when a change is genuinely repo-wide.
+
+```
+feat(fleet): sweep abandoned work on a timer
+fix(agent): stop a failed restore from deleting the agent it replaces
+refactor(cockpit): read the diff from the pull request instead of the task
+docs: say what deploying actually needs
+```
+
+Write the subject for someone reading `git log` a year from now with no memory
+of the day. Say what changed, not what you did: "sweep abandoned work on a
+timer", not "added a sweep". Where the *why* does not fit, it belongs in a
+comment next to the code, which is where someone will actually be standing when
+they need it.
 
 ## Containers
 
