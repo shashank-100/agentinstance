@@ -9,6 +9,7 @@ import { runtimeLabel, type DiffLine } from "@/lib/mock-data";
 import { releaseTask, dispatchTask } from "@/lib/api";
 import { useTask, useAgentHistory, useAgentOutput } from "@/lib/use-tasks";
 import { Shell } from "@/components/cockpit/Shell";
+import { Conversation } from "@/components/cockpit/Conversation";
 import {
   CheckIcon,
   DiffStat,
@@ -188,8 +189,11 @@ function TaskView() {
         <div className="mt-7 border-t border-border pt-5" />
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Tabs defaultValue="diff" className="min-w-0">
+          <Tabs defaultValue="chat" className="min-w-0">
             <TabsList className="h-10 bg-surface-2">
+              <TabsTrigger value="chat" className="font-mono text-[11px] tracking-wide">
+                Conversation
+              </TabsTrigger>
               <TabsTrigger value="diff" className="font-mono text-[11px] tracking-wide">
                 Files changed{" "}
                 <span className="ml-1.5 text-muted-foreground">{task.filesChanged}</span>
@@ -204,6 +208,19 @@ function TaskView() {
                 Prompt
               </TabsTrigger>
             </TabsList>
+
+            {/* The turns, with the run's output folded in beside them, and a
+                composer: a dispatch is the first message rather than a job,
+                so direction after it continues the same agent in the same
+                checkout. The Terminal tab keeps the raw stream on its own. */}
+            <TabsContent value="chat" className="mt-3">
+              <Conversation
+                agentId={agentId}
+                messages={messages}
+                output={outputRows}
+                live={task.status === "running"}
+              />
+            </TabsContent>
 
             <TabsContent value="diff" className="mt-3">
               {!file ? (
