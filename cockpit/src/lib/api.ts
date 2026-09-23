@@ -219,6 +219,36 @@ export async function sendToAgent(agentId: string, text: string): Promise<string
   return body.reply ?? "";
 }
 
+/** One file a task's pull request touches. */
+export interface ChangedFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+}
+
+/**
+ * The diff of a task's pull request.
+ *
+ * Read through the deployment rather than from GitHub directly: the App
+ * credential lives on the Worker, and a browser fetching GitHub itself would
+ * need a token in its own bundle. `reason` explains an empty list — a task
+ * with no pull request has no diff, which is not the same as one that changed
+ * nothing.
+ */
+export async function fetchTaskFiles(
+  taskId: string,
+): Promise<{ files: ChangedFile[]; reason?: string; prUrl?: string }> {
+  try {
+    return await get<{ files: ChangedFile[]; reason?: string; prUrl?: string }>(
+      `/api/fleet/files/${encodeURIComponent(taskId)}`,
+    );
+  } catch (e) {
+    return { files: [], reason: e instanceof Error ? e.message : "could not read the diff" };
+  }
+}
+
 /** One chunk of live CLI output, as the agent's DO stored it. */
 export interface OutputRow {
   seq: number;

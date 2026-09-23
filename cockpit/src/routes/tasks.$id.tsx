@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { runtimeLabel, type DiffLine } from "@/lib/mock-data";
 import { releaseTask, dispatchTask } from "@/lib/api";
-import { useTask, useAgentHistory, useAgentOutput } from "@/lib/use-tasks";
+import { useTask, useAgentHistory, useAgentOutput, useTaskFiles } from "@/lib/use-tasks";
 import { Shell } from "@/components/cockpit/Shell";
 import { Conversation } from "@/components/cockpit/Conversation";
 import {
@@ -55,6 +55,13 @@ function TaskView() {
   const { rows: outputRows } = useAgentOutput(agentId, task?.status === "running");
   const { messages } = useAgentHistory(agentId, task?.status === "running");
   const [activeFile, setActiveFile] = useState("");
+  // The diff only exists once a pull request does, so the fetch waits for one.
+  const {
+    files: changed,
+    reason: diffReason,
+    loading: diffLoading,
+  } = useTaskFiles(id, Boolean(task?.prUrl));
+  const shownFile = changed.find((f) => f.path === activeFile) ?? changed[0];
   const [releasing, setReleasing] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const queryClient = useQueryClient();
@@ -83,8 +90,6 @@ function TaskView() {
       </Shell>
     );
   }
-
-  const file = task.files.find((f) => f.path === activeFile) ?? task.files[0];
 
   return (
     <Shell>
@@ -195,8 +200,10 @@ function TaskView() {
                 Conversation
               </TabsTrigger>
               <TabsTrigger value="diff" className="font-mono text-[11px] tracking-wide">
-                Files changed{" "}
-                <span className="ml-1.5 text-muted-foreground">{task.filesChanged}</span>
+                Files changed
+                {changed.length > 0 && (
+                  <span className="ml-1.5 text-muted-foreground">{changed.length}</span>
+                )}
               </TabsTrigger>
               <TabsTrigger value="terminal" className="font-mono text-[11px] tracking-wide">
                 Terminal
@@ -222,19 +229,25 @@ function TaskView() {
               />
             </TabsContent>
 
+            {/* The real diff, read from the pull request the agent opened.
+                This used to render `task.files`, which the API never fills —
+                so the tab showed "Files changed 0" on a task that had changed
+                a file and opened a PR about it. */}
             <TabsContent value="diff" className="mt-3">
-              {!file ? (
-                <EmptyPanel text="No commits yet — the microVM is still provisioning." />
+              {diffLoading ? (
+                <EmptyPanel text="Reading the pull request…" />
+              ) : changed.length === 0 ? (
+                <EmptyPanel text={diffReason ?? "No pull request yet — nothing to diff."} />
               ) : (
-                <div className="grid gap-3 2xl:grid-cols-[230px_minmax(0,1fr)]">
+                <div className="grid gap-3 2xl:grid-cols-[260px_minmax(0,1fr)]">
                   <ul className="h-fit max-h-60 overflow-y-auto rounded-md border border-border bg-surface 2xl:max-h-none">
-                    {task.files.map((f) => (
+                    {changed.map((f) => (
                       <li key={f.path}>
                         <button
                           onClick={() => setActiveFile(f.path)}
                           className={cn(
                             "flex w-full flex-col gap-0.5 border-l-2 px-2.5 py-2 text-left transition-colors",
-                            f.path === file.path
+                            f.path === shownFile?.path
                               ? "border-primary bg-surface-2"
                               : "border-transparent hover:bg-surface-2/60",
                           )}
@@ -243,9 +256,9 @@ function TaskView() {
                             {f.path.split("/").slice(-1)[0]}
                           </span>
                           <span className="truncate font-mono text-[10px] text-muted-foreground">
-                            {f.path.split("/").slice(0, -1).join("/")}
+                            {f.path.split("/").slice(0, -1).join("/") || f.status}
                           </span>
-                          <DiffStat added={f.added} removed={f.removed} />
+                          <DiffStat added={f.additions} removed={f.deletions} />
                         </button>
                       </li>
                     ))}
@@ -253,17 +266,40 @@ function TaskView() {
 
                   <div className="overflow-hidden rounded-md border border-border bg-surface">
                     <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                      <span className="truncate font-mono text-[11px]">{file.path}</span>
-                      <DiffStat added={file.added} removed={file.removed} />
+                      <span className="truncate font-mono text-[11px]">{shownFile?.path}</span>
+                      <DiffStat
+                        added={shownFile?.additions ?? 0}
+                        removed={shownFile?.deletions ?? 0}
+                      />
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse font-mono text-[11.5px] leading-5">
-                        <tbody>
-                          {file.lines.map((line, i) => (
-                            <DiffRow key={i} line={line} />
+                    <div className="max-h-[520px] overflow-auto">
+                      {shownFile?.patch ? (
+                        <pre className="font-mono text-[11.5px] leading-5">
+                          {shownFile.patch.split("\n").map((line, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                "px-3",
+                                line.startsWith("+") &&
+                                  !line.startsWith("+++") &&
+                                  "bg-success/10 text-success",
+                                line.startsWith("-") &&
+                                  !line.startsWith("---") &&
+                                  "bg-destructive/10 text-destructive",
+                                line.startsWith("@@") && "bg-surface-2 text-muted-foreground",
+                              )}
+                            >
+                              {line || " "}
+                            </div>
                           ))}
-                        </tbody>
-                      </table>
+                        </pre>
+                      ) : (
+                        // GitHub omits the patch for binaries and very large
+                        // files rather than inlining them.
+                        <p className="p-3 font-mono text-[11px] text-muted-foreground">
+                          No inline diff for this file — {shownFile?.status}.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

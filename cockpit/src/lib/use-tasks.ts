@@ -11,6 +11,7 @@ import {
   fetchAgentHistory,
   fetchAgentOutput,
   fetchCatalog,
+  fetchTaskFiles,
   type OutputRow,
 } from "./api";
 import type { Task } from "./mock-data";
@@ -157,4 +158,21 @@ export function useCatalog() {
     staleTime: Infinity,
   });
   return { catalog: q.data ?? null, loading: q.isLoading };
+}
+
+/**
+ * A task's diff, once it has a pull request to have one.
+ *
+ * Not polled: a merged diff does not change, and a running task has no pull
+ * request yet. Refetched when the task's state moves, which is when a diff
+ * first appears.
+ */
+export function useTaskFiles(taskId: string, enabled: boolean) {
+  const mounted = useMounted();
+  const q = useQuery({
+    queryKey: ["fleet", "files", taskId],
+    queryFn: () => fetchTaskFiles(taskId),
+    enabled: mounted && enabled,
+  });
+  return { files: q.data?.files ?? [], reason: q.data?.reason, loading: q.isLoading };
 }
