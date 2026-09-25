@@ -152,27 +152,67 @@ async function ownerOf(request: Request, env: Env): Promise<string> {
 }
 
 /**
- * Every JSON reply is readable cross-origin.
+ * Cross-origin headers, which now depend on who is asking.
  *
- * The API and the UI that reads it are separate Workers, so a dashboard on its
- * own origin is a browser request from somewhere else — and without these
- * headers the browser discards a perfectly good 200 before the page sees it.
+ * This was a flat `access-control-allow-origin: *`, on the reasoning that
+ * FLEET_TOKEN was the defence and the browser's opinion did not matter. Session
+ * cookies change that twice over:
  *
- * `*` rather than a named origin: what protects this deployment is FLEET_TOKEN
- * on every mutating route, not the browser's guess about who is asking. An
- * origin allowlist here would imply a protection that is not how this is
- * actually defended, while breaking every other client — curl, a script, a
- * second dashboard — for no gain.
+ * - A browser refuses to hand a response to a `credentials: "include"` request
+ *   when the origin is `*`. Left alone, a board on its own origin would sign in
+ *   and then see every call fail in the browser rather than at the server.
+ * - Reflecting an origin *and* allowing credentials is how a hostile page reads
+ *   somebody's board using their cookie. So an origin is only reflected when
+ *   this deployment named it.
+ *
+ * `CORS_ORIGINS` is a comma-separated allowlist for exactly that: a board
+ * deployed on a different host. Unset, and only same-origin works — which is
+ * the normal case, where the board is served by this Worker. Token-carrying
+ * clients (curl, scripts, the VM tools) are unaffected either way; CORS is a
+ * browser rule and they are not browsers.
  */
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-  "access-control-allow-headers": "authorization,content-type",
-  "access-control-max-age": "86400",
+const corsHeaders = (request: Request, env: Env): Record<string, string> => {
+  const base: Record<string, string> = {
+    "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+    "access-control-allow-headers": "authorization,content-type",
+    "access-control-max-age": "86400",
+    // The reply differs per origin, so a shared cache must not serve one
+    // origin's response to another.
+    vary: "origin",
+  };
+  const origin = request.headers.get("origin");
+  if (!origin) return base;
+
+  const allowed = (env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  if (allowed.includes(origin)) {
+    return { ...base, "access-control-allow-origin": origin, "access-control-allow-credentials": "true" };
+  }
+  // Not on the list: readable by a script that brings its own token, never by a
+  // page using somebody's cookie.
+  return { ...base, "access-control-allow-origin": "*" };
 };
 
-const json = (body: unknown, status = 200) =>
-  Response.json(body, { status, headers: CORS });
+/**
+ * A JSON reply.
+ *
+ * No CORS headers here. `json` is called from dozens of places that have no
+ * request in hand, and the correct headers now depend on the request's origin —
+ * so they are applied once to whatever this Worker returns, in `fetch`, rather
+ * than threaded through every call site or stashed in a module-level variable
+ * that two concurrent requests in one isolate would trample.
+ */
+const json = (body: unknown, status = 200) => Response.json(body, { status });
+
+/** The same response, with this request's CORS headers on it. */
+function withCors(response: Response, request: Request, env: Env): Response {
+  const out = new Response(response.body, response);
+  for (const [k, v] of Object.entries(corsHeaders(request, env))) out.headers.set(k, v);
+  return out;
+}
 
 /**
  * Is this request allowed to change things?
@@ -224,8 +264,13 @@ const parsedBody = async <T>(request: Request): Promise<T | null> => {
   }
 };
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+/**
+ * Everything this Worker serves, before CORS.
+ *
+ * Split out so `fetch` has exactly one place to put the per-request CORS
+ * headers on — every reply, including the ones that return early.
+ */
+async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     // Decode each segment: `url.pathname` keeps percent-encoding, so an agent
     // whose name needs escaping could never be addressed again — a DELETE would
@@ -246,7 +291,7 @@ export default {
     // so this has to answer before any routing: the browser never sends the
     // real request until it does.
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS });
+      return new Response(null, { status: 204 });
     }
 
     if (url.pathname === "/") {
@@ -286,6 +331,11 @@ export default {
     }
 
     return env.ASSETS.fetch(request); // static assets
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return withCors(await handle(request, env, ctx), request, env);
   },
 } satisfies ExportedHandler<Env>;
 

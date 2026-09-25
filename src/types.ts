@@ -66,6 +66,17 @@ export interface Env {
    * said "anyone".
    */
   ALLOWED_LOGINS?: string;
+  /**
+   * Origins allowed to call this API from a browser with a session cookie,
+   * comma separated.
+   *
+   * Only needed when the board is served from a different host than the API.
+   * Unset means same-origin only, which is how this deployment runs — and an
+   * origin is never reflected unless it is on this list, because reflecting one
+   * while allowing credentials is how a hostile page reads somebody's board
+   * with their own cookie.
+   */
+  CORS_ORIGINS?: string;
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;
   // Capability keys.
