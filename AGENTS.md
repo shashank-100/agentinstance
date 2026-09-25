@@ -131,6 +131,15 @@ push.
 Never put a token in a command argument or a file the repo tracks. `.dev.vars`
 is local only; `.dev.vars.example` documents the names.
 
+**Set `WORKER_URL` on any deployment where an alarm wakes an agent.** The VM
+tool scripts post back through the public front door, so an agent needs to know
+its own address to install them. That address normally comes from the request
+being served, and an alarm has no request — `agentUrl()` falls back to the last
+origin the agent saw, which a brand-new agent woken first by an alarm has never
+had. The result is an agent that runs with no tools and says so: the supervisor
+reported "there is no `fleet_task` tool in this environment" on its first
+unattended wake, while its spec listed one.
+
 ## Harnesses
 
 | Harness | State |
