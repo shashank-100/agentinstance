@@ -304,13 +304,15 @@ async function authRoute(request: Request, env: Env, action?: string): Promise<R
       // Checked after GitHub confirms who they are, so the refusal names a
       // real login rather than whatever was typed.
       if (!allowed(env, user.login)) {
-        return json(
-          {
-            error: `${user.login} is not on this deployment's invite list`,
-            hint: "ALLOWED_LOGINS is a comma-separated list of GitHub logins",
+        // Back to the board with the reason in the URL, not a 403 body. Someone
+        // turned away here has done nothing wrong and pressed one button; a
+        // bare JSON payload reads as the button being broken.
+        return new Response(null, {
+          status: 302,
+          headers: {
+            location: `/?denied=${encodeURIComponent(user.login)}`,
           },
-          403,
-        );
+        });
       }
 
       const token = await issueSession(env, user);
