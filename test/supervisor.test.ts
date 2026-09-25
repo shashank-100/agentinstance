@@ -42,17 +42,20 @@ describe("a run that breaks", () => {
     const task = await file("work whose agent dies");
     await claim("agent-that-dies");
     await age(task.id, 20);
-    // The sweep reclaims and records; it must not wake anyone itself.
-    await SELF.fetch("https://x/api/fleet/sweep", { method: "POST" });
 
-    const first = await supervise();
-    expect(first.woke).toBe(true);
-    expect(first.reports).toBeGreaterThan(0);
+    // The sweep reclaims, records, and wakes the supervisor itself — nothing
+    // outside has to notice. This is the whole point: an incident that waited
+    // for someone to run curl would leave a broken run unreported on exactly
+    // the product that claims to work unattended.
+    const swept = (await (
+      await SELF.fetch("https://x/api/fleet/sweep", { method: "POST" })
+    ).json()) as { reported: number };
+    expect(swept.reported).toBeGreaterThan(0);
 
-    // Claimed on read: a second look finds nothing, so one failure does not
-    // wake a supervisor twice.
-    const second = await supervise();
-    expect(second.woke).toBe(false);
+    // Claimed as they were read, so asking again finds nothing: one failure
+    // wakes a supervisor once, however many times anyone looks.
+    const after = await supervise();
+    expect(after.woke).toBe(false);
   });
 
   it("does not wake an agent that was never launched", async () => {
