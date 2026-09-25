@@ -34,7 +34,7 @@ import {
   storedKeys,
   withStoredKeys,
 } from "./keys.js";
-import { pullRequestFiles } from "./github-app.js";
+import { installationAccount, pullRequestFiles } from "./github-app.js";
 import { allowed, exchangeCode, issueSession, sessionHeader, whoIs } from "./auth.js";
 import { DEPLOYMENT, fleetName, registryName, scoped } from "./scope.js";
 import { toText, type Part } from "./parts.js";
@@ -359,7 +359,7 @@ async function authRoute(request: Request, env: Env, action?: string): Promise<R
  * `tokenForRepo` asks it per repo. That is deliberate — an installation id
  * cached here would go stale the moment someone changed the grant.
  */
-function githubRoute(request: Request, env: Env, action?: string): Response {
+async function githubRoute(request: Request, env: Env, action?: string): Promise<Response> {
   const appSlug = env.GITHUB_APP_SLUG;
   switch (action) {
     case "install": {
@@ -374,13 +374,33 @@ function githubRoute(request: Request, env: Env, action?: string): Response {
         302,
       );
     }
-    case "installed":
+    case "installed": {
+      // GitHub sends the installation id here, but this is a plain redirect
+      // anyone can hit with any number in the query — so it is confirmed with
+      // the App's own credentials before it means anything.
+      const installationId = new URL(request.url).searchParams.get("installation_id");
+      if (!installationId || !env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+        return json({
+          ok: true,
+          message:
+            "installed — agents can now reach the repositories you granted. " +
+            "Check /github/status to confirm.",
+        });
+      }
+      const acct = await installationAccount(
+        env.GITHUB_APP_ID,
+        env.GITHUB_APP_PRIVATE_KEY,
+        installationId,
+      );
       return json({
         ok: true,
-        message:
-          "installed — agents can now reach the repositories you granted. " +
-          "Check /github/status to confirm.",
+        account: acct.account,
+        message: acct.account
+          ? `installed on ${acct.account} — agents owned by ${acct.account} can now ` +
+            "reach the repositories you granted."
+          : "installed — check /github/status to confirm.",
       });
+    }
     case "status": {
       const app = Boolean(env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY);
       return json({
