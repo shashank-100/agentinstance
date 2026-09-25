@@ -57,8 +57,10 @@ only when its key is present (`/catalog` reports what is actually ready).
 # harnesses authenticate with — so there is no per-token API rate to pay.
 npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN
 
-# Strongly recommended. Without it EVERY route is open — anyone with the URL
-# can launch agents billed to your account, read their history, or delete them.
+# The machine credential: an agent's tools call back from inside a container
+# over plain HTTP with no cookie, and carry this. It is also what protects a
+# deployment that has no sign-in configured — with neither this nor
+# GITHUB_CLIENT_ID set, every route is open to anyone with the URL.
 # Any long random string: `openssl rand -hex 32`.
 npx wrangler secret put FLEET_TOKEN
 
@@ -104,6 +106,85 @@ openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in downloaded.pem -out k
 Then visit `/github/install` on your deployment to install the App on the
 repositories agents may touch. `/github/status` reports which credential is in
 use.
+
+### Letting people sign in
+
+Sign-in is GitHub's, through the App above — a GitHub App can authenticate
+people itself, so there is no separate OAuth App. Both values come from the
+App's own settings page:
+
+```bash
+npx wrangler secret put GITHUB_CLIENT_ID       # shown on the App settings page
+npx wrangler secret put GITHUB_CLIENT_SECRET   # generate it there
+```
+
+**The App must know the callback URL** or GitHub refuses the redirect. Add it
+under *Callback URL* on the App settings page:
+
+```
+https://<your-worker>.workers.dev/auth/callback
+```
+
+A GitHub App accepts several callback URLs. If you run more than one
+deployment, **add** each one rather than replacing the existing entry —
+replacing it breaks sign-in on the deployment that was working.
+
+Then decide who may in. Two ways, and a deployment must pick one:
+
+```bash
+# Invite-only: a comma-separated list of GitHub logins.
+npx wrangler secret put ALLOWED_LOGINS
+
+# Or open sign-up, where everyone brings their own model key (see below).
+npx wrangler secret put BYOK        # any non-empty value
+```
+
+With neither, nobody can sign in. That is deliberate: every agent otherwise
+runs on this deployment's subscription and boots a container on its account, so
+a deployment that has not said who may in has not said "everyone".
+
+### A second, public deployment
+
+To run a deployment open to other people alongside your own, deploy a second
+Worker from the same repo with `wrangler.public.jsonc`:
+
+```bash
+npx wrangler deploy --config wrangler.public.jsonc
+```
+
+It is a separate Worker with its own Durable Objects, so its agents, boards and
+keys are entirely separate from yours. The reason it is a config file rather
+than a `--name` override: a container application's name is account-global and
+is fixed at first deploy, so the two deployments need distinct container names
+or the second collides with the first.
+
+`wrangler.public.jsonc` is generated from `wrangler.jsonc` — regenerate it after
+changing the base rather than editing both.
+
+Its secrets differ from a private deployment in one important way: **it holds no
+model credential**. That is what makes open sign-up affordable.
+
+```bash
+A=agentinstance-app
+
+npx wrangler secret put BYOK --name $A               # open sign-up, own key
+npx wrangler secret put RUN_LIMIT --name $A          # concurrent runs per person
+npx wrangler secret put GITHUB_CLIENT_ID --name $A
+npx wrangler secret put GITHUB_CLIENT_SECRET --name $A
+npx wrangler secret put FLEET_TOKEN --name $A        # its own, not shared
+npx wrangler secret put BOARD_URL --name $A          # where its board lives
+npx wrangler secret put CORS_ORIGINS --name $A       # that board's origin
+```
+
+`BOARD_URL` and `CORS_ORIGINS` matter when the board is a separate Worker from
+the API. `BOARD_URL` is where `/` redirects and where sign-in returns to;
+`CORS_ORIGINS` is the allowlist of origins that may call the API with a session
+cookie. Without the latter the browser drops the cookie on every request and a
+signed-in person sees 401s.
+
+`/catalog` on such a deployment reports **no harness ready** until a signed-in
+person saves their own key on the board. If it ever reports one ready before
+that, `BYOK` is not taking effect and strangers are spending your subscription.
 
 ## 5. Create and talk to an agent
 
