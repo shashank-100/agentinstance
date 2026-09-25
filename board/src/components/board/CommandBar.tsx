@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useTasks, useFleetStatus } from "@/lib/use-tasks";
 import { Kbd } from "./atoms";
 import { useMe } from "./sign-in";
+import { apiUrl } from "@/lib/api";
 import { Plus, Search } from "lucide-react";
 
 export function CommandBar() {
@@ -148,7 +149,7 @@ function Who() {
       ) : null}
       <span className="hidden text-[13px] text-muted-foreground sm:inline">{me.login}</span>
       <a
-        href="/auth/logout"
+        href={apiUrl("/auth/logout")}
         className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
       >
         Sign out

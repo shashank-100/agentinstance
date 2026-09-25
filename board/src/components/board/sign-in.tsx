@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 
-import { fetchMe, SignedOutError } from "@/lib/api";
+import { apiUrl, fetchMe, SignedOutError } from "@/lib/api";
 
 /**
  * Who is signed in, cached for the session.
@@ -43,7 +43,7 @@ function SignIn({ denied }: { denied: string | null }) {
         ) : null}
 
         <a
-          href="/auth/login"
+          href={apiUrl("/auth/login")}
           className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <svg viewBox="0 0 16 16" aria-hidden className="h-4 w-4 fill-current">

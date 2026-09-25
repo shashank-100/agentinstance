@@ -66,6 +66,16 @@ function check(res: Response, what: string): void {
   if (!res.ok) throw new Error(`${what} (${res.status})`);
 }
 
+/**
+ * A URL on the API, for a link the browser follows itself.
+ *
+ * Sign-in and sign-out are redirects, not fetches, so they cannot be relative:
+ * when the board is served from its own Worker, `/auth/login` is a path on the
+ * *board*, which does not serve it. `BASE` is empty in the same-origin case, so
+ * this is the plain path there.
+ */
+export const apiUrl = (path: string): string => `${BASE}${path}`;
+
 /** Who is signed in, or null. */
 export async function fetchMe(): Promise<{
   login: string;
