@@ -901,6 +901,27 @@ async function dispatchTask(
     };
   }
 
+  // How much of the deployment one person may occupy at once.
+  //
+  // BYOK settles who pays for the model; it does nothing about containers,
+  // which are a fixed pool (`max_instances` per tier in wrangler.jsonc) shared
+  // by everyone. Without a cap, one person dispatching six tasks starves every
+  // other user of a deployment that is open to the public.
+  //
+  // The deployment's own namespace is exempt: that is the person who runs this,
+  // and a rule written for strangers should not cap them.
+  if (env.BYOK && owner !== DEPLOYMENT) {
+    const limit = Number(env.RUN_LIMIT ?? "2");
+    const running = await f.running();
+    if (running >= limit) {
+      return {
+        error:
+          `You already have ${running} task${running === 1 ? "" : "s"} running, which is ` +
+          `this deployment's limit. Wait for one to finish, or settle it, then dispatch again.`,
+      };
+    }
+  }
+
   const agentId = `task-${task.id}`;
   const spec = defaultSpec({
     harness: opts.harness ?? "claude-code",

@@ -217,6 +217,27 @@ export class FleetDO extends DurableObject<Env> {
   }
 
   /**
+   * How many of this board's tasks are running right now.
+   *
+   * Counted here, inside the object, rather than in the Worker: a DO is
+   * single-threaded, so a caller that counts and then assigns in one call
+   * cannot be overtaken between the two. The same count taken in the Worker
+   * would let two simultaneous dispatches both read "one slot left" and both
+   * take it.
+   *
+   * Stale rows are reclaimed first, so a run that died without settling frees
+   * its slot instead of counting against its owner forever. Without that the
+   * cap is a one-way ratchet: three crashes and the person is locked out.
+   */
+  async running(): Promise<number> {
+    this.reclaimStale();
+    const [row] = this.sql
+      .exec<{ n: number }>("SELECT COUNT(*) AS n FROM tasks WHERE state='running'")
+      .toArray();
+    return row?.n ?? 0;
+  }
+
+  /**
    * Take the oldest queued task, or null when there is nothing to do.
    *
    * Read and write happen in one call on purpose. A DO is single-threaded, so

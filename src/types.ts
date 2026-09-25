@@ -77,6 +77,14 @@ export interface Env {
    */
   BYOK?: string;
   /**
+   * How many tasks one person may have running at once, on a BYOK deployment.
+   *
+   * Containers are a fixed pool shared by everybody (`max_instances` per tier),
+   * so a key of their own stops a user spending the deployment's model budget
+   * but not its compute. Defaults to 2.
+   */
+  RUN_LIMIT?: string;
+  /**
    * Where the board lives, for the redirect at `/`.
    *
    * The board is a separate Worker, so this Worker cannot know its address.
