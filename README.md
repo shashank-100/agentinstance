@@ -1,199 +1,151 @@
-# agentinstance
+# agentinstance ⚡
 
-**Open-source, self-hostable always-on AI agents on Cloudflare.**
+**An agent that is still working when you close the laptop.**
 
-## Deploy
+Give it a goal. It gets a micro-VM with a real coding CLI, clones your
+repository, makes the change, and opens a pull request. Nothing runs on your
+machine — the agent lives in a Cloudflare Durable Object, so closing the tab
+that filed the work has no effect on the work.
 
-Every agent runs a coding CLI inside its own container, so deploying builds a
-container image and pushes it to Cloudflare's registry. That needs three things
-a one-click button cannot provide:
+**One agent is one Durable Object.** Addressed by name, its own SQLite, its own
+container, woken by its own alarms. That is the whole architecture, and it is
+why there is no session store, no connection pool and no locking anywhere in
+this repository.
 
-- **A paid Workers plan.** Containers are not on the free tier.
-- **A running Docker daemon.** `wrangler deploy` builds the image locally.
-  Docker Desktop works; on macOS [colima](https://github.com/abiosoft/colima)
-  is lighter (`brew install colima && colima start`).
-- **An Anthropic API key**, which is what agents run on. Paste it into the
-  board after deploying, or set it as a secret.
+[Deploy it](./DEPLOY.md) · [What every file does](./ARCHITECTURE.md) · [Read the loop](src/agent-instance.ts)
 
-```sh
-git clone https://github.com/shashank-100/agentinstance
-cd agentinstance && npm install
-npx wrangler login
-npm run deploy          # builds the image and pushes it — the slow part
+## The shape of it
+
+```text
+  you                Worker                 Durable Object          container
+   │                   │                          │                     │
+   ├─ file a task ────→│                          │                     │
+   │                   ├─ idFromName("alice/x") ─→│                     │
+   │                   │                          ├─ claude-code ──────→│
+   │← task id ─────────┤                          │                     │
+   │                                              │   git clone         │
+  (close the laptop)                              │   edit, commit      │
+                                                  │   push, open PR     │
+   │                                              │←────────────────────┤
+   ├─ read the board ─→ settled · PR #4           │
 ```
 
-Then the key agents run on. Paste an Anthropic API key into the board's
-home screen, which checks it with Anthropic before saving it. Or set it as a
-secret, or use a Claude subscription token instead. Everything else is
-optional, and each capability is offered to agents only when its key is
-present:
-
-```sh
-npx wrangler secret put ANTHROPIC_API_KEY         # or paste it in the board
-
-# Strongly recommended. Without it EVERY route is open — anyone with the URL
-# can launch agents billed to your account. Any long random string.
-npx wrangler secret put FLEET_TOKEN
-```
-
-To let agents clone, push and open pull requests, install a GitHub App
-(preferred — permissions are granted by a consent screen rather than picked
-by hand) or set `GITHUB_TOKEN`. See [DEPLOY.md](./DEPLOY.md), which covers the
-App setup, the registry push failures worth knowing about, and the rest.
-
-
-Snap together a **harness**, a **model**, and **capabilities** — launch a long-lived
-agent with persistent memory, reachable on every channel your users already use.
-It sleeps when idle and you pay nothing while it does.
-
-Each agent lives in its own [Durable Object](https://developers.cloudflare.com/durable-objects/)
-with SQLite storage — one coordination atom, strongly consistent, always recoverable.
-
-> **Note:** a model key is required: an Anthropic API key, saved from the
-> board or set as `ANTHROPIC_API_KEY`, or a `CLAUDE_CODE_OAUTH_TOKEN`.
-> Without one, `send`
-> returns a clear error rather than a canned reply — see [DEPLOY.md](./DEPLOY.md).
+The agent is not a chat loop calling tools. It is **Claude Code or pi running
+in a real shell**, with a filesystem, `git`, and the editing tools those CLIs
+already have. Capabilities that live in the Worker — `search_web`,
+`browse_page`, `remember`, `send_to_agent` — are installed into the VM as
+commands on `PATH` that post back through the front door, so the CLI calls
+`search_web "..."` like any other program.
 
 ## Try it
 
-- **The board:** a separate Worker — file tasks, watch runs, read diffs. `/` on
-  the API redirects there when `BOARD_URL` is set.
-- **Web chat:** `/chat?id=<agent>`
-
-## Features
-
-- **A real agent CLI, not a chat loop** — every agent runs a coding CLI inside
-  its own micro-VM, with its own shell, filesystem, and editing tools. Two
-  harnesses today: **Claude Code** (on a Claude subscription token) and **pi**
-  (on any provider it has a key for, so agents can run cheaper models).
-- **Agents that talk to each other** — `send_to_agent` and `list_agents` are
-  capabilities like any other, so a supervisor delegating to workers, two
-  agents reviewing each other, or a pipeline are all the same primitive. See
-  [docs/topologies.md](./docs/topologies.md).
-- **Capabilities the CLI can actually reach** — `search_web`, `browse_page`,
-  `remember` and `recall` are installed into the VM as commands that call back
-  into the Worker, so the agent uses them like any other program.
-- **Tasks, not just messages** — hand an agent a goal and close the tab. A task
-  carries a branch, a pull request and a terminal *settled* state, and outlives
-  the request that filed it. Nothing has to stay running for it to finish,
-  which is the whole reason for an agent that lives in a Durable Object rather
-  than on your laptop.
-- **Real git** — an agent clones, branches, commits, pushes and opens a pull
-  request from inside its own VM. The GitHub token reaches `git` through a
-  credential helper, so it is never written to `.git/config` or a remote URL.
-- **Model handoff** — hit a rate limit, or find a cheap model is not up to the
-  job, and move the agent to another harness or model mid-conversation. History
-  lives in the agent's SQLite, so the next model starts knowing what the last
-  one did.
-- **Persistent memory** — history and notes in Durable Object SQLite. The VM's
-  filesystem is discarded between sessions; what the agent chose to `remember`
-  is not.
-- **Machine tiers that mean something** — ½, 1, or 2 vCPU, each a separate
-  container class, because CPU is what limits real work in the VM.
-- **Scheduled wakeups** via alarms, with a declared cadence so *stalled* ≠ *idle*
-  (health ≠ progress).
-- **Idle is free** — containers sleep after five idle minutes and bill per 10ms
-  of active time.
-
-## Quick start
-
 ```bash
+git clone https://github.com/shashank-100/agentinstance.git
+cd agentinstance
 npm install
-npm test          # runs the Workers test suite
-npm run dev       # local dev server
-npm run deploy    # deploy to your Cloudflare account
+npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN   # claude setup-token
+npm run deploy
 ```
 
-Set a model key (required — agents cannot reply without it):
+Deploying builds a container image and pushes it to Cloudflare's registry, so
+it needs Docker running and takes a few minutes the first time.
+[DEPLOY.md](./DEPLOY.md) covers the parts that bite — the image push is the
+fragile step.
+
+Then file work against a repository:
 
 ```bash
-npx wrangler secret put CLAUDE_CODE_OAUTH_TOKEN
+curl -X POST "$URL/api/fleet/tasks" -H 'content-type: application/json' \
+  -H "authorization: Bearer $FLEET_TOKEN" \
+  -d '{"goal":"Fix slugify: punctuation, repeated spaces, leading/trailing dashes.",
+       "repo":"you/your-repo","dispatch":true}'
 ```
 
-## API
+`dispatch: true` launches an agent for the task and starts it. Without it the
+task waits on the board until something picks it up.
 
+## Why it keeps working
+
+- **A task outlives the request that filed it.** It carries a branch, a pull
+  request, and a terminal *settled* state. Nothing has to stay connected.
+- **A dead run is noticed and retried.** An agent that crashes leaves its task
+  `running` with nobody working it. A lease expires, a sweep requeues it, and
+  after three attempts it fails with the reason recorded rather than silently
+  disappearing.
+- **A supervisor hears about it.** Broken runs become incidents, claimed on
+  read so two supervisors cannot act on the same one, capped at five an hour so
+  a crash loop is one conversation rather than a storm.
+- **Idle is free.** Containers sleep after five idle minutes and bill per 10ms
+  of active time, so an always-on agent costs nothing while it waits.
+- **Agents reach each other.** `send_to_agent` is a capability like any other,
+  so a supervisor delegating to workers is the same primitive as two agents
+  reviewing each other. `from` is stamped by the Worker, so an agent cannot
+  claim to be another one, and hops are capped.
+- **Two people are two objects.** `idFromName("alice/reviewer")` and
+  `idFromName("bob/reviewer")` are different objects — isolation holds by
+  construction, not by a `WHERE` clause somebody might forget.
+
+Credentials never reach the model. A GitHub token is passed to `git` through a
+credential helper rather than written into `.git/config` or a remote URL, and
+tool output is data: nothing the model writes becomes a shell command.
+
+## Small enough to read
+
+| File | Job |
+| --- | --- |
+| [agent-instance.ts](src/agent-instance.ts) | One agent: memory, alarms, capabilities, the run loop |
+| [index.ts](src/index.ts) | The Worker gateway — every route, and who may call it |
+| [fleet-do.ts](src/fleet-do.ts) | The board: queue, leases, the sweep, incidents |
+| [harnesses/](src/harnesses/) | Running a real CLI in the VM, and the tool bridge |
+| [scope.ts](src/scope.ts) | Whose object is this — 76 lines, mostly comment |
+| [catalog.ts](src/catalog.ts) | Models, machines, capabilities, and what is ready |
+
+About 5,900 lines of TypeScript in 19 files, and 20 test files.
+
+## Evidence and limits
+
+Agents on this deployment have opened real pull requests, each authored by the
+GitHub App rather than by a person:
+[#2 on a playground repo](https://github.com/shashank-100/agent-playground/pull/2)
+fixed a slugify bug from a one-sentence goal and is still open;
+[#3](https://github.com/shashank-100/agentinstance/pull/3) verified the App
+could push at all and [#4](https://github.com/shashank-100/agentinstance/pull/4)
+added a CONTRIBUTING.md, both since closed. The supervisor has woken unattended
+in production and reported a broken run.
+
+**What is not proven.** Two people have never used one deployment at once — the
+isolation above is tested at the object level, not demonstrated with two real
+accounts. `pi` reports ready and has never produced a pull request. There is no
+general benchmark here: these are individual runs on small repositories, not a
+reliability measurement.
+
+**What does not exist.** Inbound GitHub webhooks (no issue → task), outbound
+notifications (no "your pull request is ready" anywhere), and `browse_page`
+reads one URL with no session — it cannot click or type. Containers are a pool
+shared by everyone on a deployment; a per-user cap divides it, but the pool is
+finite.
+
+## Harnesses
+
+| Harness | State |
+| --- | --- |
+| `claude-code` | working — on a Claude subscription token |
+| `pi` | runs; never verified end to end. Pinned at 0.84.0 because 0.86.0 offers the model no tools |
+| `codex` | defined, not in the image |
+
+## Development
+
+```bash
+npm test          # worker suite, in workerd
+npm run test:ui   # UI suite, in node
+npm run typecheck
 ```
-POST /agents/:id/configure   { harness, model, capabilities, machine, system }
-POST /agents/:id/send        { text, channel? }  -> { reply }
-GET  /agents/:id/history
-GET  /agents/:id/status      -> { lastProgress, expectedCadenceMs, stalled }
-GET  /agents/:id/snapshot                          -> { spec, history, kv }
-POST /agents/:id/restore     { spec, history, kv }
-POST /agents/:id/schedule    { atMs, prompt, cadenceMs? }
-POST /agents/:id/wake
-POST /agents/:id/tool/:name  { ...input }          -> { result } (gated by capabilities)
-POST /agents/:id/a2a         { from, text, async? }  -> { reply } or { accepted }
-POST /agents/:id/handoff     { harness?, model?, reason? } -> { from, spec }
 
-# the work queue
-POST /api/fleet/tasks        { goal, repo?, createdBy? }   -> a task
-POST /api/fleet/tasks        { claim: "<agent>" }          -> the next queued task
-GET  /api/fleet/tasks        ?state=queued|running|settled|failed
-POST /api/fleet/tasks/:id    { assignedTo } | { branch } | { prUrl }
-                             | { state: "settled"|"failed"|"queued", result? }
-GET  /api/fleet/tasks/:id
-DELETE /api/fleet/tasks/:id
-GET  /api/fleet/status       -> counts per state
+Read the output, not the exit code: `vitest` has exited 0 here while running
+zero tests. [AGENTS.md](./AGENTS.md) is the working agreement for editing this
+repository — how to test, how to commit, and which version pins are
+load-bearing and why.
 
-# channel webhooks
-POST /channels/telegram/:id
-POST /channels/web/:id       { text }              -> { reply }
-```
+---
 
-See [DEPLOY.md](./DEPLOY.md) for Cloudflare deployment and setup.
-
-## Architecture
-
-| Piece | File |
-|-------|------|
-| Per-agent runtime + memory + alarms | `src/agent-instance.ts` |
-| Worker gateway (REST) | `src/index.ts` |
-| Model adapters | `src/models/` |
-| Agent CLI runner + VM tool bridge | `src/harnesses/` |
-| Catalog (models/pricing/machines/capabilities) | `src/catalog.ts` |
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for what every file does and why.
-
-## The VM
-
-Every agent gets a container attached to its own Durable Object — a Firecracker
-micro-VM with bash, python3, git and the Claude Code CLI. It has no public
-endpoint: the Worker reaches it through a binding, so nothing that executes
-arbitrary commands is addressable from the internet.
-
-This is where the agent actually runs. A Worker cannot spawn processes, which
-is why the VM exists at all.
-
-Capabilities that live in the Worker — web search, page rendering, the agent's
-notes — are installed into the VM as small scripts on `PATH` that post back to
-`/agents/:id/tool/:name`. The CLI calls `search_web "..."` like any other
-command, and the endpoint enforces the same per-agent capability gate the REST
-API does.
-
-Deleting an agent stops its container immediately rather than leaving it to
-time out. See `Dockerfile` for the image.
-
-## Multi-agent
-
-Agents reach each other with `send_to_agent` and `list_agents`, enabled per
-agent like any other capability. There is no supervisor type and no worker
-type — a supervisor is an agent whose instructions tell it to delegate, which
-is why peer review and pipelines cost nothing extra. `from` is stamped by the
-Worker from the sending agent's own spec, so an agent cannot claim to be
-another one, and hops are capped so two agents cannot message each other
-forever.
-
-See [docs/topologies.md](./docs/topologies.md) for three worked examples.
-
-## Roadmap
-
-**More harnesses.** A `codex` row exists in `CLI_HARNESSES` but is not offered
-in the catalog: it speaks OpenAI's wire format, so it cannot use a Claude
-subscription, leaving it the one harness needing a key nothing else here needs.
-Re-enabling it is two catalog lines. OpenCode is one more row, once its
-contract is confirmed — note it ships `bin/opencode.exe`, so check that
-resolves on Linux first.
-
-## License
-
-MIT
+[DEPLOY.md](./DEPLOY.md) · [ARCHITECTURE.md](./ARCHITECTURE.md) · [ROADMAP.md](./ROADMAP.md) · MIT
