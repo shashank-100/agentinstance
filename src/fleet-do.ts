@@ -37,6 +37,37 @@ const SWEEP_MS = 5 * 60 * 1000;
 const ATTEMPT_LIMIT = 3;
 
 /**
+ * How many incidents an hour a supervisor is woken for.
+ *
+ * A container tier that is down fails every task on the board, and a
+ * supervisor woken once per failure is woken dozens of times — each one a
+ * model call on a booted container. Past this, incidents are still recorded
+ * and the supervisor is left alone until the hour rolls over: a storm should
+ * cost one look, not fifty.
+ */
+const INCIDENTS_PER_HOUR = 5;
+
+/**
+ * A run that broke, and whether anyone has been told.
+ *
+ * Kept as a table rather than a notification because the sweep runs in an
+ * alarm: waking an agent there is a model call inside a timer, which delays
+ * every other reclaim behind it and fails silently when it throws. The sweep
+ * records; something else reads.
+ */
+export interface Incident {
+  id: number;
+  taskId: string;
+  agentId: string | null;
+  /** `requeued` when the task went back on the board, `failed` at the limit. */
+  outcome: "requeued" | "failed";
+  attempts: number;
+  ts: number;
+  /** Null until a supervisor has read it. */
+  reportedAt: number | null;
+}
+
+/**
  * Where a task is in its life.
  *
  * `settled` rather than `done` because a task can finish without succeeding —
@@ -92,6 +123,17 @@ export class FleetDO extends DurableObject<Env> {
         -- Claiming reads the oldest queued row on every call, which is the
         -- hot path once more than a couple of agents are working.
         CREATE INDEX IF NOT EXISTS tasks_by_state ON tasks (state, createdAt);
+        -- Runs that broke. The sweep writes; a supervisor reads and decides.
+        CREATE TABLE IF NOT EXISTS incidents (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          taskId TEXT NOT NULL,
+          agentId TEXT,
+          outcome TEXT NOT NULL,
+          attempts INTEGER NOT NULL,
+          ts INTEGER NOT NULL,
+          reportedAt INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS incidents_unreported ON incidents (reportedAt, ts);
       `);
       // Added after the table shipped, so CREATE TABLE above will not add it
       // to a deployment that already has rows. Failing is the normal path on
@@ -226,6 +268,7 @@ export class FleetDO extends DurableObject<Env> {
           Date.now(),
           t.id,
         );
+        this.recordIncident(t.id, t.assignedTo, "failed", attempts);
       } else {
         this.sql.exec(
           "UPDATE tasks SET state='queued', assignedTo=NULL, attempts=?, updatedAt=? WHERE id=?",
@@ -233,6 +276,7 @@ export class FleetDO extends DurableObject<Env> {
           Date.now(),
           t.id,
         );
+        this.recordIncident(t.id, t.assignedTo, "requeued", attempts);
       }
     }
   }
@@ -277,6 +321,99 @@ export class FleetDO extends DurableObject<Env> {
       .toArray()[0] as { n: number } | undefined;
     if (!running?.n) return; // nothing in flight: let the alarm lapse
     await this.ctx.storage.setAlarm(Date.now() + SWEEP_MS);
+  }
+
+  /**
+   * Note that a run broke.
+   *
+   * Recording is unconditional; the rate limit belongs to whoever reads. A
+   * storm that suppressed its own records would leave no trace of what
+   * happened, which is the opposite of what an incident log is for.
+   */
+  private recordIncident(
+    taskId: string,
+    agentId: string | null,
+    outcome: "requeued" | "failed",
+    attempts: number,
+  ): void {
+    this.sql.exec(
+      "INSERT INTO incidents (taskId, agentId, outcome, attempts, ts, reportedAt) VALUES (?,?,?,?,?,NULL)",
+      taskId,
+      agentId,
+      outcome,
+      attempts,
+      Date.now(),
+    );
+  }
+
+  /**
+   * Incidents nobody has been told about, oldest first.
+   *
+   * Claiming them is part of reading: an incident handed out twice is a
+   * supervisor woken twice for one failure, and two sweeps inside a lease
+   * window would otherwise do exactly that. The cap is the storm guard — past
+   * `INCIDENTS_PER_HOUR` in the last hour, the rest stay recorded and unread
+   * until the hour rolls over.
+   */
+  async takeIncidents(limit = INCIDENTS_PER_HOUR): Promise<Incident[]> {
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    const reported = (
+      this.sql
+        .exec("SELECT COUNT(*) AS n FROM incidents WHERE reportedAt > ?", hourAgo)
+        .toArray()[0] as { n: number } | undefined
+    )?.n ?? 0;
+    const room = Math.max(0, INCIDENTS_PER_HOUR - reported);
+    if (room === 0) return [];
+
+    const rows = this.sql
+      .exec(
+        "SELECT id, taskId, agentId, outcome, attempts, ts, reportedAt FROM incidents " +
+          "WHERE reportedAt IS NULL ORDER BY ts ASC LIMIT ?",
+        Math.min(limit, room),
+      )
+      .toArray() as unknown as Incident[];
+    if (rows.length === 0) return [];
+
+    const now = Date.now();
+    for (const r of rows) {
+      this.sql.exec("UPDATE incidents SET reportedAt = ? WHERE id = ?", now, r.id);
+    }
+    return rows;
+  }
+
+  /**
+   * Incidents with the task behind each one, ready to hand to a supervisor.
+   *
+   * The join is the point. An incident alone says "task d66c broke", which
+   * sends whoever reads it back to the board to find out what that was. AO
+   * learned the same thing about CI: a failure notice is only useful when it
+   * arrives with the job, the step and the log tail. So each report carries
+   * the goal, the repository, and what the agent last said — enough to decide
+   * without another lookup.
+   */
+  async incidentReports(): Promise<
+    {
+      incident: Incident;
+      goal: string;
+      repo: string | null;
+      lastResult: string | null;
+      state: TaskState;
+    }[]
+  > {
+    const incidents = await this.takeIncidents();
+    const out = [];
+    for (const incident of incidents) {
+      const task = await this.get(incident.taskId);
+      if (!task) continue; // deleted while the incident sat unread
+      out.push({
+        incident,
+        goal: task.goal,
+        repo: task.repo,
+        lastResult: task.result,
+        state: task.state,
+      });
+    }
+    return out;
   }
 
   /**
