@@ -19,6 +19,7 @@ import {
 } from "./catalog.js";
 import { tokenForRepo } from "./github-app.js";
 import { withStoredKeys } from "./keys.js";
+import { fleetName, registryName, unscope } from "./scope.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
 /**
@@ -850,8 +851,12 @@ export class AgentInstance extends DurableObject<Env> {
    * This agent is filtered out — it is not someone it can send to.
    */
   private async listAgents(): Promise<Record<string, unknown>> {
+    // An agent's own name carries whose it is, so it reads its owner's list
+    // rather than a single global one. Without this, delegation would be a way
+    // to message strangers' agents.
+    const { owner } = unscope(this.spec.name ?? "");
     const registry = this.env.REGISTRY.get(
-      this.env.REGISTRY.idFromName("global"),
+      this.env.REGISTRY.idFromName(registryName(owner)),
     ) as unknown as { list(): Promise<{ id: string; model: string; harness: string }[]> };
     const all = await registry.list();
     const me = this.spec.name;
@@ -872,7 +877,12 @@ export class AgentInstance extends DurableObject<Env> {
   private async fleetTask(
     input: Record<string, unknown>,
   ): Promise<{ result?: Record<string, unknown>; error?: string }> {
-    const fleet = this.env.FLEET.get(this.env.FLEET.idFromName("global")) as unknown as {
+    // The board this agent belongs to. Asking for a single global one would
+    // let one person's agent claim another person's tasks.
+    const { owner: boardOwner } = unscope(this.spec.name ?? "");
+    const fleet = this.env.FLEET.get(
+      this.env.FLEET.idFromName(fleetName(boardOwner)),
+    ) as unknown as {
       claim(agentId: string): Promise<unknown>;
       get(id: string): Promise<unknown>;
       list(state?: string): Promise<unknown[]>;

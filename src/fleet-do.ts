@@ -13,6 +13,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AgentInstance } from "./agent-instance.js";
 import type { Env } from "./types.js";
+import { DEPLOYMENT, scoped } from "./scope.js";
 
 /**
  * How long a claim is good for without progress.
@@ -319,6 +320,25 @@ export class FleetDO extends DurableObject<Env> {
   }
 
   /**
+   * Whose board this is.
+   *
+   * A FleetDO is addressed by a name that carries its owner, but the object
+   * cannot read its own name — so it is told once, on the first write, and
+   * remembers. Unowned boards stay `DEPLOYMENT`, which is what every board
+   * created before sign-in existed already is.
+   */
+  private async owner(): Promise<string> {
+    return (await this.ctx.storage.get<string>("owner")) ?? DEPLOYMENT;
+  }
+
+  /** Record whose board this is, the first time anything is filed on it. */
+  async claimOwner(owner: string): Promise<void> {
+    if (owner === DEPLOYMENT) return;
+    const existing = await this.ctx.storage.get<string>("owner");
+    if (!existing) await this.ctx.storage.put("owner", owner);
+  }
+
+  /**
    * Tell the supervisor what broke.
    *
    * This runs from the alarm, so the model call goes through `waitUntil` and
@@ -339,8 +359,12 @@ export class FleetDO extends DurableObject<Env> {
     // Typed from the class itself, so a change to `send` or `exists` shows up
     // here rather than failing at run time. The import is type-only and
     // agent-instance does not import this file, so nothing becomes circular.
+    // This board's own supervisor, not a shared one. A flat name would wake
+    // one person's agent for another person's failures — and hand it their
+    // goals and repositories in the report.
+    const owner = await this.owner();
     const agent = this.env.AGENT.get(
-      this.env.AGENT.idFromName(SUPERVISOR),
+      this.env.AGENT.idFromName(scoped(owner, SUPERVISOR)),
     ) as DurableObjectStub<AgentInstance>;
 
     // No supervisor is the ordinary case on a fresh deployment, not a fault.

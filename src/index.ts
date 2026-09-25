@@ -36,6 +36,7 @@ import {
 } from "./keys.js";
 import { pullRequestFiles } from "./github-app.js";
 import { allowed, exchangeCode, issueSession, sessionHeader, whoIs } from "./auth.js";
+import { DEPLOYMENT, fleetName, registryName, scoped } from "./scope.js";
 import { toText, type Part } from "./parts.js";
 
 // The containers runtime reaches for this by name on the worker entrypoint to
@@ -124,14 +125,31 @@ type AgentStub = Omit<DurableObjectStub<AgentInstance>, "runTool"> & {
 type RegistryStub = DurableObjectStub<RegistryDO>;
 type FleetStub = DurableObjectStub<FleetDO>;
 
-const agentStub = (env: Env, id: string): AgentStub =>
-  env.AGENT.get(env.AGENT.idFromName(id)) as AgentStub;
+// Every object is addressed inside somebody's namespace. `owner` is a GitHub
+// login, or DEPLOYMENT for a request with nobody signed in — which resolves to
+// exactly the names these objects had before sign-in existed, so a deployment
+// that has been running does not wake up pointing at empty ones.
+const agentStub = (env: Env, id: string, owner = DEPLOYMENT): AgentStub =>
+  env.AGENT.get(env.AGENT.idFromName(scoped(owner, id))) as AgentStub;
 
-const registry = (env: Env): RegistryStub =>
-  env.REGISTRY.get(env.REGISTRY.idFromName("global")) as RegistryStub;
+const registry = (env: Env, owner = DEPLOYMENT): RegistryStub =>
+  env.REGISTRY.get(env.REGISTRY.idFromName(registryName(owner))) as RegistryStub;
 
-const fleet = (env: Env): FleetStub =>
-  env.FLEET.get(env.FLEET.idFromName("global")) as FleetStub;
+const fleet = (env: Env, owner = DEPLOYMENT): FleetStub =>
+  env.FLEET.get(env.FLEET.idFromName(fleetName(owner))) as FleetStub;
+
+/**
+ * Whose objects this request touches.
+ *
+ * A signed-in person owns their own. A machine credential — an agent's tools
+ * calling back from inside a container, which have no cookie — belongs to the
+ * deployment, and the route resolves what it needs from the agent id it was
+ * given rather than from a person who is not there.
+ */
+async function ownerOf(request: Request, env: Env): Promise<string> {
+  const { user } = await whoIs(request, env);
+  return user?.login ?? DEPLOYMENT;
+}
 
 /**
  * Every JSON reply is readable cross-origin.
@@ -229,7 +247,7 @@ export default {
     }
     if (first === "api" && second === "keys") return keysRoute(request, env);
     if (first === "api" && second === "agents" && request.method === "GET") {
-      return listAgentsRoute(env);
+      return listAgentsRoute(env, await ownerOf(request, env));
     }
     if (first === "api" && second === "fleet") {
       return fleetRoute(request, env, ctx, third, fourth);
@@ -243,7 +261,7 @@ export default {
       const isAgentItself = third === undefined;
       if (isAgentItself && request.method === "DELETE") {
         if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
-        return deleteAgentRoute(env, second);
+        return deleteAgentRoute(env, second, await ownerOf(request, env));
       }
       return agentRoute(request, env, ctx, { id: second, action: third ?? "send", arg: fourth });
     }
@@ -450,6 +468,7 @@ function catalogRoute(env: Env): Response {
 
 // --- create an agent from a spec, after checking the pieces fit --------------
 async function launchRoute(request: Request, env: Env): Promise<Response> {
+  const owner = await ownerOf(request, env);
   const body = await parsedBody<{
     id?: string;
     harness?: string;
@@ -478,11 +497,11 @@ async function launchRoute(request: Request, env: Env): Promise<Response> {
   // place: its capabilities and machine were replaced by the new spec's, with
   // no warning and no way to tell it had happened. Creating is not editing —
   // `POST /agents/:id/configure` is the route for changing an agent.
-  if (body.id && (await agentStub(env, id).exists())) {
+  if (body.id && (await agentStub(env, id, owner).exists())) {
     return json({ error: `agent '${id}' already exists` }, 409);
   }
-  await agentStub(env, id).configure({ ...spec, name: id }, true);
-  await registry(env).register({
+  await agentStub(env, id, owner).configure({ ...spec, name: id }, true);
+  await registry(env, owner).register({
     id,
     model: spec.model,
     harness: spec.harness,
@@ -507,7 +526,13 @@ async function fleetRoute(
   section: string | undefined,
   id: string | undefined,
 ): Promise<Response> {
-  const f = fleet(env);
+  // Whose board. A signed-in person gets their own; an agent's tools, which
+  // carry the machine credential and no cookie, get the deployment's.
+  const owner = await ownerOf(request, env);
+  const f = fleet(env, owner);
+  // A board cannot read its own name, so it is told whose it is the first time
+  // anyone touches it — which is what lets its sweep wake the right supervisor.
+  await f.claimOwner(owner);
   // `sweep` changes state whatever the method: it requeues abandoned tasks and,
   // at the attempt limit, fails them permanently. Reads are deliberately open
   // here, so the method alone cannot decide — a GET to sweep would otherwise
@@ -540,7 +565,7 @@ async function fleetRoute(
     const reports = await f.incidentReports();
     if (reports.length === 0) return json({ woke: false, reason: "no unread incidents" });
 
-    const agent = agentStub(env, supervisor);
+    const agent = agentStub(env, supervisor, owner);
     if (!(await agent.exists())) {
       // Incidents stay claimed rather than being handed back: an unread queue
       // that grows while no supervisor exists would wake one with a month of
@@ -632,7 +657,7 @@ async function fleetRoute(
         return json({ error: `task '${id}' is already running on ${task.assignedTo}` }, 409);
       }
       return json(
-        await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body),
+        await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body, owner),
       );
     }
     // Ending a task is a state change, not a patch: settle and fail record why.
@@ -679,7 +704,9 @@ async function fleetRoute(
   // board, which is a queue that needs a human to run it. With it, the task
   // gets an agent of its own and begins immediately.
   if (body.dispatch) {
-    return json(await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body));
+    return json(
+      await dispatchTask(env, ctx, f, task, new URL(request.url).origin, body, owner),
+    );
   }
 
   return json(task);
@@ -709,6 +736,10 @@ async function dispatchTask(
   task: { id: string; goal: string; repo: string | null },
   origin: string,
   opts: { harness?: string; model?: string; machine?: string },
+  // The agent a dispatch creates lands in the same namespace as the task it
+  // was created for; anything else and the board would show work being done
+  // by an agent it cannot address.
+  owner: string,
 ): Promise<Record<string, unknown>> {
   const agentId = `task-${task.id}`;
   const spec = defaultSpec({
@@ -717,9 +748,9 @@ async function dispatchTask(
     capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr"],
     machine: opts.machine ?? "one-cpu",
   });
-  const agent = agentStub(env, agentId);
+  const agent = agentStub(env, agentId, owner);
   await agent.configure({ ...spec, name: agentId }, true);
-  await registry(env).register({
+  await registry(env, owner).register({
     id: agentId,
     model: spec.model,
     harness: spec.harness,
@@ -749,22 +780,22 @@ async function dispatchTask(
 }
 
 // --- dashboard listing: registry records plus each agent's live status -------
-async function listAgentsRoute(env: Env): Promise<Response> {
-  const records = await registry(env).list();
+async function listAgentsRoute(env: Env, owner: string): Promise<Response> {
+  const records = await registry(env, owner).list();
   const withStatus = await Promise.all(
-    records.map(async (r) => ({ ...r, ...(await agentStub(env, r.id).status()) })),
+    records.map(async (r) => ({ ...r, ...(await agentStub(env, r.id, owner).status()) })),
   );
   return json(withStatus);
 }
 
-async function deleteAgentRoute(env: Env, id: string): Promise<Response> {
+async function deleteAgentRoute(env: Env, id: string, owner: string): Promise<Response> {
   // Ask the agent to release its container before its own state is erased:
   // afterwards nothing knows which machine tier it was on, so nothing can find
   // the container to stop. Left alone it keeps its slot against max_instances
   // until the idle timer expires, long after the agent is gone from the UI.
-  await agentStub(env, id).releaseSandbox();
-  await agentStub(env, id).wipe();
-  await registry(env).remove(id);
+  await agentStub(env, id, owner).releaseSandbox();
+  await agentStub(env, id, owner).wipe();
+  await registry(env, owner).remove(id);
   return json({ ok: true, deleted: id });
 }
 
@@ -787,7 +818,8 @@ async function agentRoute(
   ctx: ExecutionContext,
   route: { id: string; action: string; arg?: string },
 ): Promise<Response> {
-  const agent = agentStub(env, route.id);
+  const owner = await ownerOf(request, env);
+  const agent = agentStub(env, route.id, owner);
   // Every deployment must call its own tools back, so the origin comes from
   // the request rather than from a value compiled into the repo.
   const origin = new URL(request.url).origin;
