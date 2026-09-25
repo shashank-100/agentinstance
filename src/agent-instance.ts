@@ -19,7 +19,7 @@ import {
 } from "./catalog.js";
 import { tokenForRepo } from "./github-app.js";
 import { withStoredKeys } from "./keys.js";
-import { fleetName, registryName, unscope } from "./scope.js";
+import { DEPLOYMENT, fleetName, registryName, unscope } from "./scope.js";
 import { EchoModel, OpenAICompatModel, UnusedModel, type Model } from "./models/index.js";
 
 /**
@@ -925,6 +925,18 @@ export class AgentInstance extends DurableObject<Env> {
   }
 
   /**
+   * The GitHub account whose grants this agent's repository access runs under.
+   *
+   * An agent's name carries its owner, so the agent already knows. `undefined`
+   * for an unowned agent — everything predating sign-in — which `tokenForRepo`
+   * reads as "no owner boundary", keeping those agents working as they did.
+   */
+  private repoOwner(): string | undefined {
+    const { owner } = unscope(this.spec.name ?? "");
+    return owner === DEPLOYMENT ? undefined : owner;
+  }
+
+  /**
    * Git against a real remote, inside the agent's own VM.
    *
    * The token is passed to the command's environment for the life of that
@@ -1021,7 +1033,9 @@ export class AgentInstance extends DurableObject<Env> {
       if (!repo) {
         return { error: `git_repo ${action} needs a repo — clone one first` };
       }
-      const got = await tokenForRepo(this.env, repo);
+      // Scoped to whoever owns this agent: without that, a repository is
+      // reachable by anyone on a deployment the app was ever installed from.
+      const got = await tokenForRepo(this.env, repo, this.repoOwner());
       if (got.error) return { error: got.error };
       token = got.token!;
     }
@@ -1060,7 +1074,7 @@ export class AgentInstance extends DurableObject<Env> {
     if (!repo || !head) {
       return { error: "open_pr requires { repo: 'owner/name', head: 'branch' }" };
     }
-    const got = await tokenForRepo(this.env, repo);
+    const got = await tokenForRepo(this.env, repo, this.repoOwner());
     if (got.error) return { error: got.error };
     const token = got.token!;
 
