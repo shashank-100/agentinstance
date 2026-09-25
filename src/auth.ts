@@ -138,18 +138,44 @@ export function sessionCookie(request: Request): string | null {
   return null;
 }
 
-/** `Set-Cookie` for a session, or for clearing one. */
-export const sessionHeader = (token: string | null): string =>
-  token
-    ? `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_DAYS * 24 * 60 * 60}`
-    : `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+/**
+ * `Set-Cookie` for a session, or for clearing one.
+ *
+ * `SameSite` depends on where the board lives, and getting it wrong is a silent
+ * failure rather than an error:
+ *
+ * - Same origin (the board served by this Worker): `Lax`. The cookie rides
+ *   along on ordinary navigation and is withheld from other sites' requests,
+ *   which is the CSRF protection worth having.
+ * - A board on its own Worker: its `fetch` calls here are *cross-site*, and a
+ *   `Lax` cookie is simply not attached to those. Sign-in would appear to work
+ *   and then every call would 401. `None` is the only value a browser sends
+ *   cross-site, and it requires `Secure`, which is set either way.
+ *
+ * `None` gives up SameSite as a CSRF defence, so it is used only when the
+ * deployment says it needs it — and the cross-origin callers that can then
+ * reach this API are exactly the ones `CORS_ORIGINS` names.
+ */
+export const sessionHeader = (token: string | null, crossSite = false): string => {
+  const sameSite = crossSite ? "None" : "Lax";
+  const attrs = `HttpOnly; Secure; SameSite=${sameSite}; Path=/`;
+  return token
+    ? `${COOKIE}=${token}; ${attrs}; Max-Age=${SESSION_DAYS * 24 * 60 * 60}`
+    : `${COOKIE}=; ${attrs}; Max-Age=0`;
+};
 
 /**
  * May this login sign in?
  *
- * Invite-only, and closed by default. Every agent runs on the deployment's own
- * subscription and every task boots a container, so an open sign-up is an open
- * invitation to spend someone else's money. A deployment that has not said who
+ * Two ways a deployment can answer, and it must pick one deliberately:
+ *
+ * - `ALLOWED_LOGINS` lists who may in. Invite-only.
+ * - `BYOK` opens sign-up to anyone, because everyone brings their own model key
+ *   and so spends nothing of the deployment's.
+ *
+ * With neither, nobody signs in. That is the safe default rather than an
+ * oversight: every agent otherwise runs on the deployment's own subscription
+ * and boots a container on its account, so a deployment that has not said who
  * may in has not said "everyone".
  *
  * `ALLOWED_LOGINS` is a comma-separated list of GitHub logins. Comparison is
@@ -160,8 +186,10 @@ export function allowed(env: Env, login: string): boolean {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  if (list.length === 0) return false;
-  return list.includes(login.toLowerCase());
+  // An allowlist, when there is one, wins: a BYOK deployment can still be
+  // restricted to a few people while they are testing it.
+  if (list.length > 0) return list.includes(login.toLowerCase());
+  return Boolean(env.BYOK);
 }
 
 /**

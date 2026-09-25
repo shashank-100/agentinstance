@@ -307,7 +307,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       });
     }
     if (first === "auth") return authRoute(request, env, second);
-    if (first === "catalog") return catalogRoute(await withStoredKeys(env));
+    if (first === "catalog") {
+      // Readiness is per person once keys are: a capability is "ready" when the
+      // caller has what it needs, not when somebody else does.
+      return catalogRoute(await withStoredKeys(env, await ownerOf(request, env)));
+    }
     if (first === "github") return githubRoute(request, env, second);
     if (first === "api" && second === "launch" && request.method === "POST") {
       if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
@@ -355,6 +359,32 @@ export default {
  * already have, and the same App then grants the repository access their agents
  * need.
  */
+/**
+ * Where to send somebody once sign-in is over.
+ *
+ * The board, when it is a separate Worker — otherwise `/`, which is this Worker
+ * serving it. Bouncing through `/` instead would work for the plain case and
+ * quietly drop the query string on the refusal, which is the one redirect that
+ * carries anything.
+ */
+/**
+ * Is the board on a different site than this API?
+ *
+ * Decides the session cookie's `SameSite`. Compared by origin: a board at a
+ * different host is cross-site, and its `fetch` calls carry no `Lax` cookie.
+ */
+const boardIsCrossSite = (request: Request, env: Env): boolean => {
+  if (!env.BOARD_URL) return false;
+  try {
+    return new URL(env.BOARD_URL).origin !== new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+};
+
+const backToBoard = (env: Env, query = ""): string =>
+  (env.BOARD_URL ? env.BOARD_URL.replace(/\/$/, "") : "") + "/" + query;
+
 async function authRoute(request: Request, env: Env, action?: string): Promise<Response> {
   const url = new URL(request.url);
 
@@ -387,7 +417,7 @@ async function authRoute(request: Request, env: Env, action?: string): Promise<R
         return new Response(null, {
           status: 302,
           headers: {
-            location: `/?denied=${encodeURIComponent(user.login)}`,
+            location: backToBoard(env, `?denied=${encodeURIComponent(user.login)}`),
           },
         });
       }
@@ -399,14 +429,14 @@ async function authRoute(request: Request, env: Env, action?: string): Promise<R
       // looking at a payload instead of the thing they came for.
       return new Response(null, {
         status: 302,
-        headers: { location: "/", "set-cookie": sessionHeader(token) },
+        headers: { location: backToBoard(env), "set-cookie": sessionHeader(token, boardIsCrossSite(request, env)) },
       });
     }
 
     case "logout":
       return new Response(null, {
         status: 302,
-        headers: { location: "/", "set-cookie": sessionHeader(null) },
+        headers: { location: backToBoard(env), "set-cookie": sessionHeader(null, boardIsCrossSite(request, env)) },
       });
 
     case "me": {
@@ -508,9 +538,16 @@ async function keysRoute(request: Request, env: Env): Promise<Response> {
   // four characters of each — little on its own, and not something to hand to
   // anyone who asks.
   if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
+  const owner = await ownerOf(request, env);
   if (request.method === "GET") {
-    const stored = await storedKeys(env);
-    const secrets = env as unknown as Record<string, string | undefined>;
+    const stored = await storedKeys(env, owner);
+    // The deployment's own secrets count as "set" only for the deployment. To
+    // anybody else they are somebody else's credential, and reporting them
+    // would both leak that they exist and promise a key the caller cannot use.
+    const secrets =
+      owner === DEPLOYMENT || !env.BYOK
+        ? (env as unknown as Record<string, string | undefined>)
+        : {};
     return json(
       Object.fromEntries(
         SETTABLE_KEYS.map((name) => {
@@ -537,7 +574,7 @@ async function keysRoute(request: Request, env: Env): Promise<Response> {
   for (const [name, raw] of Object.entries(body) as [SettableKey, string | null][]) {
     const value = typeof raw === "string" ? raw.trim() : null;
     if (value === null || value === "") {
-      await setStoredKey(env, name, null);
+      await setStoredKey(env, name, null, owner);
       continue;
     }
     if (!value.startsWith("sk-ant-")) {
@@ -546,9 +583,12 @@ async function keysRoute(request: Request, env: Env): Promise<Response> {
     if (await anthropicRejects(value)) {
       return json({ error: "Anthropic rejected this key. Check it and try again." }, 400);
     }
-    await setStoredKey(env, name, value);
+    await setStoredKey(env, name, value, owner);
   }
-  return keysRoute(new Request(request.url), env);
+  // Re-read through the same request, so the recursive call sees the caller's
+  // credentials and resolves the same owner rather than falling back to the
+  // deployment's.
+  return keysRoute(new Request(request.url, { headers: request.headers }), env);
 }
 
 // --- what an agent can be built from -----------------------------------------
@@ -845,6 +885,22 @@ async function dispatchTask(
   // by an agent it cannot address.
   owner: string,
 ): Promise<Record<string, unknown>> {
+  // Refuse here, not inside the VM. Without a key the container boots, the CLI
+  // starts, and the run dies minutes later as an authentication error in a log
+  // nobody is watching — while the board shows a task that looks dispatched.
+  //
+  // Only on a BYOK deployment. Elsewhere the deployment's own credential is the
+  // point, and a readiness check that refuses without one would stop a working
+  // single-user install from dispatching anything at all.
+  const keyed = await withStoredKeys(env, owner);
+  if (env.BYOK && !keyed.ANTHROPIC_API_KEY && !keyed.CLAUDE_CODE_OAUTH_TOKEN) {
+    return {
+      error:
+        "No Anthropic key on this account. Add one on the board before dispatching — " +
+        "agents run on your own key here.",
+    };
+  }
+
   const agentId = `task-${task.id}`;
   const spec = defaultSpec({
     harness: opts.harness ?? "claude-code",
