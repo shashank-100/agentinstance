@@ -83,11 +83,11 @@ export interface Env {
    * so a key of their own stops a user spending the deployment's model budget
    * but not its compute. Defaults to 5.
    *
-   * It only has to divide the pool sensibly: `max_instances` is 20 per tier, so
-   * 5 lets four people run flat out at once. Cloudflare bills containers per
-   * 10ms of actual runtime, not per configured slot, so a bigger pool costs
-   * nothing until somebody uses it — the account ceiling is over 1,500
-   * concurrent instances of this size.
+   * It only has to divide the pool sensibly. `max_instances` is left unset in
+   * wrangler.jsonc, so Cloudflare's own default applies; the pool is shared and
+   * finite either way, which is what this divides. Cloudflare bills containers
+   * per 10ms of actual runtime rather than per configured slot, so an unused
+   * slot costs nothing.
    */
   RUN_LIMIT?: string;
   /**

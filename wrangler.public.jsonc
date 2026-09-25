@@ -39,7 +39,6 @@
       "class_name": "SandboxSmall",
       "image": "./Dockerfile",
       "instance_type": "standard-1",
-      "max_instances": 20,
       "constraints": {
         "regions": [
           "ENAM",
@@ -54,7 +53,6 @@
       "class_name": "SandboxMedium",
       "image": "./Dockerfile",
       "instance_type": "standard-2",
-      "max_instances": 20,
       "constraints": {
         "regions": [
           "ENAM",
@@ -69,7 +67,6 @@
       "class_name": "SandboxLarge",
       "image": "./Dockerfile",
       "instance_type": "standard-3",
-      "max_instances": 20,
       "constraints": {
         "regions": [
           "ENAM",

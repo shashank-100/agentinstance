@@ -24,11 +24,11 @@
   // Anthropic serves. The cost is latency from Asia; the alternative is agents
   // that fail at random.
   "containers": [
-    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "standard-1", "max_instances": 20,
+    { "class_name": "SandboxSmall",  "image": "./Dockerfile", "instance_type": "standard-1",
       "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } },
-    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-2", "max_instances": 20,
+    { "class_name": "SandboxMedium", "image": "./Dockerfile", "instance_type": "standard-2",
       "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } },
-    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-3", "max_instances": 20,
+    { "class_name": "SandboxLarge",  "image": "./Dockerfile", "instance_type": "standard-3",
       "constraints": { "regions": ["ENAM", "WNAM", "WEUR", "EEUR"] } }
   ],
   "durable_objects": {
