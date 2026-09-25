@@ -35,6 +35,7 @@ import {
   withStoredKeys,
 } from "./keys.js";
 import { pullRequestFiles } from "./github-app.js";
+import { allowed, exchangeCode, issueSession, sessionHeader, whoIs } from "./auth.js";
 import { toText, type Part } from "./parts.js";
 
 // The containers runtime reaches for this by name on the worker entrypoint to
@@ -219,6 +220,7 @@ export default {
       // No landing page, so the agent list is the front door.
       return Response.redirect(new URL("/agents/", url).toString(), 302);
     }
+    if (first === "auth") return authRoute(request, env, second);
     if (first === "catalog") return catalogRoute(await withStoredKeys(env));
     if (first === "github") return githubRoute(request, env, second);
     if (first === "api" && second === "launch" && request.method === "POST") {
@@ -249,6 +251,79 @@ export default {
     return env.ASSETS.fetch(request); // static assets
   },
 } satisfies ExportedHandler<Env>;
+
+/**
+ * Signing in, and finding out who is signed in.
+ *
+ * GitHub's, through the App the deployment already owns: the people using this
+ * are developers signing in to work on repositories, so it is the identity they
+ * already have, and the same App then grants the repository access their agents
+ * need.
+ */
+async function authRoute(request: Request, env: Env, action?: string): Promise<Response> {
+  const url = new URL(request.url);
+
+  switch (action) {
+    case "login": {
+      if (!env.GITHUB_CLIENT_ID) {
+        return json({ error: "GITHUB_CLIENT_ID is not set, so there is nobody to sign in with" }, 400);
+      }
+      const redirect = `${url.origin}/auth/callback`;
+      return Response.redirect(
+        `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}` +
+          `&redirect_uri=${encodeURIComponent(redirect)}`,
+        302,
+      );
+    }
+
+    case "callback": {
+      const code = url.searchParams.get("code");
+      if (!code) return json({ error: "GitHub sent no code" }, 400);
+
+      const { user, error } = await exchangeCode(env, code);
+      if (!user) return json({ error: error ?? "sign-in failed" }, 401);
+
+      // Checked after GitHub confirms who they are, so the refusal names a
+      // real login rather than whatever was typed.
+      if (!allowed(env, user.login)) {
+        return json(
+          {
+            error: `${user.login} is not on this deployment's invite list`,
+            hint: "ALLOWED_LOGINS is a comma-separated list of GitHub logins",
+          },
+          403,
+        );
+      }
+
+      const token = await issueSession(env, user);
+      if (!token) return json({ error: "this deployment cannot sign sessions" }, 500);
+
+      // Back to the board, signed in. A JSON body here would leave the person
+      // looking at a payload instead of the thing they came for.
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/", "set-cookie": sessionHeader(token) },
+      });
+    }
+
+    case "logout":
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/", "set-cookie": sessionHeader(null) },
+      });
+
+    case "me": {
+      const { user, machine } = await whoIs(request, env);
+      // `signedIn` rather than inferring from `user`: a machine credential is
+      // authenticated and is nobody, and a board that confused the two would
+      // show an agent's tool call as a signed-in person.
+      return json({ signedIn: Boolean(user), machine, user });
+    }
+
+    default:
+      return json({ error: `unknown auth action '${action ?? ""}'` }, 404);
+  }
+}
 
 /**
  * The GitHub App install flow.

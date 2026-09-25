@@ -51,6 +51,21 @@ export interface Env {
   /** The app's URL name, e.g. `my-agents` in github.com/apps/my-agents.
    *  Only needed to offer /github/install; tokens do not depend on it. */
   GITHUB_APP_SLUG?: string;
+  /**
+   * The App's OAuth credentials, for signing people in. A GitHub App can do
+   * this itself — no separate OAuth App — so the client id is the one on the
+   * App's own settings page and the secret is generated there.
+   */
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  /**
+   * GitHub logins allowed to sign in, comma separated.
+   *
+   * Closed by default: every agent spends this deployment's subscription and
+   * boots a container, so a deployment that has not said who may in has not
+   * said "anyone".
+   */
+  ALLOWED_LOGINS?: string;
   /** Test-only: serve replies from the offline EchoModel. */
   USE_ECHO_MODEL?: string;
   // Capability keys.
