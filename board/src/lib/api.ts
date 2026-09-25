@@ -24,15 +24,62 @@ interface ApiTask {
 }
 
 /**
- * Where the deployment lives, and the token that may change it.
+ * Where the deployment lives.
  *
  * Same-origin by default, so the board served from the Worker needs no
  * configuration. `VITE_AGENT_URL` points a local `vite dev` at a deployment.
  */
 const BASE = import.meta.env["VITE_AGENT_URL"] ?? "";
-const TOKEN = import.meta.env["VITE_FLEET_TOKEN"] ?? "";
 
-const authHeaders = (): HeadersInit => (TOKEN ? { authorization: `Bearer ${TOKEN}` } : {});
+/**
+ * The session cookie, and nothing else.
+ *
+ * This used to send `VITE_FLEET_TOKEN` as a bearer. Vite inlines `import.meta.env`
+ * at build time, so that shipped the deployment's shared secret inside the
+ * JavaScript of a public page — readable by anyone who opened the board and
+ * usable against every route it guards. The cookie is HttpOnly and per person,
+ * so the page can send it without ever being able to read it.
+ *
+ * `credentials: "include"` rather than the `"same-origin"` default: production
+ * is same-origin, but `VITE_AGENT_URL` points a dev board at a real deployment,
+ * and the default would silently drop the cookie on exactly that setup.
+ */
+const CREDENTIALS: RequestCredentials = "include";
+
+/**
+ * A request refused because nobody is signed in.
+ *
+ * A distinct type because the board's answer to it is a sign-in screen, not an
+ * error: rendering "failed to load tasks" for a 401 sends somebody to the logs
+ * to find out that their session expired.
+ */
+export class SignedOutError extends Error {
+  constructor() {
+    super("not signed in");
+    this.name = "SignedOutError";
+  }
+}
+
+/** Throws `SignedOutError` on a 401, so every caller can tell the two apart. */
+function check(res: Response, what: string): void {
+  if (res.status === 401 || res.status === 403) throw new SignedOutError();
+  if (!res.ok) throw new Error(`${what} (${res.status})`);
+}
+
+/** Who is signed in, or null. */
+export async function fetchMe(): Promise<{
+  login: string;
+  name?: string;
+  avatarUrl?: string;
+} | null> {
+  const res = await fetch(`${BASE}/auth/me`, { credentials: CREDENTIALS });
+  if (!res.ok) return null;
+  const body = (await res.json()) as {
+    signedIn?: boolean;
+    user?: { login: string; name?: string; avatarUrl?: string };
+  };
+  return body.signedIn && body.user ? body.user : null;
+}
 
 /**
  * `settled` is the API's word for over-and-not-failed; the UI calls that
@@ -106,8 +153,8 @@ function adapt(t: ApiTask, index: number): Task {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+  const res = await fetch(`${BASE}${path}`, { credentials: CREDENTIALS });
+  check(res, `${path} failed`);
   return (await res.json()) as T;
 }
 
@@ -180,7 +227,8 @@ export async function createTask(
 ): Promise<Task> {
   const res = await fetch(`${BASE}/api/fleet/tasks`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
+    headers: { "content-type": "application/json" },
+    credentials: CREDENTIALS,
     // `dispatch` launches an agent for the task and starts it immediately.
     // Filing without it leaves the task queued until somebody points an agent
     // at the board by hand, which is not what pressing "Dispatch" means.
@@ -192,7 +240,7 @@ export async function createTask(
       dispatch: true,
     }),
   });
-  if (!res.ok) throw new Error(`could not file the task (${res.status})`);
+  check(res, "could not file the task");
   return adapt((await res.json()) as ApiTask, 0);
 }
 
@@ -210,10 +258,11 @@ export async function createTask(
 export async function sendToAgent(agentId: string, text: string): Promise<string> {
   const res = await fetch(`${BASE}/agents/${encodeURIComponent(agentId)}/send`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
+    headers: { "content-type": "application/json" },
+    credentials: CREDENTIALS,
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) throw new Error(`the agent did not accept the message (${res.status})`);
+  check(res, "the agent did not accept the message");
   const body = (await res.json()) as { reply?: string; error?: string };
   if (body.error) throw new Error(body.error);
   return body.reply ?? "";
@@ -287,9 +336,11 @@ export async function dispatchTask(
 ): Promise<void> {
   const res = await fetch(`${BASE}/api/fleet/tasks/${encodeURIComponent(id)}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
+    headers: { "content-type": "application/json" },
+    credentials: CREDENTIALS,
     body: JSON.stringify({ dispatch: true, ...opts }),
   });
+  if (res.status === 401 || res.status === 403) throw new SignedOutError();
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(
@@ -312,9 +363,11 @@ export async function dispatchTask(
 export async function releaseTask(id: string): Promise<void> {
   const res = await fetch(`${BASE}/api/fleet/tasks/${encodeURIComponent(id)}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
+    headers: { "content-type": "application/json" },
+    credentials: CREDENTIALS,
     body: JSON.stringify({ state: "queued" }),
   });
+  if (res.status === 401 || res.status === 403) throw new SignedOutError();
   if (!res.ok) {
     throw new Error(
       res.status === 404
@@ -369,9 +422,11 @@ export async function fetchAnthropicKey(): Promise<KeyStatus> {
 export async function saveAnthropicKey(key: string | null): Promise<KeyStatus> {
   const res = await fetch(`${BASE}/api/keys`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
+    headers: { "content-type": "application/json" },
+    credentials: CREDENTIALS,
     body: JSON.stringify({ ANTHROPIC_API_KEY: key }),
   });
+  if (res.status === 401 || res.status === 403) throw new SignedOutError();
   const body = (await res.json().catch(() => ({}))) as Record<string, KeyStatus> & { error?: string };
   if (!res.ok) throw new Error(body.error ?? `could not save the key (${res.status})`);
   return body["ANTHROPIC_API_KEY"] ?? { set: false, source: null, last4: null };
