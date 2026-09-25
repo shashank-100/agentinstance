@@ -184,6 +184,40 @@ export async function installationForRepo(
 }
 
 /**
+ * Who an installation belongs to, according to GitHub.
+ *
+ * The account that installed it — a user login or an organisation name. Read
+ * from GitHub rather than taken from whoever is asking: `/github/installed` is
+ * a redirect anybody can hit with any `installation_id` in the query, and
+ * believing that number would let one person claim another's installation and
+ * every repository in it.
+ */
+export async function installationAccount(
+  appId: string,
+  privateKey: string,
+  installationId: string,
+): Promise<{ account?: string; error?: string }> {
+  let jwt: string;
+  try {
+    jwt = await appJwt(appId, privateKey);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "could not sign app JWT" };
+  }
+
+  const res = await fetch(`https://api.github.com/app/installations/${installationId}`, {
+    headers: { ...GH_HEADERS, authorization: `Bearer ${jwt}` },
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    account?: { login?: string };
+    message?: string;
+  };
+  if (!res.ok || !body.account?.login) {
+    return { error: body.message ?? `github returned ${res.status}` };
+  }
+  return { account: body.account.login };
+}
+
+/**
  * The credential to use for a repository, whichever way this deployment is
  * configured.
  *
@@ -194,6 +228,20 @@ export async function installationForRepo(
 export async function tokenForRepo(
   env: { GITHUB_APP_ID?: string; GITHUB_APP_PRIVATE_KEY?: string; GITHUB_TOKEN?: string },
   repo: string,
+  /**
+   * The login whose agent is asking, when there is one.
+   *
+   * Without it, an installation *is* the permission: `installationForRepo`
+   * answers for any repository the App was ever installed on, whoever is
+   * asking. On a deployment with two people that means one can name the
+   * other's private repository and be handed a working token for it. With it,
+   * a repository is reachable only through an installation its owner made.
+   *
+   * Undefined means an unowned agent — everything that predates sign-in — and
+   * keeps working exactly as before. Tightening that would stop every agent
+   * already running.
+   */
+  owner?: string,
 ): Promise<{ token?: string; error?: string }> {
   if (env.GITHUB_APP_ID && env.GITHUB_APP_PRIVATE_KEY) {
     const found = await installationForRepo(
@@ -202,6 +250,27 @@ export async function tokenForRepo(
       repo,
     );
     if (found.error) return { error: found.error };
+
+    if (owner) {
+      // One extra call per clone or push, and worth it: the alternative is a
+      // boundary that exists only in the UI.
+      const acct = await installationAccount(
+        env.GITHUB_APP_ID,
+        env.GITHUB_APP_PRIVATE_KEY,
+        found.installationId!,
+      );
+      if (acct.error) return { error: acct.error };
+      // An organisation the person belongs to is a legitimate grant, so the
+      // check is on the installation's account, not on the repository owner.
+      if (acct.account?.toLowerCase() !== owner.toLowerCase()) {
+        return {
+          error:
+            `${repo} is reached through an installation belonging to ` +
+            `${acct.account}, not ${owner}. Install the app on it yourself.`,
+        };
+      }
+    }
+
     return installationToken(
       env.GITHUB_APP_ID,
       env.GITHUB_APP_PRIVATE_KEY,
