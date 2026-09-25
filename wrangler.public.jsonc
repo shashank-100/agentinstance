@@ -1,0 +1,144 @@
+// The public deployment: open sign-up, everyone brings their own model key.
+//
+// A separate Worker from `wrangler.jsonc`, with its own Durable Objects, so the
+// dev deployment's agents and boards are untouched by anything here.
+//
+// The `name` on each container is the reason this file exists rather than a
+// `--name` override. A container application's name is account-global and is
+// fixed when it is first deployed; without distinct names here, deploying this
+// worker collides with dev's containers:
+//
+//   ERROR: There is already an application with the name
+//   agentinstance-sandboxsmall deployed that is associated with a different
+//   durable object namespace
+//
+// Generated from wrangler.jsonc — regenerate it rather than editing both.
+//
+//   npx wrangler deploy --config wrangler.public.jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agentinstance-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "containers": [
+    {
+      "class_name": "SandboxSmall",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 20,
+      "constraints": {
+        "regions": [
+          "ENAM",
+          "WNAM",
+          "WEUR",
+          "EEUR"
+        ]
+      },
+      "name": "app-sandboxsmall"
+    },
+    {
+      "class_name": "SandboxMedium",
+      "image": "./Dockerfile",
+      "instance_type": "standard-2",
+      "max_instances": 20,
+      "constraints": {
+        "regions": [
+          "ENAM",
+          "WNAM",
+          "WEUR",
+          "EEUR"
+        ]
+      },
+      "name": "app-sandboxmedium"
+    },
+    {
+      "class_name": "SandboxLarge",
+      "image": "./Dockerfile",
+      "instance_type": "standard-3",
+      "max_instances": 20,
+      "constraints": {
+        "regions": [
+          "ENAM",
+          "WNAM",
+          "WEUR",
+          "EEUR"
+        ]
+      },
+      "name": "app-sandboxlarge"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT",
+        "class_name": "AgentInstance"
+      },
+      {
+        "name": "REGISTRY",
+        "class_name": "RegistryDO"
+      },
+      {
+        "name": "FLEET",
+        "class_name": "FleetDO"
+      },
+      {
+        "name": "SANDBOX_SMALL",
+        "class_name": "SandboxSmall"
+      },
+      {
+        "name": "SANDBOX_MEDIUM",
+        "class_name": "SandboxMedium"
+      },
+      {
+        "name": "SANDBOX_LARGE",
+        "class_name": "SandboxLarge"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "AgentInstance",
+        "RegistryDO"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "Sandbox"
+      ]
+    },
+    {
+      "tag": "v3",
+      "deleted_classes": [
+        "Sandbox"
+      ],
+      "new_sqlite_classes": [
+        "SandboxSmall",
+        "SandboxMedium",
+        "SandboxLarge"
+      ]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": [
+        "FleetDO"
+      ]
+    }
+  ]
+}
