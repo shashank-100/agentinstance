@@ -140,6 +140,46 @@ had. The result is an agent that runs with no tools and says so: the supervisor
 reported "there is no `fleet_task` tool in this environment" on its first
 unattended wake, while its spec listed one.
 
+## Who may use a deployment
+
+A deployment holds more than one person. That is an addressing property, not a
+permissions one: Durable Objects are reached by name, so two people who both
+call an agent `reviewer` do not get two agents with a visibility bug between
+them — `idFromName` hands them **one object**, sharing its memory, container and
+conversation. No `WHERE owner = ?` fixes that, because the collision happens
+before any query runs. So the owner goes in the address (`src/scope.ts`) and
+isolation holds by construction.
+
+Everything that predates sign-in is addressed under `DEPLOYMENT` (`~`) and keeps
+resolving to exactly the objects it always did, so an existing deployment does
+not need migrating.
+
+Sign-in is GitHub's, through the App the deployment already owns, and it is
+**invite-only**: `ALLOWED_LOGINS` is closed by default, because every agent
+spends this deployment's subscription and boots a container.
+
+Three credentials reach the API, and they are not interchangeable:
+
+| Caller | Credential | Used by |
+|---|---|---|
+| a person | session cookie | the board |
+| a machine | `FLEET_TOKEN` | an agent's tools calling back from a container |
+| anyone | none | only when neither `FLEET_TOKEN` nor `GITHUB_CLIENT_ID` is set |
+
+**Reads need a credential too.** They were open once, on the grounds that a
+listing costs nothing — true of a deployment with one person on it. Once a board
+belongs to somebody, reading it is reading their work, and an agent's transcript
+is the most private thing here behind a guessable name.
+
+**Do not break the machine path.** The VM tools have no cookie and no browser;
+`test/machine-credential.test.ts` exists to catch that, because the failure is
+silent — every running agent's callbacks start failing at once.
+
+A repository is reachable only through an installation its **owner** made.
+Without that check an installation *is* the permission, and on a two-person
+deployment one person can name the other's private repo and be handed a working
+token for it.
+
 ## Harnesses
 
 | Harness | State |
