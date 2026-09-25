@@ -177,23 +177,38 @@ const json = (body: unknown, status = 200) =>
 /**
  * Is this request allowed to change things?
  *
- * Unset FLEET_TOKEN means an open deployment — the default, so a fresh clone
- * runs with no configuration. Once set, every mutating route requires it, and
- * the agents' own VM tools carry it too.
+ * Three ways in, and they are not interchangeable:
  *
- * Reads are deliberately left open: the dashboard is static and fetches the
- * agent list before it could prompt for anything, and a listing is not what
- * costs money. Launching, deleting and sending are.
+ * - a signed-in person, by session cookie. This is what the board uses. Before
+ *   sign-in existed there was no such caller, and a deployment that gained one
+ *   without teaching this function about it would show somebody their own board
+ *   and then refuse every button on it.
+ * - a machine, by FLEET_TOKEN. The agents' own VM tools call back over plain
+ *   HTTP from inside a container with no cookie, so this stays exactly as it
+ *   was; breaking it breaks every running agent.
+ * - anyone, when neither FLEET_TOKEN nor sign-in is configured — a fresh clone,
+ *   which must run with no setup.
+ *
+ * Reads used to be open on the grounds that a listing costs nothing. That was
+ * true of a deployment with one person on it. Now that every object is
+ * addressed inside its owner's namespace, an open read is a way to page through
+ * somebody else's board by naming it, so reads authenticate too — see
+ * `readable`.
  */
-const authorized = (request: Request, env: Env): boolean => {
-  if (!env.FLEET_TOKEN) return true;
-  const header = request.headers.get("authorization") ?? "";
-  const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
-  // Also accept the token on a query param: the VM tool scripts post from
-  // python with no easy way to add headers per call.
-  const param = new URL(request.url).searchParams.get("token") ?? "";
-  return bearer === env.FLEET_TOKEN || param === env.FLEET_TOKEN;
+const authorized = async (request: Request, env: Env): Promise<boolean> => {
+  const { user, machine } = await whoIs(request, env);
+  if (user || machine) return true;
+  // No credential presented. Open only if this deployment has configured none.
+  return !env.FLEET_TOKEN && !env.GITHUB_CLIENT_ID;
 };
+
+/**
+ * May this request read?
+ *
+ * The same rule as writing. They were once different — a listing was harmless
+ * — but a namespaced board makes a read of it a read of one person's work.
+ */
+const readable = authorized;
 const bodyOf = <T>(request: Request) => request.json().catch(() => ({})) as Promise<T>;
 
 /** Like bodyOf, but tells the caller the body was unparseable rather than
@@ -242,11 +257,15 @@ export default {
     if (first === "catalog") return catalogRoute(await withStoredKeys(env));
     if (first === "github") return githubRoute(request, env, second);
     if (first === "api" && second === "launch" && request.method === "POST") {
-      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
       return launchRoute(request, env);
     }
     if (first === "api" && second === "keys") return keysRoute(request, env);
     if (first === "api" && second === "agents" && request.method === "GET") {
+      // Whose agents exist is that person's business: the list is scoped to the
+      // caller, so serving it unauthenticated would only ever serve the
+      // deployment's own namespace to a stranger.
+      if (!(await readable(request, env))) return json({ error: "unauthorized" }, 401);
       return listAgentsRoute(env, await ownerOf(request, env));
     }
     if (first === "api" && second === "fleet") {
@@ -260,7 +279,7 @@ export default {
       // instead of clearing its standing task.
       const isAgentItself = third === undefined;
       if (isAgentItself && request.method === "DELETE") {
-        if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+        if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
         return deleteAgentRoute(env, second, await ownerOf(request, env));
       }
       return agentRoute(request, env, ctx, { id: second, action: third ?? "send", arg: fourth });
@@ -427,6 +446,10 @@ async function githubRoute(request: Request, env: Env, action?: string): Promise
  * POST `{ ANTHROPIC_API_KEY: "sk-ant-..." }` saves one; `null` removes it.
  */
 async function keysRoute(request: Request, env: Env): Promise<Response> {
+  // Reads as well as writes. A GET here reports which keys are set and the last
+  // four characters of each — little on its own, and not something to hand to
+  // anyone who asks.
+  if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
   if (request.method === "GET") {
     const stored = await storedKeys(env);
     const secrets = env as unknown as Record<string, string | undefined>;
@@ -441,7 +464,7 @@ async function keysRoute(request: Request, env: Env): Promise<Response> {
     );
   }
   if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
-  if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+  if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
 
   const body = await parsedBody<Record<string, unknown>>(request);
   if (!body) return json({ error: "body is not valid JSON" }, 400);
@@ -561,8 +584,9 @@ async function fleetRoute(
   // let anyone strip a running agent's claim without a token.
   // `supervise` wakes an agent, which spends the subscription, so it is a
   // write whatever the method says.
-  const write = request.method !== "GET" || section === "sweep" || section === "supervise";
-  if (write && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+  // Reads are gated too, now that a board belongs to somebody: listing the
+  // tasks on it is reading that person's work, not public information.
+  if (!(await readable(request, env))) return json({ error: "unauthorized" }, 401);
 
   if (section === "status") return json(await f.stats());
 
@@ -863,14 +887,11 @@ async function agentRoute(
   if (WRITES.has(route.action) && request.method === "GET") {
     return json({ error: `${route.action} requires POST` }, 405);
   }
-  // Anything that changes state, boots a VM, or spends model quota needs the
-  // token when one is configured. `schedule` and `agents-md` are included on
-  // their mutating methods: a standing task is a recurring spend.
-  const mutating =
-    WRITES.has(route.action) ||
-    ((route.action === "schedule" || route.action === "agents-md") &&
-      request.method !== "GET");
-  if (mutating && !authorized(request, env)) return json({ error: "unauthorized" }, 401);
+  // Every route here needs a credential, reads as much as writes: an agent's
+  // transcript is the most private thing this deployment holds and its name is
+  // guessable. `WRITES` above no longer has anything to do with that — it only
+  // rejects a GET on a POST-only action.
+  if (!(await authorized(request, env))) return json({ error: "unauthorized" }, 401);
   try {
     switch (route.action) {
       case "send": {
