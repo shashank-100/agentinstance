@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useTasks, useFleetStatus } from "@/lib/use-tasks";
 import { Kbd } from "./atoms";
+import { useMe } from "./sign-in";
 import { Plus, Search } from "lucide-react";
 
 export function CommandBar() {
@@ -125,6 +126,37 @@ function FleetSummary() {
   );
 }
 
+/**
+ * The signed-in person, and the way out.
+ *
+ * Sign-out is a link to a server route because the session cookie is HttpOnly:
+ * the page cannot clear what it cannot read, and a button that only dropped the
+ * cached identity would leave a live session behind on the next reload.
+ */
+function Who() {
+  const { data: me } = useMe();
+  if (!me) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      {me.avatarUrl ? (
+        <img
+          src={me.avatarUrl}
+          alt=""
+          className="size-6 rounded-full border border-border"
+        />
+      ) : null}
+      <span className="hidden text-[13px] text-muted-foreground sm:inline">{me.login}</span>
+      <a
+        href="/auth/logout"
+        className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Sign out
+      </a>
+    </div>
+  );
+}
+
 export function TopBar() {
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/90 backdrop-blur">
@@ -140,8 +172,9 @@ export function TopBar() {
         {/* The real queue, not a fixed string. This read "acme · 3 microVMs
             warm" whatever the board was doing. */}
         <FleetSummary />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
           <CommandBar />
+          <Who />
         </div>
       </div>
     </header>
