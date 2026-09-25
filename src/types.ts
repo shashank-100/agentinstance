@@ -67,6 +67,13 @@ export interface Env {
    */
   ALLOWED_LOGINS?: string;
   /**
+   * Where the board lives, for the redirect at `/`.
+   *
+   * The board is a separate Worker, so this Worker cannot know its address.
+   * Unset, `/` reports what this service is instead of redirecting nowhere.
+   */
+  BOARD_URL?: string;
+  /**
    * Origins allowed to call this API from a browser with a session cookie,
    * comma separated.
    *

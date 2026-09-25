@@ -295,8 +295,16 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     }
 
     if (url.pathname === "/") {
-      // No landing page, so the agent list is the front door.
-      return Response.redirect(new URL("/agents/", url).toString(), 302);
+      // The board is the front door, and it is a separate Worker — this one is
+      // the API. `BOARD_URL` says where, because that differs per deployment;
+      // without it there is nothing to point at, so say so rather than
+      // redirecting into a 404.
+      if (env.BOARD_URL) return Response.redirect(env.BOARD_URL, 302);
+      return json({
+        ok: true,
+        service: "agentinstance",
+        hint: "this is the API. Set BOARD_URL to redirect here to the board.",
+      });
     }
     if (first === "auth") return authRoute(request, env, second);
     if (first === "catalog") return catalogRoute(await withStoredKeys(env));
