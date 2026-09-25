@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { RequireSignIn } from "@/components/board/sign-in";
 
 function NotFoundComponent() {
   return (
@@ -126,8 +127,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      {/* One gate for every route: each of them reads the same API, so a
+          per-route check would only be a per-route chance to forget it. */}
+      <RequireSignIn>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </RequireSignIn>
       <Toaster position="bottom-right" />
     </QueryClientProvider>
   );
