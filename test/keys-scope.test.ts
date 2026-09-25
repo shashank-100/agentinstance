@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { env } from "cloudflare:test";
 import { storedKeys, setStoredKey, withStoredKeys } from "../src/keys.js";
+import type { Env } from "../src/types.js";
 import { DEPLOYMENT } from "../src/scope.js";
 
 // Failure #3 and #6 from the list: keys used to live at idFromName("global"),
@@ -24,15 +25,15 @@ describe("a key belongs to one person", () => {
   it("does not fall back to the deployment's credential under BYOK", async () => {
     // The whole point of BYOK: a stranger who has saved nothing must not end up
     // running on whoever deployed this.
-    const byok = { ...env, BYOK: "1", ANTHROPIC_API_KEY: "sk-ant-deployer" };
-    const seen = await withStoredKeys(byok as never, "dave");
+    const byok = { ...env, BYOK: "1", ANTHROPIC_API_KEY: "sk-ant-deployer" } as unknown as Env;
+    const seen = await withStoredKeys(byok, "dave");
     expect(seen.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
   it("still gives the deployment its own credential", async () => {
     // Failure #2: the deployer already works and must keep working.
-    const byok = { ...env, BYOK: "1", ANTHROPIC_API_KEY: "sk-ant-deployer" };
-    const seen = await withStoredKeys(byok as never, DEPLOYMENT);
+    const byok = { ...env, BYOK: "1", ANTHROPIC_API_KEY: "sk-ant-deployer" } as unknown as Env;
+    const seen = await withStoredKeys(byok, DEPLOYMENT);
     expect(seen.ANTHROPIC_API_KEY).toBe("sk-ant-deployer");
   });
 });
