@@ -173,9 +173,6 @@ plain HTML with a `<script>` block, so the deploy is a file upload.
 | File | What it does |
 |---|---|
 | `chat.html` | The playground: agent sidebar, header, conversation, composer. Includes a small hand-rolled markdown renderer that HTML-escapes first, so a model reply can never inject markup. |
-| `agents/index.html` | Dashboard listing every agent, with delete/chat links. |
-| `agents/new.html` | The builder: pick harness + model + capabilities + machine, check compatibility, launch. |
-| `agents/builder.js` | The builder's state machine, kept separate so it can be unit-tested in Node without a browser (see `test/ui/builder.test.ts`). |
 
 ---
 

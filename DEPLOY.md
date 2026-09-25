@@ -107,7 +107,7 @@ use.
 
 ## 5. Create and talk to an agent
 
-Open `/agents/new.html` to build one in the browser, or use the API:
+Dispatch a task from the board, which launches an agent for it, or use the API:
 
 ```bash
 export AGENTINSTANCE_URL=https://agentinstance.<your-subdomain>.workers.dev

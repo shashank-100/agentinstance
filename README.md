@@ -56,9 +56,8 @@ with SQLite storage — one coordination atom, strongly consistent, always recov
 
 ## Try it
 
-- **Your agents dashboard:** `/agents/` (`/` redirects here)
-- **Task board:** `/agents/board.html`
-- **Agent builder (one click):** `/agents/new.html`
+- **The board:** a separate Worker — file tasks, watch runs, read diffs. `/` on
+  the API redirects there when `BOARD_URL` is set.
 - **Web chat:** `/chat?id=<agent>`
 
 ## Features
