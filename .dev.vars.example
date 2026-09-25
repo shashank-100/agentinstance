@@ -26,12 +26,47 @@ GITHUB_TOKEN=
 # Telegram bot token, for POST /channels/telegram/:id
 TELEGRAM_BOT_TOKEN=
 
+# --- GitHub App ----------------------------------------------------------
+# Preferred over GITHUB_TOKEN above. The App declares its own permissions and
+# mints hour-long installation tokens, so nobody hand-picks permission boxes
+# and a leaked credential expires by itself. It is also what lets more than one
+# person use a deployment: each installs the App on their own account, and an
+# agent reaches only the repositories its owner granted.
+#
+# The key must be PKCS#8 ("BEGIN PRIVATE KEY"). GitHub hands out PKCS#1
+# ("BEGIN RSA PRIVATE KEY"), which WebCrypto will not import. Convert it:
+#   openssl pkcs8 -topk8 -nocrypt -in downloaded.pem -out pkcs8.pem
+GITHUB_APP_ID=
+GITHUB_APP_PRIVATE_KEY=
+# The App's URL name, e.g. `my-agents` in github.com/apps/my-agents. Only used
+# to offer /github/install; tokens do not depend on it.
+GITHUB_APP_SLUG=
+
+# --- who may sign in -----------------------------------------------------
+# Sign-in is GitHub's, through the App above — a GitHub App can sign people in
+# itself, so these come from its own settings page rather than a separate OAuth
+# App. Without them the board has no sign-in screen to offer.
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Comma-separated GitHub logins allowed in. Closed by default: every agent
+# spends this deployment's subscription and boots a container, so a deployment
+# that has not said who may in has not said "anyone". An empty value lets
+# nobody sign in.
+ALLOWED_LOGINS=
+
 # --- access control ------------------------------------------------------
-# Optional, but set it on any deployment reachable from the internet: without
-# it anyone with the URL can launch, delete and run agents, and spend whatever
-# the keys above pay for. When set, /api/* and every mutating /agents/:id/*
-# action require `Authorization: Bearer <token>`.
+# The machine credential. An agent's tools call back from inside a container
+# over plain HTTP with no cookie, and they carry this. Set it on any deployment
+# reachable from the internet: without it — and without GITHUB_CLIENT_ID —
+# every route is open, which is the right default only for a fresh clone on a
+# laptop.
 FLEET_TOKEN=
+
+# Origins allowed to call this API from a browser carrying a session cookie,
+# comma separated. Only needed when the board is served from a different host
+# than the API; unset means same-origin only, which is the normal deploy.
+# CORS_ORIGINS=https://board.example.com
 
 # --- deployment ----------------------------------------------------------
 # Only needed when the public URL differs from the request host (a proxy, or a
