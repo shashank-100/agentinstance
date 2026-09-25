@@ -180,33 +180,6 @@ Without that check an installation *is* the permission, and on a two-person
 deployment one person can name the other's private repo and be handed a working
 token for it.
 
-## What a run costs
-
-Containers are the bill; the Worker and Durable Objects are rounding error.
-Cloudflare charges per 10ms of runtime, so an idle slot costs nothing and
-`max_instances` sets a ceiling rather than a spend.
-
-Memory and disk are billed on *provisioned* resources for as long as the
-container lives; CPU only on active use. So a slow agent that is mostly waiting
-on the model still pays full memory — which is why run length, not CPU, is what
-moves the bill.
-
-| Tier | Instance | Per container-hour |
-|---|---|---|
-| one-cpu | standard-1 | $0.045 |
-| two-cpu | standard-2 | $0.071 |
-| four-cpu | standard-3 | $0.105 |
-
-A typical 10-minute agent run on one-cpu is about **0.75 cents**. The $5/month
-Workers Paid plan includes roughly 6 container-hours before anything is charged
-(memory is the binding allowance, not CPU).
-
-The exposure worth knowing: 20 one-cpu slots saturated 24/7 is about **$650 a
-month**. That is what `max_instances` permits, not what anything is expected to
-cost — but it is the reason `RUN_LIMIT` exists on a public deployment. The cap
-bounds concurrency per person, not their total monthly spend; a hard budget
-would need separate accounting.
-
 ## Harnesses
 
 | Harness | State |
