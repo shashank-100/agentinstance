@@ -903,15 +903,16 @@ async function dispatchTask(
 
   // How much of the deployment one person may occupy at once.
   //
-  // BYOK settles who pays for the model; it does nothing about containers,
-  // which are a fixed pool (`max_instances` per tier in wrangler.jsonc) shared
-  // by everyone. Without a cap, one person dispatching six tasks starves every
-  // other user of a deployment that is open to the public.
+  // BYOK settles who pays for the model; it does nothing about containers.
+  // Those are a single pool per tier (`max_instances` in wrangler.jsonc) and
+  // Cloudflare has no notion of who asked for one — it just refuses to start
+  // the next container past the limit. So the only place a share can be worked
+  // out per person is here.
   //
   // The deployment's own namespace is exempt: that is the person who runs this,
   // and a rule written for strangers should not cap them.
   if (env.BYOK && owner !== DEPLOYMENT) {
-    const limit = Number(env.RUN_LIMIT ?? "2");
+    const limit = Number(env.RUN_LIMIT ?? "5");
     const running = await f.running();
     if (running >= limit) {
       return {
