@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /**
- * The Anthropic API key that agents run Claude on.
+ * The Anthropic API key this account's agents run Claude on.
  *
- * One key per deployment, saved on the server and used by every agent. It
- * replaces running `wrangler secret put` before anything works. The server
- * checks the key with Anthropic before saving it, so a typo is caught here and
- * not minutes into a run.
+ * One key per signed-in person, saved on the server against their own
+ * namespace: their agents run on it and nobody else's do. It replaces running
+ * `wrangler secret put` before anything works. The server checks the key with
+ * Anthropic before saving it, so a typo is caught here and not minutes into a
+ * run.
  */
 export function ClaudeKey() {
   const queryClient = useQueryClient();

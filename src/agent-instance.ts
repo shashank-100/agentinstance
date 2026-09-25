@@ -268,8 +268,10 @@ export class AgentInstance extends DurableObject<Env> {
     this.record(makeMessage("user", text, channel));
     const harness = getHarness(this.spec.harness, this.env.USE_ECHO_MODEL === "1");
     const { getSandbox } = await import("./sandbox/index.js");
-    // Keys saved from the board, laid over the Worker's secrets.
-    const env = await withStoredKeys(this.env);
+    // Keys saved from the board, laid over the Worker's secrets — this agent's
+    // owner's keys, so an agent runs on its own person's credential and never
+    // on somebody else's.
+    const env = await withStoredKeys(this.env, this.owner());
 
     const reply = await harness.run(this.buildModel(), this.history(), this.spec.system, {
       sandbox: getSandbox(this.env, this.spec.machine),
@@ -546,7 +548,7 @@ export class AgentInstance extends DurableObject<Env> {
       const { harness, model } = snap.spec;
       if (!HARNESSES[harness]) {
         errors.push(`harness '${harness}' is not one this deployment has`);
-      } else if (!harnessCatalog((await withStoredKeys(this.env)) as unknown as KeyEnv)[harness]?.ready) {
+      } else if (!harnessCatalog((await withStoredKeys(this.env, this.owner())) as unknown as KeyEnv)[harness]?.ready) {
         // A warning, not an error. Whether a key happens to be set right now
         // says nothing about whether the snapshot is complete, and refusing
         // here would block recovery during exactly the outage — a missing or
@@ -932,8 +934,18 @@ export class AgentInstance extends DurableObject<Env> {
    * reads as "no owner boundary", keeping those agents working as they did.
    */
   private repoOwner(): string | undefined {
-    const { owner } = unscope(this.spec.name ?? "");
+    const owner = this.owner();
     return owner === DEPLOYMENT ? undefined : owner;
+  }
+
+  /**
+   * Whose agent this is, as a scope name.
+   *
+   * `DEPLOYMENT` for everything that predates sign-in, which is what keeps
+   * those agents resolving to the keys and registry they always used.
+   */
+  private owner(): string {
+    return unscope(this.spec.name ?? "").owner;
   }
 
   /**

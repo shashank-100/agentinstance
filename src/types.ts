@@ -67,6 +67,16 @@ export interface Env {
    */
   ALLOWED_LOGINS?: string;
   /**
+   * Make every signed-in person bring their own model key.
+   *
+   * Set on a deployment open to the public. Without it, an open sign-up means
+   * strangers running agents on whatever model credential the deployment holds
+   * — its owner's subscription token or API key. With it, those credentials
+   * serve the deployer alone and everyone else must save a key on their own
+   * board before an agent will run.
+   */
+  BYOK?: string;
+  /**
    * Where the board lives, for the redirect at `/`.
    *
    * The board is a separate Worker, so this Worker cannot know its address.
