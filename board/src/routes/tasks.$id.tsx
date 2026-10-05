@@ -221,6 +221,12 @@ function TaskView() {
                 so direction after it continues the same agent in the same
                 checkout. The Terminal tab keeps the raw stream on its own. */}
             <TabsContent value="chat" className="mt-3">
+              {task.logs.length > 0 && (
+                <section className="mb-4 rounded-lg border border-border bg-surface-2 p-4">
+                  <h2 className="mb-2 text-sm font-medium">Task result</h2>
+                  {task.logs.map((entry, index) => <p key={index} className="whitespace-pre-wrap break-words text-sm leading-6">{entry.text}</p>)}
+                </section>
+              )}
               <Conversation
                 agentId={agentId}
                 messages={messages}
