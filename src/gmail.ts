@@ -50,7 +50,7 @@ export async function gmailRoute(request: Request, env: Env, action?: string): P
     const session = await issueSession(env, { login: owner, name: user?.name ?? profile.emailAddress });
     if (!session) return json({ error: "Session signing is not configured." }, 503);
     await registry(env, owner).setKey(KEY, JSON.stringify({ email: profile.emailAddress, refreshToken: token.refresh_token }));
-    const headers = new Headers({ location: `${env.BOARD_URL?.replace(/\/$/, "") ?? url.origin}/dispatch?gmail=connected` });
+    const headers = new Headers({ location: `${env.BOARD_URL?.replace(/\/$/, "") ?? url.origin}/connectors?gmail=connected` });
     headers.append("set-cookie", stateCookie(""));
     headers.append("set-cookie", sessionHeader(session, true));
     return new Response(null, { status: 302, headers });

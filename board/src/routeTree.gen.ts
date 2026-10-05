@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConnectorsRouteImport } from './routes/connectors'
 import { Route as DispatchRouteImport } from './routes/dispatch'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectorsRoute = ConnectorsRouteImport.update({
+  id: '/connectors',
+  path: '/connectors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DispatchRoute = DispatchRouteImport.update({
@@ -31,30 +37,34 @@ const TasksIdRoute = TasksIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dispatch' | '/tasks/$id'
+  fullPaths: '/' | '/connectors' | '/dispatch' | '/tasks/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dispatch' | '/tasks/$id'
-  id: '__root__' | '/' | '/dispatch' | '/tasks/$id'
+  to: '/' | '/connectors' | '/dispatch' | '/tasks/$id'
+  id: '__root__' | '/' | '/connectors' | '/dispatch' | '/tasks/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConnectorsRoute: typeof ConnectorsRoute
   DispatchRoute: typeof DispatchRoute
   TasksIdRoute: typeof TasksIdRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connectors': {
+      id: '/connectors'
+      path: '/connectors'
+      fullPath: '/connectors'
+      preLoaderRoute: typeof ConnectorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dispatch': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConnectorsRoute: ConnectorsRoute,
   DispatchRoute: DispatchRoute,
   TasksIdRoute: TasksIdRoute,
 }

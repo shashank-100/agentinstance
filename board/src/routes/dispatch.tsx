@@ -1,4 +1,3 @@
-import { GmailConnection } from "@/components/board/GmailConnection";
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,7 +66,6 @@ function DispatchPage() {
           <p className="rule-label mb-3">New task</p>
           <h1 className="font-display text-3xl font-medium leading-snug">What would you like to get done?</h1>
           <p className="mt-3 text-sm text-muted-foreground">Describe the outcome. We’ll choose an available agent and set up its workspace.</p>
-          <GmailConnection onExample={setPrompt} />
           <form onSubmit={(event) => { event.preventDefault(); void startTask(); }}>
             <label htmlFor="task-goal" className="sr-only">Task description</label>
             <Textarea id="task-goal" autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={6}

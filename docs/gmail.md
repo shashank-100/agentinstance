@@ -1,6 +1,6 @@
 # Gmail connection
 
-The task screen can connect Gmail for searching and reading conversations. The
+The Connectors tab can connect Gmail for searching and reading conversations. The
 OAuth grant is `gmail.readonly`; no sending, deleting, or mailbox modification
 is implemented. Email content is treated as untrusted input by the tools.
 
@@ -17,7 +17,7 @@ Configure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the API Worker using
 keep them out of source control and chat. A self-hosted deployment uses its own
 API origin followed by `/gmail/callback`.
 
-Open the task screen and choose **Connect Gmail**. A signed-in user's connection
+Open the Connectors tab and choose **Connect Gmail**. A signed-in user's connection
 belongs to that account. A signed-out user receives a private namespace derived
 from the verified Gmail address. Existing deployment tasks stay in their original
 namespace. OAuth state is signed, expires in ten minutes, and binds the initiating
