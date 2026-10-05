@@ -103,7 +103,7 @@ export async function gmailTool(env: Env, owner: string, input: Record<string, u
     const mime = `From: ${connection.email}\r\nTo: ${to}\r\nSubject: =?UTF-8?B?${encode(subject)}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(body).match(/.{1,76}/g)!.join("\r\n")}\r\n`;
     const res = await fetch(`${base}/drafts`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ message: { raw: encode(mime).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") } }) });
     if (!res.ok) return { error: `Gmail draft creation failed (${res.status}).` };
-    return { ...await res.json() as Record<string, unknown>, note: "Draft saved. Ask the user to review and send it from Connectors. No email was sent." };
+    return { ...await res.json() as Record<string, unknown>, note: "Draft saved. Ask the user to review and send it in Gmail. No email was sent." };
   }
   if (input.action === "drafts") {
     const res = await fetch(`${base}/drafts?maxResults=10`, { headers });

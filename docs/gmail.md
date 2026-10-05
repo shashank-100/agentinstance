@@ -28,7 +28,7 @@ Sign-in also creates or resumes the account identified by the verified Gmail
 address, retaining the same private chats and tasks. Existing read-only users
 choose Enable write access in Connectors to upgrade consent. Agents use
 `gmail_draft <to> <subject> <body...>` to save a plain-text draft. The signed-in
-user reviews and sends it in Connectors; `gmail_send` is not an agent tool.
+user reviews and sends it in Gmail; `gmail_send` is not an agent tool.
 Drafts containing HTML, attachments, Cc or Bcc must be sent in Gmail.
 
 Start a task without a repository, for example:
