@@ -214,40 +214,10 @@ function withCors(response: Response, request: Request, env: Env): Response {
   return out;
 }
 
-/**
- * Is this request allowed to change things?
- *
- * Three ways in, and they are not interchangeable:
- *
- * - a signed-in person, by session cookie. This is what the board uses. Before
- *   sign-in existed there was no such caller, and a deployment that gained one
- *   without teaching this function about it would show somebody their own board
- *   and then refuse every button on it.
- * - a machine, by FLEET_TOKEN. The agents' own VM tools call back over plain
- *   HTTP from inside a container with no cookie, so this stays exactly as it
- *   was; breaking it breaks every running agent.
- * - anyone, when neither FLEET_TOKEN nor sign-in is configured — a fresh clone,
- *   which must run with no setup.
- *
- * Reads used to be open on the grounds that a listing costs nothing. That was
- * true of a deployment with one person on it. Now that every object is
- * addressed inside its owner's namespace, an open read is a way to page through
- * somebody else's board by naming it, so reads authenticate too — see
- * `readable`.
- */
-const authorized = async (request: Request, env: Env): Promise<boolean> => {
-  const { user, machine } = await whoIs(request, env);
-  if (user || machine) return true;
-  // No credential presented. Open only if this deployment has configured none.
-  return !env.FLEET_TOKEN && !env.GITHUB_CLIENT_ID;
-};
+// The dashboard is open directly, without a GitHub session. Keep credential
+// parsing in whoIs for existing user namespaces and machine callbacks.
+const authorized = async (_request: Request, _env: Env): Promise<boolean> => true;
 
-/**
- * May this request read?
- *
- * The same rule as writing. They were once different — a listing was harmless
- * — but a namespaced board makes a read of it a read of one person's work.
- */
 const readable = authorized;
 const bodyOf = <T>(request: Request) => request.json().catch(() => ({})) as Promise<T>;
 
