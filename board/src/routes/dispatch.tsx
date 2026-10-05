@@ -1,40 +1,25 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { toast } from "sonner";
 import { Shell } from "@/components/board/Shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
 import { createTask } from "@/lib/api";
 import { useCatalog } from "@/lib/use-tasks";
-import { cn } from "@/lib/utils";
 import { type Harness, harnessLabel } from "@/lib/mock-data";
-
-const title = "Dispatch a task — agentinstance";
-const description =
-  "Describe the change, pick the harness, and agentinstance provisions an ephemeral microVM with its own branch for review.";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/dispatch")({
   validateSearch: z.object({ prompt: z.string().optional() }),
-  head: () => ({
-    meta: [
-      { title },
-      { name: "description", content: description },
-      { property: "og:title", content: title },
-      { property: "og:description", content: description },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: () => ({ meta: [
+    { title: "Start a task — agentinstance" },
+    { name: "description", content: "Describe your goal. Choose an available agent automatically and follow its work." },
+  ] }),
   component: DispatchPage,
 });
-
-const harnessNote: Record<Harness, string> = {
-  "claude-code": "Headless CLI daemon · deep AST map · higher token spend",
-  pi: "Event-driven RPC loop · tight tools · minimal tokens",
-};
 
 function DispatchPage() {
   const queryClient = useQueryClient();
@@ -43,166 +28,100 @@ function DispatchPage() {
   const { catalog } = useCatalog();
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [repo, setRepo] = useState("");
-  const [harness, setHarness] = useState<Harness>("claude-code");
-  // Null until the catalog names a default, so the first render cannot commit
-  // to a tier this deployment does not offer.
+  const [harness, setHarness] = useState<Harness | "auto">("auto");
   const [machine, setMachine] = useState<string | null>(null);
-  const chosenMachine = machine ?? catalog?.defaultMachine ?? null;
-
-  // A harness this deployment cannot run is not a choice. `ready` is computed
-  // from its own secrets, so a missing key greys the option out here rather
-  // than failing at dispatch with an error pointing at neither.
-  const readiness = new Map(catalog?.harnesses.map((h) => [h.id, h.ready]) ?? []);
-  const harnessReady = (h: Harness) => readiness.get(h) ?? true;
-
-  // `git_repo clone` builds https://github.com/<repo>.git, so anything that is
-  // not exactly owner/name produces a URL that 404s minutes into the run. Say
-  // so here rather than letting the agent discover it.
+  const [submitting, setSubmitting] = useState(false);
+  const ready = (id: Harness) => catalog?.harnesses.some((h) => h.id === id && h.ready) ?? false;
+  const chosenHarness = harness === "auto"
+    ? (["claude-code", "pi"] as Harness[]).find(ready)
+    : ready(harness) ? harness : undefined;
+  const chosenMachine = machine ?? catalog?.defaultMachine;
+  const tier = catalog?.machines.find((m) => m.id === chosenMachine);
   const trimmedRepo = repo.trim();
   const repoInvalid = trimmedRepo !== "" && !/^[\w.-]+\/[\w.-]+$/.test(trimmedRepo);
+
+  async function startTask() {
+    if (submitting || !prompt.trim() || repoInvalid || !chosenHarness || !tier) return;
+    setSubmitting(true);
+    try {
+      const task = await createTask(prompt.trim(), {
+        harness: chosenHarness,
+        machine: tier.id,
+        ...(trimmedRepo ? { repo: trimmedRepo } : {}),
+      });
+      void queryClient.invalidateQueries({ queryKey: ["fleet"] });
+      toast.success("Task started", { description: "Follow your agent’s progress." });
+      void navigate({ to: "/tasks/$id", params: { id: task.id } });
+    } catch (error) {
+      toast.error("Could not start the task", { description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <Shell>
       <div className="px-5 py-10 sm:px-8 lg:px-10">
         <section className="max-w-3xl">
-          <h1 className="font-display text-2xl font-medium leading-snug">Dispatch task</h1>
-          <p className="mt-2 text-[13px] text-muted-foreground">
-            An ephemeral microVM is provisioned per task and a branch is opened for review.
-          </p>
-
-          <Textarea
-            autoFocus
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={5}
-            placeholder="Refactor the Stripe webhook handler to support tiered subscriptions…"
-            className="mt-6 resize-none bg-surface font-mono text-xs"
-          />
-
-          {/* The repository the work is against. The API has always accepted
-              one and names it in the agent's opening prompt; this screen never
-              collected it, so a task told to "open a pull request" had no repo
-              to open one on unless the prompt happened to spell it out. */}
-          <p className="rule-label mt-6 mb-2">Repository</p>
-          <Input
-            value={repo}
-            onChange={(e) => setRepo(e.target.value)}
-            placeholder="owner/name"
-            spellCheck={false}
-            aria-invalid={repoInvalid}
-            className="bg-surface font-mono text-xs"
-          />
-          <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
-            {repoInvalid
-              ? "Expected owner/name — a full URL or a bare name will not clone."
-              : "Optional. Without one the agent has nothing to clone, so it cannot open a pull request."}
-          </p>
-
-          <p className="rule-label mt-6 mb-2">Harness</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(["claude-code", "pi"] as Harness[]).map((h) => {
-              const ready = harnessReady(h);
-              return (
-                <button
-                  key={h}
-                  disabled={!ready}
-                  title={ready ? undefined : "No credentials for this harness on this deployment"}
-                  onClick={() => setHarness(h)}
-                  className={cn(
-                    "rounded-lg border bg-surface px-3.5 py-3 text-left transition-colors",
-                    !ready && "cursor-not-allowed opacity-40",
-                    ready && harness === h
-                      ? "border-primary/50 bg-surface-2"
-                      : "border-border hover:border-border-strong",
-                  )}
-                >
-                  <span className="block text-[13px] font-medium">{harnessLabel[h]}</span>
-                  <span className="mt-1 block font-mono text-[10px] leading-relaxed text-muted-foreground">
-                    {ready ? harnessNote[h] : "not configured"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Machine. The API has always taken a tier and the builder has
-              always offered one; this screen did not, so every dispatch got
-              the API's default whatever the work needed. Tiers come from
-              /catalog rather than a local list — they carry this deployment's
-              own hardware and rates. */}
-          <p className="rule-label mt-6 mb-2">Machine</p>
-          {!catalog ? (
-            <p className="font-mono text-[11px] text-muted-foreground">Loading tiers…</p>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-3">
-              {catalog.machines.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setMachine(m.id)}
-                  className={cn(
-                    "rounded-lg border bg-surface px-3.5 py-3 text-left transition-colors",
-                    chosenMachine === m.id
-                      ? "border-primary/50 bg-surface-2"
-                      : "border-border hover:border-border-strong",
-                  )}
-                >
-                  <span className="block text-[13px] font-medium">{m.label}</span>
-                  <span className="mt-1 block font-mono text-[10px] leading-relaxed text-muted-foreground">
-                    {m.ramGb} GB RAM · {m.diskGb} GB disk
-                    <br />${m.usdPerHour}/hr active
-                  </span>
-                </button>
+          <p className="rule-label mb-3">New task</p>
+          <h1 className="font-display text-3xl font-medium leading-snug">What would you like to get done?</h1>
+          <p className="mt-3 text-sm text-muted-foreground">Describe the outcome. We’ll choose an available agent and set up its workspace.</p>
+          <form onSubmit={(event) => { event.preventDefault(); void startTask(); }}>
+            <label htmlFor="task-goal" className="sr-only">Task description</label>
+            <Textarea id="task-goal" autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={6}
+              placeholder="Find and fix the failing tests, then prepare a pull request…"
+              className="mt-7 resize-none bg-surface text-sm leading-relaxed" />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["Fix a bug", "Review a repository", "Build a feature"].map((label, index) => (
+                <button type="button" key={label} onClick={() => setPrompt([
+                  "Find and fix a bug in this repository. Run the relevant checks and prepare a pull request.",
+                  "Review this repository for bugs. Explain the most important findings with file references. Do not change any code.",
+                  "Build a feature in this repository: describe the feature here, including how it should behave.",
+                ][index] ?? "")} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground">{label}</button>
               ))}
             </div>
-          )}
-
-          <div className="mt-7 flex items-center justify-between border-t border-border pt-5">
-            {/* The rate is the deployment's published figure for the tier
-                actually selected. "est. boot ~150ms" stood here and was not
-                measured from anything — a container cold start is seconds. */}
-            <p className="font-mono text-[10px] text-muted-foreground">
-              {(() => {
-                const m = catalog?.machines.find((x) => x.id === chosenMachine);
-                return m ? `${m.label} · $${m.usdPerHour}/hr while running` : "branch auto-created";
-              })()}
+            <label htmlFor="task-repo" className="rule-label mt-7 mb-2 block">Repository <span className="normal-case">(optional)</span></label>
+            <Input id="task-repo" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="owner/name" spellCheck={false}
+              aria-invalid={repoInvalid} aria-describedby="repo-help" className="bg-surface font-mono text-xs" />
+            <p id="repo-help" className={cn("mt-2 text-xs", repoInvalid ? "text-destructive" : "text-muted-foreground")}>
+              {repoInvalid ? "Enter owner/name, rather than a full URL." : "Add a repository for code changes and pull requests. Leave blank for a standalone task."}
             </p>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/" })}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!prompt.trim() || repoInvalid}
-                onClick={() => {
-                  const goal = prompt.trim();
-                  if (!goal || repoInvalid) return;
-                  setPrompt("");
-                  setRepo("");
-                  // File it for real, and say so only once the queue has it —
-                  // a success toast fired before the POST lands is a lie the
-                  // user acts on.
-                  // `machine` is omitted rather than sent as undefined when
-                  // the catalog has not loaded, so the API falls back to its
-                  // own default instead of being handed a missing tier.
-                  void createTask(goal, {
-                    harness,
-                    ...(chosenMachine ? { machine: chosenMachine } : {}),
-                    ...(trimmedRepo ? { repo: trimmedRepo } : {}),
-                  })
-                    .then((t) => {
-                      void queryClient.invalidateQueries({ queryKey: ["fleet"] });
-                      toast.success("Task filed", { description: `queued as ${t.id}` });
-                      void navigate({ to: "/" });
-                    })
-                    .catch((e: Error) =>
-                      toast.error("Could not file the task", { description: e.message }),
-                    );
-                }}
-              >
-                Dispatch
-              </Button>
+            <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border bg-surface px-3 py-1.5">Agent: {harness === "auto" ? "Auto" : harnessLabel[harness]}</span>
+              <span>Machine: {machine ? tier?.label : "Auto"}</span>
             </div>
-          </div>
+            <details className="mt-4 rounded-lg border border-border bg-surface p-4">
+              <summary className="cursor-pointer text-sm font-medium">Advanced settings</summary>
+              <p className="mt-2 text-xs text-muted-foreground">Choose the agent and machine yourself, or keep the automatic defaults.</p>
+              <p className="rule-label mt-5 mb-2">Agent</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(["auto", "claude-code", "pi"] as const).map((id) => (
+                  <button type="button" key={id} aria-pressed={harness === id} disabled={id !== "auto" && !ready(id)} onClick={() => setHarness(id)}
+                    className={cn("rounded-lg border px-3 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40", harness === id ? "border-primary/50 bg-surface-2" : "border-border hover:border-border-strong")}>
+                    {id === "auto" ? "Auto" : harnessLabel[id]}
+                    <span className="mt-1 block text-xs text-muted-foreground">{id === "auto" ? "Choose an available agent" : ready(id) ? "Available" : "Not configured"}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="rule-label mt-5 mb-2">Machine</p>
+              <button type="button" onClick={() => setMachine(null)} aria-pressed={machine === null} className="mb-3 text-xs text-muted-foreground underline underline-offset-4">Use automatic machine selection</button>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {catalog?.machines.map((m) => (
+                  <button type="button" key={m.id} aria-pressed={machine === m.id} onClick={() => setMachine(m.id)}
+                    className={cn("rounded-lg border px-3 py-3 text-left text-sm transition-colors", machine === m.id ? "border-primary/50 bg-surface-2" : "border-border hover:border-border-strong")}>
+                    {m.label}<span className="mt-1 block text-xs text-muted-foreground">{m.ramGb} GB RAM · ${m.usdPerHour}/hr</span>
+                  </button>
+                ))}
+              </div>
+            </details>
+            <p role="status" className="mt-4 text-xs text-muted-foreground">
+              {!catalog ? "Loading available agents…" : !chosenHarness ? "No agent is configured. Add an agent credential before starting." : `Ready with ${harnessLabel[chosenHarness]}${tier ? ` · ${tier.label} · $${tier.usdPerHour}/hr while running` : ""}.`}
+            </p>
+            <div className="mt-6 flex items-center justify-between gap-4 border-t border-border pt-5">
+              <p className="text-xs text-muted-foreground">Follow progress and review the result after starting.</p>
+              <Button type="submit" disabled={submitting || !prompt.trim() || repoInvalid || !chosenHarness || !tier}>{submitting ? "Starting…" : "Start task"}</Button>
+            </div>
+          </form>
         </section>
       </div>
     </Shell>
