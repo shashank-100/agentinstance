@@ -247,6 +247,8 @@ const CAPABILITY_DEFS: Record<string, Described> = {
   list_agents: { desc: "List the other agents on this deployment.", needs: () => true },
   // The work queue, from inside the VM: claim a task, record a branch or a
   // pull request against it, and settle it.
+  gmail_search: { desc: "Search connected Gmail conversations (read only).", needs: (env) => has(env, "GMAIL_CONNECTION") },
+  gmail_read: { desc: "Read a connected Gmail conversation.", needs: (env) => has(env, "GMAIL_CONNECTION") },
   fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
   // Git against a real remote. Without a credential an agent can still clone a
   // public repo but cannot push, so these are offered only when one is set —

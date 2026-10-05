@@ -44,7 +44,7 @@ const enc = new TextEncoder();
  * more thing to forget.
  */
 async function signingKey(env: Env): Promise<CryptoKey | null> {
-  const material = env.GITHUB_APP_PRIVATE_KEY ?? env.FLEET_TOKEN;
+  const material = env.GITHUB_APP_PRIVATE_KEY ?? env.FLEET_TOKEN ?? env.GOOGLE_CLIENT_SECRET;
   if (!material) return null;
   return crypto.subtle.importKey(
     "raw",

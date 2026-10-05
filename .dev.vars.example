@@ -73,3 +73,7 @@ FLEET_TOKEN=
 # custom domain). Left unset, the Worker takes its own address from the
 # request it is serving, which is right for a normal workers.dev deploy.
 # WORKER_URL=https://agents.example.com
+
+# Google OAuth web client; redirect URI: https://<api-host>/gmail/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

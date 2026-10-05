@@ -56,6 +56,8 @@ export interface Env {
    * this itself — no separate OAuth App — so the client id is the one on the
    * App's own settings page and the secret is generated there.
    */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   /**

@@ -77,6 +77,8 @@ describe("capabilities", () => {
       "fleet_task",
       "git_repo",
       "open_pr",
+      "gmail_search", // needs the agent owner
+      "gmail_read",
     ]);
     for (const name of Object.keys(CAPABILITIES)) {
       if (onTheAgent.has(name)) continue;

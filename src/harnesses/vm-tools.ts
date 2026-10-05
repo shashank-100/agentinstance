@@ -37,6 +37,8 @@ const VM_TOOLS: Record<string, { usage: string; fields: string[] }> = {
   // `fields` names the JSON keys, in argument order. A trailing "*" means that
   // field takes the rest of the line, so a query or a note can contain spaces
   // without the caller quoting it.
+  gmail_search: { usage: "gmail_search <query>", fields: ["query*"] },
+  gmail_read: { usage: "gmail_read <thread-id>", fields: ["id"] },
   search_web: { usage: 'search_web <query>', fields: ["query*"] },
   browse_page: { usage: "browse_page <url>", fields: ["url"] },
   remember: { usage: 'remember <key> <value...>', fields: ["key", "value*"] },

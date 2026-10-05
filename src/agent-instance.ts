@@ -1,3 +1,4 @@
+import { gmailTool } from "./gmail.js";
 // One agent = one Durable Object. It owns that agent's conversation, its
 // notes, its configuration and its alarm, all in the DO's own SQLite.
 //
@@ -746,6 +747,9 @@ export class AgentInstance extends DurableObject<Env> {
       return { error: `capability '${name}' not enabled for this agent` };
     }
     try {
+      if (name === "gmail_search" || name === "gmail_read") {
+        return { result: await gmailTool(this.env, this.owner(), { ...input, action: name === "gmail_search" ? "search" : "read" }) };
+      }
       if (name === "run_shell") {
         const { getSandbox } = await import("./sandbox/index.js");
         const sandbox = getSandbox(this.env, this.spec.machine);
