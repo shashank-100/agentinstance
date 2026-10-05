@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -32,11 +32,20 @@ export function Conversation({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!sending || !agentId) return;
+    const polling = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ["agent", agentId] });
+    }, 2000);
+    return () => clearInterval(polling);
+  }, [sending, agentId, queryClient]);
+
 
   const send = () => {
     const text = draft.trim();
-    if (!text || !agentId) return;
+    if (!text || !agentId || sending) return;
     setSending(true);
+    void queryClient.invalidateQueries({ queryKey: ["agent", agentId] });
     setDraft("");
     sendToAgent(agentId, text)
       .then(() => {
@@ -77,25 +86,21 @@ export function Conversation({
               {m.content}
             </p>
 
-            {/* The CLI output belongs to the turn that produced it, so it sits
-                under the first agent reply rather than in a tab of its own. */}
-            {i === messages.findIndex((x) => x.role !== "user") && output.length > 0 && (
-              <details className="mt-2" open={live}>
-                <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
-                  terminal · {output.length} chunk{output.length === 1 ? "" : "s"}
-                </summary>
-                <pre className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-2.5 font-mono text-[11px] leading-5 text-muted-foreground">
-                  {output.map((r) => r.text).join("")}
-                </pre>
-              </details>
-            )}
           </div>
         ))}
 
-        {live && (
-          <p className="flex items-center gap-2 px-4 py-3 font-mono text-[11px] text-muted-foreground">
+        {output.length > 0 && (
+          <section aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
+            <p className="mb-2 text-xs font-medium">{live || sending ? "Live activity" : "Activity"}</p>
+            <pre role="log" aria-live="polite" aria-relevant="additions text" className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-3 font-sans text-sm leading-6 text-muted-foreground">
+              {output.map((r) => r.text).join("")}
+            </pre>
+          </section>
+        )}
+        {(live || sending) && (
+          <p role="status" className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
             <span className="size-1.5 animate-pulse rounded-full bg-info" />
-            working…
+            {output.length ? "Agent is running — new activity appears here." : "Starting the agent — waiting for its first activity."}
           </p>
         )}
       </div>
@@ -125,7 +130,7 @@ export function Conversation({
             {sending ? "the agent is working — this can take a minute" : ""}
           </span>
           <Button size="sm" disabled={!draft.trim() || !agentId || sending} onClick={send}>
-            {sending ? "Sending…" : "Send"}
+            {sending ? "Running…" : "Send"}
           </Button>
         </div>
       </div>

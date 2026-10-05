@@ -118,6 +118,7 @@ export class AgentCliHarness implements Harness {
     // as commands it can run, and tell it in AGENTS.md when to reach for each.
     // Both are redone every session: a container's filesystem does not survive
     // sleeping, so nothing written here is still present next message.
+    ctx?.onOutput?.("Preparing the workspace and connecting agent tools…\n");
     const capabilities = ctx?.capabilities ?? [];
     if (ctx?.agentUrl && capabilities.length) {
       await installVmTools(sandbox, agentId, ctx.agentUrl, capabilities);
@@ -216,6 +217,8 @@ export class AgentCliHarness implements Harness {
       `cd /workspace && (id -u agent >/dev/null 2>&1 || useradd -m agent) && ` +
       `chown -R agent /workspace /home/agent && ` +
       `timeout ${CLI_TIMEOUT_SECONDS} runuser -u agent -- sh -c ${shellQuote(inner)}`;
+
+    ctx?.onOutput?.("Starting the agent…\n");
 
     // Streamed when someone is listening: `exec` resolves only at the end, so
     // a run that takes minutes shows nothing until it is over.

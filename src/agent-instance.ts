@@ -306,6 +306,7 @@ export class AgentInstance extends DurableObject<Env> {
         };
       })(),
     });
+    this.recordOutput("Agent response ready.\n");
     this.record(makeMessage("assistant", reply, channel));
     // health != progress: advance last-progress only when a unit of work completes.
     this.setKV("last_progress", Date.now());
@@ -748,7 +749,10 @@ export class AgentInstance extends DurableObject<Env> {
     }
     try {
       if (name === "gmail_search" || name === "gmail_read" || name === "gmail_draft") {
-        return { result: await gmailTool(this.env, this.owner(), { ...input, action: name === "gmail_search" ? "search" : name === "gmail_draft" ? "draft" : "read" }) };
+        this.recordOutput(`${name === "gmail_search" ? "Searching Gmail" : name === "gmail_read" ? "Reading an email conversation" : "Creating a Gmail draft"}…\n`);
+        const result = await gmailTool(this.env, this.owner(), { ...input, action: name === "gmail_search" ? "search" : name === "gmail_draft" ? "draft" : "read" });
+        this.recordOutput(result.error ? `Gmail action failed: ${result.error}\n` : "Gmail action completed.\n");
+        return { result };
       }
       if (name === "run_shell") {
         const { getSandbox } = await import("./sandbox/index.js");

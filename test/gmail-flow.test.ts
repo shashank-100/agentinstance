@@ -46,6 +46,14 @@ it("connects, searches and disconnects Gmail under the initiating account", asyn
     expect(search.status).toBe(200);
     expect(result).toContain("abcdef");
     expect(result).not.toContain("test-refresh");
+    // Activity must reach the dashboard before any assistant reply exists.
+    const activity = await call("/agents/gmail-flow-agent/output?since=0", { headers: { cookie } });
+    const activityText = await activity.text();
+    expect(activity.status).toBe(200);
+    expect(activityText).toContain("Searching Gmail");
+    expect(activityText).toContain("Gmail action completed");
+    expect(activityText).not.toContain("test-refresh");
+
     const draft = await call("/agents/gmail-flow-agent/tool/gmail_draft", { method: "POST", headers: { cookie }, body: JSON.stringify({ to: "candidate@example.com", subject: "Interview", body: "Please share your availability." }) });
     expect(await draft.text()).toContain("draft-123");
     const injected = await call("/agents/gmail-flow-agent/tool/gmail_draft", { method: "POST", headers: { cookie }, body: JSON.stringify({ to: "candidate@example.com\r\nBcc: someone@example.com", subject: "Interview", body: "Hi" }) });
