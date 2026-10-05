@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GoogleAccount } from "./GoogleAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Command,
@@ -142,6 +143,7 @@ export function TopBar() {
         <FleetSummary />
         <div className="ml-auto flex items-center gap-3">
           <CommandBar />
+          <GoogleAccount />
         </div>
       </div>
     </header>

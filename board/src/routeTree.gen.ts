@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectorsRouteImport } from './routes/connectors'
 import { Route as DispatchRouteImport } from './routes/dispatch'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const DispatchRoute = DispatchRouteImport.update({
   path: '/dispatch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TasksIdRoute = TasksIdRouteImport.update({
   id: '/tasks/$id',
   path: '/tasks/$id',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
+  '/privacy': typeof PrivacyRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
+  '/privacy': typeof PrivacyRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/connectors': typeof ConnectorsRoute
   '/dispatch': typeof DispatchRoute
+  '/privacy': typeof PrivacyRoute
   '/tasks/$id': typeof TasksIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/connectors' | '/dispatch' | '/tasks/$id'
+  fullPaths: '/' | '/connectors' | '/dispatch' | '/privacy' | '/tasks/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connectors' | '/dispatch' | '/tasks/$id'
-  id: '__root__' | '/' | '/connectors' | '/dispatch' | '/tasks/$id'
+  to: '/' | '/connectors' | '/dispatch' | '/privacy' | '/tasks/$id'
+  id: '__root__' | '/' | '/connectors' | '/dispatch' | '/privacy' | '/tasks/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConnectorsRoute: typeof ConnectorsRoute
   DispatchRoute: typeof DispatchRoute
+  PrivacyRoute: typeof PrivacyRoute
   TasksIdRoute: typeof TasksIdRoute
 }
 
@@ -92,6 +102,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DispatchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks/$id': {
       id: '/tasks/$id'
       path: '/tasks/$id'
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConnectorsRoute: ConnectorsRoute,
   DispatchRoute: DispatchRoute,
+  PrivacyRoute: PrivacyRoute,
   TasksIdRoute: TasksIdRoute,
 }
 export const routeTree = rootRouteImport
