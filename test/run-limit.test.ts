@@ -10,7 +10,8 @@ const fleet = (name: string) =>
 describe("how much of the pool one person holds", () => {
   it("counts only running tasks, not queued or settled ones", async () => {
     const id = env.FLEET.idFromName("limit-count");
-    await runInDurableObject(env.FLEET.get(id), async (f: FleetDO) => {
+    await runInDurableObject(env.FLEET.get(id) as never, async (instance) => {
+      const f = instance as unknown as FleetDO;
       const a = await f.enqueue({ goal: "one" });
       const b = await f.enqueue({ goal: "two" });
       await f.enqueue({ goal: "three" });
