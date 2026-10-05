@@ -109,13 +109,13 @@ function DispatchPage() {
                 {catalog?.machines.map((m) => (
                   <button type="button" key={m.id} aria-pressed={machine === m.id} onClick={() => setMachine(m.id)}
                     className={cn("rounded-lg border px-3 py-3 text-left text-sm transition-colors", machine === m.id ? "border-primary/50 bg-surface-2" : "border-border hover:border-border-strong")}>
-                    {m.label}<span className="mt-1 block text-xs text-muted-foreground">{m.ramGb} GB RAM · ${m.usdPerHour}/hr</span>
+                    {m.label}<span className="mt-1 block text-xs text-muted-foreground">{m.ramGb} GB RAM</span>
                   </button>
                 ))}
               </div>
             </details>
             <p role="status" className="mt-4 text-xs text-muted-foreground">
-              {!catalog ? "Loading available agents…" : !chosenHarness ? "No agent is configured. Add an agent credential before starting." : `Ready with ${harnessLabel[chosenHarness]}${tier ? ` · ${tier.label} · $${tier.usdPerHour}/hr while running` : ""}.`}
+              {!catalog ? "Loading available agents…" : !chosenHarness ? "No agent is configured. Add an agent credential before starting." : `Ready with ${harnessLabel[chosenHarness]}${tier ? ` · ${tier.label}` : ""}.`}
             </p>
             <div className="mt-6 flex items-center justify-between gap-4 border-t border-border pt-5">
               <p className="text-xs text-muted-foreground">Follow progress and review the result after starting.</p>
