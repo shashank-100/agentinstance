@@ -1,8 +1,8 @@
 # Gmail connection
 
 The Connectors tab can connect Gmail for searching and reading conversations. The
-OAuth grant is `gmail.readonly`; no sending, deleting, or mailbox modification
-is implemented. Email content is treated as untrusted input by the tools.
+OAuth grants are `gmail.readonly` and `gmail.compose`: reading, creating drafts,
+and sending reviewed drafts. Email content is treated as untrusted input by the tools.
 
 Create a Google Cloud project, enable the Gmail API, configure the OAuth consent
 screen, and create an OAuth client of type **Web application**. In testing mode,
@@ -23,6 +23,13 @@ from the verified Gmail address. Existing deployment tasks stay in their origina
 namespace. OAuth state is signed, expires in ten minutes, and binds the initiating
 account to the callback. Refresh tokens stay in that account's registry and are
 never included in tool responses or sent into the agent VM.
+
+Sign-in also creates or resumes the account identified by the verified Gmail
+address, retaining the same private chats and tasks. Existing read-only users
+choose Enable write access in Connectors to upgrade consent. Agents use
+`gmail_draft <to> <subject> <body...>` to save a plain-text draft. The signed-in
+user reviews and sends it in Connectors; `gmail_send` is not an agent tool.
+Drafts containing HTML, attachments, Cc or Bcc must be sent in Gmail.
 
 Start a task without a repository, for example:
 

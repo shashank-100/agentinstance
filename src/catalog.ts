@@ -248,6 +248,7 @@ const CAPABILITY_DEFS: Record<string, Described> = {
   // The work queue, from inside the VM: claim a task, record a branch or a
   // pull request against it, and settle it.
   gmail_search: { desc: "Search connected Gmail conversations (read only).", needs: (env) => has(env, "GMAIL_CONNECTION") },
+  gmail_draft: { desc: "Create Gmail drafts for the user to review and send from Connectors.", needs: (env) => has(env, "GMAIL_CONNECTION") && String(env.GMAIL_CONNECTION).includes("gmail.compose") },
   gmail_read: { desc: "Read a connected Gmail conversation.", needs: (env) => has(env, "GMAIL_CONNECTION") },
   fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
   // Git against a real remote. Without a credential an agent can still clone a

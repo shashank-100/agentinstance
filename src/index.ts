@@ -899,7 +899,7 @@ async function dispatchTask(
   const spec = defaultSpec({
     harness: opts.harness ?? "claude-code",
     model: opts.model ?? "claude-opus-5",
-    capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr", ...(Boolean((keyed as unknown as Record<string, unknown>).GMAIL_CONNECTION) ? ["gmail_search", "gmail_read"] : [])],
+    capabilities: ["fleet_task", "run_shell", "git_repo", "open_pr", ...(Boolean((keyed as unknown as Record<string, unknown>).GMAIL_CONNECTION) ? ["gmail_search", "gmail_read", "gmail_draft"] : [])],
     machine: opts.machine ?? "one-cpu",
   });
   const agent = agentStub(env, agentId, owner);
