@@ -4,6 +4,14 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { sendToAgent, type OutputRow } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function AgentMessage({ text }: { text: string }) {
+  return <div className="break-words text-sm leading-7 [&_p]:mb-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-surface-2 [&_pre]:p-3 [&_code]:font-mono [&_code]:text-xs [&_table]:my-4 [&_table]:w-full [&_th]:border [&_th]:border-border [&_th]:p-2 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:p-2 [&_a]:text-primary [&_a]:underline [&_h2]:my-4 [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:font-semibold">
+    <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{text}</ReactMarkdown>
+  </div>;
+}
 
 /**
  * A task as a conversation.
@@ -79,23 +87,23 @@ export function Conversation({
           <div key={i} className={cn("flex px-4 py-4", m.role === "user" ? "justify-end" : "justify-start")}>
             <div className={cn("min-w-0 max-w-[90%]", m.role === "user" ? "rounded-2xl bg-surface-2 px-5 py-3" : "w-full py-2")}>
               <p className="mb-2 text-xs font-medium text-muted-foreground">{m.role === "user" ? "You" : "Agent"}</p>
-              <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                {i === 0 && m.role === "user" && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
-              </p>
+              {m.role === "user" ? <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                {i === 0 && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
+              </p> : <AgentMessage text={m.content} />}
             </div>
           </div>
         ))}
         {result && !messages.some((m) => m.role === "assistant") && (
-          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p><p className="whitespace-pre-wrap break-words text-sm leading-7">{result}</p></div>
+          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p><AgentMessage text={result} /></div>
         )}
 
         {output.length > 0 && (
-          <section aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
-            <p className="mb-2 text-xs font-medium">{live || sending ? "Live activity" : "Activity"}</p>
+          <details key={live || sending ? "live" : "finished"} open={live || sending} aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
+            <summary className="mb-2 cursor-pointer text-xs text-muted-foreground">{live || sending ? "Live activity" : "View activity log"}</summary>
             <pre role="log" aria-live="polite" aria-relevant="additions text" className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-3 font-sans text-sm leading-6 text-muted-foreground">
               {output.map((r) => r.text).join("")}
             </pre>
-          </section>
+          </details>
         )}
         {(live || sending) && (
           <p role="status" className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
