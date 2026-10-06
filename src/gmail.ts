@@ -88,21 +88,24 @@ export async function gmailTool(env: Env, owner: string, input: Record<string, u
   const raw = (await storedKeys(env, owner))[KEY];
   if (!raw) return { error: "Connect Gmail on the dashboard before using this tool." };
   const connection = JSON.parse(raw) as Connection;
-  if (["draft", "drafts", "send"].includes(String(input.action)) && !connection.scopes?.includes(COMPOSE_SCOPE)) return { error: "Reconnect Gmail to enable drafts and sending." };
+  if (["draft", "drafts", "send", "send_message"].includes(String(input.action)) && !connection.scopes?.includes(COMPOSE_SCOPE)) return { error: "Reconnect Gmail to enable drafts and sending." };
   const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID ?? "", client_secret: env.GOOGLE_CLIENT_SECRET ?? "", refresh_token: connection.refreshToken, grant_type: "refresh_token" }) });
   const token = await response.json() as { access_token?: string };
   if (!response.ok || !token.access_token) return { error: "Gmail authorization expired. Reconnect Gmail." };
   const headers = { authorization: `Bearer ${token.access_token}` };
   const base = "https://gmail.googleapis.com/gmail/v1/users/me";
-  if (input.action === "draft") {
+  if (input.action === "draft" || input.action === "send_message") {
     const to = String(input.to ?? "").trim();
     const subject = String(input.subject ?? "").trim();
     const body = String(input.body ?? "");
     if (!to || to.length > 1000 || !to.split(",").every((recipient) => /^[^\s@,<>]+@[^\s@,<>]+\.[^\s@,<>]+$/.test(recipient.trim()))) return { error: "Supply valid recipient email addresses, separated by commas." };
     if (!subject || /[\r\n]/.test(subject) || subject.length > 500 || !body.trim() || body.length > 100_000) return { error: "Supply a subject (up to 500 characters) and message body (up to 100,000 characters)." };
     const mime = `From: ${connection.email}\r\nTo: ${to}\r\nSubject: =?UTF-8?B?${encode(subject)}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(body).match(/.{1,76}/g)!.join("\r\n")}\r\n`;
-    const res = await fetch(`${base}/drafts`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ message: { raw: encode(mime).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") } }) });
-    if (!res.ok) return { error: `Gmail draft creation failed (${res.status}).` };
+    const message = { raw: encode(mime).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") };
+    const sending = input.action === "send_message";
+    const res = await fetch(`${base}/${sending ? "messages/send" : "drafts"}`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(sending ? message : { message }) });
+    if (!res.ok) return { error: `Gmail ${sending ? "send" : "draft creation"} failed (${res.status}).${sending ? " Check Sent mail before retrying." : ""}` };
+    if (sending) return { ...await res.json() as Record<string, unknown>, sent: true };
     return { ...await res.json() as Record<string, unknown>, note: "Draft saved. Ask the user to review and send it in Gmail. No email was sent." };
   }
   if (input.action === "drafts") {

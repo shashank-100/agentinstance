@@ -748,9 +748,9 @@ export class AgentInstance extends DurableObject<Env> {
       return { error: `capability '${name}' not enabled for this agent` };
     }
     try {
-      if (name === "gmail_search" || name === "gmail_read" || name === "gmail_draft") {
-        this.recordOutput(`${name === "gmail_search" ? "Searching Gmail" : name === "gmail_read" ? "Reading an email conversation" : "Creating a Gmail draft"}…\n`);
-        const result = await gmailTool(this.env, this.owner(), { ...input, action: name === "gmail_search" ? "search" : name === "gmail_draft" ? "draft" : "read" });
+      if (name === "gmail_search" || name === "gmail_read" || name === "gmail_draft" || name === "gmail_send") {
+        this.recordOutput(`${name === "gmail_search" ? "Searching Gmail" : name === "gmail_read" ? "Reading an email conversation" : name === "gmail_send" ? "Sending an email" : "Creating a Gmail draft"}…\n`);
+        const result = await gmailTool(this.env, this.owner(), { ...input, action: name === "gmail_search" ? "search" : name === "gmail_draft" ? "draft" : name === "gmail_send" ? "send_message" : "read" });
         this.recordOutput(result.error ? `Gmail action failed: ${result.error}\n` : "Gmail action completed.\n");
         return { result };
       }
