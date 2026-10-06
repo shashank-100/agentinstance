@@ -27,10 +27,24 @@ function GmailRecovery({ onRetry }: { onRetry?: (() => Promise<void>) | undefine
       <a href="/connectors" className="rounded-md border border-border px-3 py-2 text-sm">{connected || status.isPending || status.isError ? "Check Gmail connection" : "Connect Gmail"}</a>
       {connected && onRetry && <Button disabled={retrying} onClick={() => {
         setRetrying(true);
-        void onRetry().catch((error: Error) => toast.error("Could not retry", { description: error.message })).finally(() => setRetrying(false));
+        void onRetry().catch((error: Error) => toast.error("Could not retry. Please try again shortly.")).finally(() => setRetrying(false));
       }}>{retrying ? "Starting…" : "Retry task"}</Button>}
     </div>
   </div>;
+}
+
+function FailureRecovery({ reason, onRetry }: { reason: string; onRetry?: (() => Promise<void>) | undefined }) {
+  const [retrying, setRetrying] = useState(false);
+  const permission = /permission|forbidden|access denied|403/i.test(reason);
+  const credentials = /credentials|api.?key|unauthorized|401|authentication/i.test(reason);
+  const limit = /rate.?limit|quota|429|credit|usage.?limit/i.test(reason);
+  const connection = /connector|not connected|connect.*account|oauth/i.test(reason);
+  const timeout = /timeout|timed out|temporarily|503|502|unavailable/i.test(reason);
+  const message = permission ? "I couldn’t access something this task needs. Check the connected account’s permissions, then retry." : credentials ? "An account credential is missing or expired. Update the account connection or agent credentials, then retry." : limit ? "A service has reached its usage limit. Check your available usage or wait for the limit to reset, then retry." : connection ? "This task needs an app connection. Connect the required account in Connectors, then retry." : timeout ? "A service didn’t respond in time. Please try this task again shortly." : "I couldn’t complete this task. Try again, or add more detail about what you need.";
+  return <div className="py-2 text-sm leading-7"><p>{message}</p><div className="mt-3 flex gap-3">
+    {(permission || credentials || connection) && <a href="/connectors" className="rounded-md border border-border px-3 py-2 text-sm">Check connections</a>}
+    {onRetry && <Button disabled={retrying} onClick={() => { setRetrying(true); void onRetry().catch(() => toast.error("Could not retry. Please try again shortly.")).finally(() => setRetrying(false)); }}>{retrying ? "Starting…" : "Retry task"}</Button>}
+  </div></div>;
 }
 
 /**
@@ -115,15 +129,17 @@ export function Conversation({
               <p className="mb-2 text-xs font-medium text-muted-foreground">{m.role === "user" ? "You" : "Agent"}</p>
               {m.role === "user" ? <p className="whitespace-pre-wrap break-words text-sm leading-7">
                 {i === 0 && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
-              </p> : needsGmail && i === messages.length - 1 ? <GmailRecovery onRetry={onRetry} /> : <AgentMessage text={m.content} />}
+              </p> : failed && i === messages.length - 1 ? needsGmail ? <GmailRecovery onRetry={onRetry} /> : <FailureRecovery reason={failureText} onRetry={onRetry} /> : <AgentMessage text={m.content} />}
             </div>
           </div>
         ))}
         {result && !messages.some((m) => m.role === "assistant") && (
-          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p>{needsGmail ? <GmailRecovery onRetry={onRetry} /> : <AgentMessage text={result} />}</div>
+          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p>{failed ? needsGmail ? <GmailRecovery onRetry={onRetry} /> : <FailureRecovery reason={failureText} onRetry={onRetry} /> : <AgentMessage text={result} />}</div>
         )}
 
-        {output.length > 0 && !needsGmail && (
+        {failed && !result && !messages.some((m) => m.role === "assistant") && <div className="px-4 py-4"><FailureRecovery reason={failureText} onRetry={onRetry} /></div>}
+
+        {output.length > 0 && !failed && (
           <details key={live || sending ? "live" : "finished"} open={live || sending} aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
             <summary className="mb-2 cursor-pointer text-xs text-muted-foreground">{live || sending ? "Live activity" : "View activity log"}</summary>
             <pre role="log" aria-live="polite" aria-relevant="additions text" className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-3 font-sans text-sm leading-6 text-muted-foreground">

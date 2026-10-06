@@ -922,6 +922,7 @@ async function dispatchTask(
           (task.repo ? `and open a pull request with open_pr. Record the branch and PR on task ` : `Record the result on task `) +
           `${task.id} with fleet_task as you go, then settle it. If you cannot ` +
           `finish, mark the task failed with the reason. Keep the user-facing answer concise and practical. ` +
+          `For any failure, explain the blocker briefly in plain language and give a concrete next step: connect the needed app, update permissions or credentials, wait for a usage limit, or retry a temporary failure. ` +
           `If Gmail access is missing or expired, ask the user to connect Gmail in Connectors and retry. ` +
           `Do not include internal tool registries, MCP settings, credentials, queue IDs, or debugging investigations in the user-facing answer. ` +
           `This task is already assigned: do not call fleet_task with no arguments or claim unrelated tasks.`,
