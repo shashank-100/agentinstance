@@ -21,7 +21,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@cloudflare/sandbox": "^0.12.9"
+    "@cloudflare/sandbox": "^0.12.9",
+    "mammoth": "^1.13.0",
+    "unpdf": "^1.8.1"
   },
   "allowScripts": {
     "workerd@1.20260815.1": true,

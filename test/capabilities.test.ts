@@ -81,6 +81,7 @@ describe("capabilities", () => {
       "gmail_read",
       "gmail_draft",
       "gmail_send",
+      "gmail_attachment",
     ]);
     for (const name of Object.keys(CAPABILITIES)) {
       if (onTheAgent.has(name)) continue;

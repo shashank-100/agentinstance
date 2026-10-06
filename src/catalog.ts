@@ -251,6 +251,7 @@ const CAPABILITY_DEFS: Record<string, Described> = {
   gmail_draft: { desc: "Create Gmail drafts for the user to review and send from Connectors.", needs: (env) => has(env, "GMAIL_CONNECTION") && String(env.GMAIL_CONNECTION).includes("gmail.compose") },
   gmail_send: { desc: "Send Gmail messages when explicitly requested by the user.", needs: (env) => has(env, "GMAIL_CONNECTION") && String(env.GMAIL_CONNECTION).includes("gmail.compose") },
   gmail_read: { desc: "Read a connected Gmail conversation.", needs: (env) => has(env, "GMAIL_CONNECTION") },
+  gmail_attachment: { desc: "Read text from PDF, DOCX, and text resume attachments in connected Gmail.", needs: (env) => has(env, "GMAIL_CONNECTION") },
   fleet_task: { desc: "Claim and complete tasks from the work queue.", needs: () => true },
   // Git against a real remote. Without a credential an agent can still clone a
   // public repo but cannot push, so these are offered only when one is set —
