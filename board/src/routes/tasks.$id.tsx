@@ -14,7 +14,6 @@ import {
   CheckIcon,
   DiffStat,
   HarnessTag,
-  NodeKindDot,
   StatusPill,
 } from "@/components/board/atoms";
 import { ArrowLeft, GitBranch } from "lucide-react";
@@ -56,7 +55,6 @@ function TaskView() {
   const { messages } = useAgentHistory(agentId, task?.status === "running");
   const [activeFile, setActiveFile] = useState("");
   const [activeTab, setActiveTab] = useState("chat");
-  const [developerView, setDeveloperView] = useState(false);
   // The diff only exists once a pull request does, so the fetch waits for one.
   const {
     files: changed,
@@ -202,19 +200,13 @@ function TaskView() {
                 <TabsTrigger value="chat">Conversation</TabsTrigger>
                 {changed.length > 0 && <TabsTrigger value="diff">Changes <span className="ml-1.5 text-muted-foreground">{changed.length}</span></TabsTrigger>}
                 <TabsTrigger value="prompt">Details</TabsTrigger>
-                {developerView && <TabsTrigger value="terminal">Terminal</TabsTrigger>}
-                {developerView && <TabsTrigger value="graph">A2A graph</TabsTrigger>}
               </TabsList>
-              <button type="button" aria-pressed={developerView} onClick={() => {
-                if (developerView && (activeTab === "terminal" || activeTab === "graph")) setActiveTab("chat");
-                setDeveloperView(!developerView);
-              }} className="text-xs text-muted-foreground hover:text-foreground">{developerView ? "Hide developer view" : "Developer view"}</button>
             </div>
 
             {/* The turns, with the run's output folded in beside them, and a
                 composer: a dispatch is the first message rather than a job,
                 so direction after it continues the same agent in the same
-                checkout. The Terminal tab keeps the raw stream on its own. */}
+                checkout. */}
             <TabsContent value="chat" className="mt-3">
               <Conversation
                 taskPrompt={task.prompt}
@@ -301,90 +293,6 @@ function TaskView() {
                   </div>
                 </div>
               )}
-            </TabsContent>
-
-            <TabsContent value="terminal" className="mt-3">
-              <div className="grid-rail overflow-hidden rounded-md border border-border bg-surface">
-                <div className="flex items-center gap-2 border-b border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
-                  <span className="size-1.5 rounded-full bg-success" />
-                  {task.vm} · {task.repo}
-                </div>
-                {/* What the CLI actually printed, streamed into the agent's DO
-                    as it ran and followed here with `?since=`. This tab used
-                    to render the transcript alone, on the since-outdated basis
-                    that container stdout was never captured — so a run in
-                    progress showed nothing until its turn had ended. */}
-                <div className="max-h-[520px] overflow-y-auto p-3 font-mono text-[11.5px] leading-6">
-                  {outputRows.length === 0 && (
-                    <p className="text-muted-foreground">
-                      {task.vm === "—"
-                        ? "No agent has claimed this task yet."
-                        : task.status === "running"
-                          ? "Waiting for the first output…"
-                          : "This run printed nothing, or its output has aged out."}
-                    </p>
-                  )}
-                  {outputRows.length > 0 && (
-                    <pre className="whitespace-pre-wrap break-words text-foreground">
-                      {outputRows.map((r) => r.text).join("")}
-                    </pre>
-                  )}
-                  {task.status === "running" && (
-                    <div className="mt-1 inline-block h-4 w-2 animate-pulse bg-primary align-middle" />
-                  )}
-                </div>
-
-                {/* The turns themselves: what the agent concluded, as opposed
-                    to what it printed on the way there. */}
-                {messages.length > 0 && (
-                  <div className="border-t border-border">
-                    <p className="rule-label px-3 pt-2.5">Transcript</p>
-                    <div className="max-h-56 overflow-y-auto p-3 font-mono text-[11.5px] leading-6">
-                      {messages.map((m, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-3 border-b border-border/40 py-1.5 last:border-0"
-                        >
-                          <span className="w-16 shrink-0 text-muted-foreground">
-                            {new Date(m.ts).toISOString().slice(11, 19)}
-                          </span>
-                          <span
-                            className={cn(
-                              "min-w-0 whitespace-pre-wrap break-words",
-                              m.role === "user" ? "text-muted-foreground" : "text-foreground",
-                            )}
-                          >
-                            {m.content}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="graph" className="mt-3">
-              <div className="rounded-md border border-border bg-surface p-4">
-                <ol className="space-y-0">
-                  {task.graph.map((n, i) => (
-                    <li key={n.id} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <NodeKindDot status={n.status} />
-                        {i < task.graph.length - 1 && (
-                          <span className="my-1 w-px flex-1 bg-border" />
-                        )}
-                      </div>
-                      <div className="pb-5">
-                        <p className="text-xs font-medium">{n.label}</p>
-                        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                          {n.kind} · {n.meta}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
             </TabsContent>
 
             <TabsContent value="prompt" className="mt-3">
