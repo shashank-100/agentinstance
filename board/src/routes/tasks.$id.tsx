@@ -168,25 +168,25 @@ function TaskView() {
               disabled={releasing || !canRelease}
               title={
                 canRelease
-                  ? "Put this task back on the queue for another agent"
-                  : "Only a running or failed task can be requeued"
+                  ? "Prepare this task to run again"
+                  : "Only a running or failed task can be retried"
               }
               onClick={() => {
                 setReleasing(true);
                 releaseTask(task.id)
                   .then(() => {
                     void queryClient.invalidateQueries({ queryKey: ["fleet"] });
-                    toast.success("Task requeued", {
-                      description: `${task.id} is back on the queue`,
+                    toast.success("Task ready to retry", {
+                      description: `Choose Start task to run it again`,
                     });
                   })
                   .catch((e: Error) =>
-                    toast.error("Could not requeue the task", { description: e.message }),
+                    toast.error("Could not prepare the task for retry", { description: e.message }),
                   )
                   .finally(() => setReleasing(false));
               }}
             >
-              {releasing ? "Requeueing…" : "Requeue task"}
+              {releasing ? "Preparing…" : "Retry task"}
             </Button>
           </div>
         </div>
