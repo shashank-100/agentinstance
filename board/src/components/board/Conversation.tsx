@@ -23,11 +23,15 @@ export function Conversation({
   messages,
   output,
   live,
+  taskPrompt,
+  result,
 }: {
   agentId: string | null;
   messages: { role: string; content: string; ts: number }[];
   output: OutputRow[];
   live: boolean;
+  taskPrompt?: string;
+  result?: string;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -63,7 +67,7 @@ export function Conversation({
   };
 
   return (
-    <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface">
+    <div className="flex min-h-0 flex-col bg-background">
       <div className="min-h-0 flex-1 overflow-y-auto">
         {messages.length === 0 && output.length === 0 && (
           <p className="p-4 font-mono text-[11.5px] text-muted-foreground">
@@ -72,22 +76,18 @@ export function Conversation({
         )}
 
         {messages.map((m, i) => (
-          <div key={i} className="border-b border-border/40 px-4 py-3 last:border-0">
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-              {m.role === "user" ? "you" : agentId}
-              <span className="ml-2 opacity-60">{new Date(m.ts).toISOString().slice(11, 16)}</span>
-            </p>
-            <p
-              className={cn(
-                "whitespace-pre-wrap break-words text-[13px] leading-relaxed",
-                m.role === "user" ? "text-muted-foreground" : "text-foreground",
-              )}
-            >
-              {m.content}
-            </p>
-
+          <div key={i} className={cn("flex px-4 py-4", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div className={cn("min-w-0 max-w-[90%]", m.role === "user" ? "rounded-2xl bg-surface-2 px-5 py-3" : "w-full py-2")}>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">{m.role === "user" ? "You" : "Agent"}</p>
+              <p className="whitespace-pre-wrap break-words text-sm leading-7">
+                {i === 0 && m.role === "user" && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
+              </p>
+            </div>
           </div>
         ))}
+        {result && !messages.some((m) => m.role === "assistant") && (
+          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p><p className="whitespace-pre-wrap break-words text-sm leading-7">{result}</p></div>
+        )}
 
         {output.length > 0 && (
           <section aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
@@ -108,7 +108,7 @@ export function Conversation({
       {/* Direction, not a chat box for its own sake: a settled task can still
           take a follow-up, because the agent kept its history and its
           checkout. Disabled only when there is no agent to talk to. */}
-      <div className="shrink-0 border-t border-border p-2.5">
+      <div className="sticky bottom-0 mt-5 shrink-0 rounded-2xl border border-border bg-surface p-3">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -121,9 +121,10 @@ export function Conversation({
           rows={2}
           disabled={!agentId || sending}
           placeholder={
-            agentId ? "Ask for a change — ⌘↵ to send" : "No agent has claimed this task yet"
+            agentId ? "Message your agent…" : "No agent has claimed this task yet"
           }
-          className="w-full resize-none rounded border border-border bg-background px-2.5 py-2 font-mono text-[12px] leading-5 placeholder:text-muted-foreground/70 focus:border-border-strong focus:outline-none disabled:opacity-50"
+          aria-label="Message your agent"
+          className="w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
         />
         <div className="mt-2 flex items-center justify-between">
           <span className="font-mono text-[10px] text-muted-foreground">

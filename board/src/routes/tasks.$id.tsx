@@ -55,6 +55,8 @@ function TaskView() {
   const { rows: outputRows } = useAgentOutput(agentId, task?.status === "running");
   const { messages } = useAgentHistory(agentId, task?.status === "running");
   const [activeFile, setActiveFile] = useState("");
+  const [activeTab, setActiveTab] = useState("chat");
+  const [developerView, setDeveloperView] = useState(false);
   // The diff only exists once a pull request does, so the fetch waits for one.
   const {
     files: changed,
@@ -194,40 +196,29 @@ function TaskView() {
         <div className="mt-7 border-t border-border pt-5" />
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Tabs defaultValue="chat" className="min-w-0">
-            <TabsList className="h-10 bg-surface-2">
-              <TabsTrigger value="chat" className="font-mono text-[11px] tracking-wide">
-                Conversation
-              </TabsTrigger>
-              <TabsTrigger value="diff" className="font-mono text-[11px] tracking-wide">
-                Files changed
-                {changed.length > 0 && (
-                  <span className="ml-1.5 text-muted-foreground">{changed.length}</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="terminal" className="font-mono text-[11px] tracking-wide">
-                Terminal
-              </TabsTrigger>
-              <TabsTrigger value="graph" className="font-mono text-[11px] tracking-wide">
-                A2A graph
-              </TabsTrigger>
-              <TabsTrigger value="prompt" className="font-mono text-[11px] tracking-wide">
-                Prompt
-              </TabsTrigger>
-            </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <TabsList className="h-10 bg-surface-2">
+                <TabsTrigger value="chat">Conversation</TabsTrigger>
+                {changed.length > 0 && <TabsTrigger value="diff">Changes <span className="ml-1.5 text-muted-foreground">{changed.length}</span></TabsTrigger>}
+                <TabsTrigger value="prompt">Details</TabsTrigger>
+                {developerView && <TabsTrigger value="terminal">Terminal</TabsTrigger>}
+                {developerView && <TabsTrigger value="graph">A2A graph</TabsTrigger>}
+              </TabsList>
+              <button type="button" aria-pressed={developerView} onClick={() => {
+                if (developerView && (activeTab === "terminal" || activeTab === "graph")) setActiveTab("chat");
+                setDeveloperView(!developerView);
+              }} className="text-xs text-muted-foreground hover:text-foreground">{developerView ? "Hide developer view" : "Developer view"}</button>
+            </div>
 
             {/* The turns, with the run's output folded in beside them, and a
                 composer: a dispatch is the first message rather than a job,
                 so direction after it continues the same agent in the same
                 checkout. The Terminal tab keeps the raw stream on its own. */}
             <TabsContent value="chat" className="mt-3">
-              {task.logs.length > 0 && (
-                <section className="mb-4 rounded-lg border border-border bg-surface-2 p-4">
-                  <h2 className="mb-2 text-sm font-medium">Task result</h2>
-                  {task.logs.map((entry, index) => <p key={index} className="whitespace-pre-wrap break-words text-sm leading-6">{entry.text}</p>)}
-                </section>
-              )}
               <Conversation
+                taskPrompt={task.prompt}
+                result={task.logs.map((entry) => entry.text).join("\n")}
                 agentId={agentId}
                 messages={messages}
                 output={outputRows}
@@ -398,8 +389,13 @@ function TaskView() {
 
             <TabsContent value="prompt" className="mt-3">
               <div className="rounded-md border border-border bg-surface p-4">
-                <p className="rule-label">Dispatched prompt</p>
-                <p className="mt-2.5 font-mono text-xs leading-6">{task.prompt}</p>
+                <p className="rule-label">Task instructions</p>
+                <p className="mt-2.5 whitespace-pre-wrap text-sm leading-6">{task.prompt}</p>
+                <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 border-t border-border pt-4 text-xs">
+                  <dt className="text-muted-foreground">Agent</dt><dd>{task.vm}</dd>
+                  <dt className="text-muted-foreground">Runtime</dt><dd>{runtimeLabel[task.runtime]}</dd>
+                  {task.repo !== "—" && <><dt className="text-muted-foreground">Repository</dt><dd>{task.repo}</dd></>}
+                </dl>
               </div>
             </TabsContent>
           </Tabs>
