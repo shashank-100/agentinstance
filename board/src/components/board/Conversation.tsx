@@ -139,7 +139,7 @@ export function Conversation({
 
         {failed && !result && !messages.some((m) => m.role === "assistant") && <div className="px-4 py-4"><FailureRecovery reason={failureText} onRetry={onRetry} /></div>}
 
-        {output.length > 0 && !failed && (
+        {output.length > 0 && (
           <details key={live || sending ? "live" : "finished"} open={live || sending} aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
             <summary className="mb-2 cursor-pointer text-xs text-muted-foreground">{live || sending ? "Live activity" : "View activity log"}</summary>
             <pre role="log" aria-live="polite" aria-relevant="additions text" className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-3 font-sans text-sm leading-6 text-muted-foreground">
