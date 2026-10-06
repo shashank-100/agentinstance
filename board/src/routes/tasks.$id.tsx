@@ -209,6 +209,12 @@ function TaskView() {
                 checkout. */}
             <TabsContent value="chat" className="mt-3">
               <Conversation
+                failed={task.state === "failed"}
+                onRetry={async () => {
+                  await releaseTask(task.id);
+                  await dispatchTask(task.id);
+                  await queryClient.invalidateQueries({ queryKey: ["fleet"] });
+                }}
                 taskPrompt={task.prompt}
                 result={task.logs.map((entry) => entry.text).join("\n")}
                 agentId={agentId}

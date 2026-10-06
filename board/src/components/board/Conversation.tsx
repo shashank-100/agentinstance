@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { sendToAgent, type OutputRow } from "@/lib/api";
+import { apiUrl, sendToAgent, type OutputRow } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,6 +10,26 @@ import remarkGfm from "remark-gfm";
 function AgentMessage({ text }: { text: string }) {
   return <div className="break-words text-sm leading-7 [&_p]:mb-3 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-surface-2 [&_pre]:p-3 [&_code]:font-mono [&_code]:text-xs [&_table]:my-4 [&_table]:w-full [&_th]:border [&_th]:border-border [&_th]:p-2 [&_th]:text-left [&_td]:border [&_td]:border-border [&_td]:p-2 [&_a]:text-primary [&_a]:underline [&_h2]:my-4 [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:font-semibold">
     <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{text}</ReactMarkdown>
+  </div>;
+}
+
+function GmailRecovery({ onRetry }: { onRetry?: (() => Promise<void>) | undefined }) {
+  const [retrying, setRetrying] = useState(false);
+  const status = useQuery({ queryKey: ["gmail", "status"], queryFn: async () => {
+    const response = await fetch(apiUrl("/gmail/status"), { credentials: "include" });
+    if (!response.ok) throw new Error("Connection unavailable");
+    return await response.json() as { connected: boolean };
+  }, retry: false });
+  const connected = status.data?.connected;
+  return <div className="py-2 text-sm leading-7">
+    <p>{connected ? "Gmail is connected now. Retry this task to summarize your emails." : "I need a Gmail connection to summarize your emails. Open Connectors, choose Connect Gmail, and approve access with Google. Then come back and retry this task."}</p>
+    <div className="mt-3 flex gap-3">
+      <a href="/connectors" className="rounded-md border border-border px-3 py-2 text-sm">{connected || status.isPending || status.isError ? "Check Gmail connection" : "Connect Gmail"}</a>
+      {connected && onRetry && <Button disabled={retrying} onClick={() => {
+        setRetrying(true);
+        void onRetry().catch((error: Error) => toast.error("Could not retry", { description: error.message })).finally(() => setRetrying(false));
+      }}>{retrying ? "Starting…" : "Retry task"}</Button>}
+    </div>
   </div>;
 }
 
@@ -33,6 +53,8 @@ export function Conversation({
   live,
   taskPrompt,
   result,
+  failed,
+  onRetry,
 }: {
   agentId: string | null;
   messages: { role: string; content: string; ts: number }[];
@@ -40,7 +62,11 @@ export function Conversation({
   live: boolean;
   taskPrompt?: string;
   result?: string;
+  failed?: boolean;
+  onRetry?: (() => Promise<void>) | undefined;
 }) {
+  const failureText = result || messages.filter((m) => m.role === "assistant").at(-1)?.content || "";
+  const needsGmail = Boolean(failed && /(?:no Gmail access|Gmail.*(?:not connected|unavailable)|connect Gmail|no.*Gmail.*tools|Gmail.*authorization expired)/i.test(failureText));
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const queryClient = useQueryClient();
@@ -89,15 +115,15 @@ export function Conversation({
               <p className="mb-2 text-xs font-medium text-muted-foreground">{m.role === "user" ? "You" : "Agent"}</p>
               {m.role === "user" ? <p className="whitespace-pre-wrap break-words text-sm leading-7">
                 {i === 0 && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
-              </p> : <AgentMessage text={m.content} />}
+              </p> : needsGmail && i === messages.length - 1 ? <GmailRecovery onRetry={onRetry} /> : <AgentMessage text={m.content} />}
             </div>
           </div>
         ))}
         {result && !messages.some((m) => m.role === "assistant") && (
-          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p><AgentMessage text={result} /></div>
+          <div className="px-4 py-4"><p className="mb-2 text-xs font-medium text-muted-foreground">Agent</p>{needsGmail ? <GmailRecovery onRetry={onRetry} /> : <AgentMessage text={result} />}</div>
         )}
 
-        {output.length > 0 && (
+        {output.length > 0 && !needsGmail && (
           <details key={live || sending ? "live" : "finished"} open={live || sending} aria-label="Agent activity" className="border-t border-border/40 px-4 py-3">
             <summary className="mb-2 cursor-pointer text-xs text-muted-foreground">{live || sending ? "Live activity" : "View activity log"}</summary>
             <pre role="log" aria-live="polite" aria-relevant="additions text" className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded bg-surface-2 p-3 font-sans text-sm leading-6 text-muted-foreground">
