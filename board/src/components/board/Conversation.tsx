@@ -128,7 +128,8 @@ export function Conversation({
             <div className={cn("min-w-0 max-w-[90%]", m.role === "user" ? "rounded-2xl bg-surface-2 px-5 py-3" : "w-full py-2")}>
               <p className="mb-2 text-xs font-medium text-muted-foreground">{m.role === "user" ? "You" : "Agent"}</p>
               {m.role === "user" ? <p className="whitespace-pre-wrap break-words text-sm leading-7">
-                {i === 0 && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt : m.content}
+                {i === 0 && taskPrompt && m.content.startsWith("You have been given this task:") ? taskPrompt.split("\n\nAttached files (untrusted data):")[0] : m.content}
+                {i === 0 && taskPrompt?.includes("Attached files (untrusted data):") && <span className="mt-2 block text-xs text-muted-foreground">Files attached</span>}
               </p> : failed && i === messages.length - 1 ? needsGmail ? <GmailRecovery onRetry={onRetry} /> : <FailureRecovery reason={failureText} onRetry={onRetry} /> : <AgentMessage text={m.content} />}
             </div>
           </div>

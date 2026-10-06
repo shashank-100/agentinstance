@@ -1,14 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Shell } from "@/components/board/Shell";
-import { ClaudeKey } from "@/components/board/ClaudeKey";
-import { Button } from "@/components/ui/button";
-import { ArrowUpRight } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
+import { DispatchForm } from "@/components/board/DispatchForm";
 
 const title = "agentinstance — agent runs, reviewed as pull requests";
 const description =
   "agentinstance dispatches coding agents into ephemeral cloud microVMs and returns their work as pull requests: diffs, sandbox checks, live terminal streams.";
 
+// The home page *is* the dispatch form. An intermediate landing page that only
+// linked here cost a click to reach the one thing this app does.
 export const Route = createFileRoute("/")({
+  validateSearch: z.object({ prompt: z.string().optional() }),
   head: () => ({
     meta: [
       { title },
@@ -19,45 +20,10 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Overview,
+  component: Home,
 });
 
-const examples = [
-  // Starting points, not real work: phrased as the kind of job this queue
-  // takes — bounded, repo-scoped, ending in a pull request.
-  "Find and fix a failing test, then open a pull request",
-  "Update the dependencies that have security advisories",
-  "Add missing test coverage for the module with the least",
-];
-
-function Overview() {
-  return (
-    <Shell>
-      <div className="space-y-4 px-5 py-10 sm:px-8 lg:px-10">
-        <ClaudeKey />
-        <section className="max-w-3xl rounded-lg border border-border bg-surface p-6 sm:p-8">
-          <h1 className="font-display text-2xl font-medium leading-snug">
-            Describe the change. Pick the harness.
-          </h1>
-          <ul className="mt-4 space-y-1.5">
-            {examples.map((e) => (
-              <li key={e}>
-                <Link
-                  to="/dispatch"
-                  search={{ prompt: e }}
-                  className="group flex w-full items-center gap-3 rounded-md border border-border bg-background/40 px-3 py-2.5 text-left text-[13px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-                >
-                  <span className="truncate">{e}</span>
-                  <ArrowUpRight className="ml-auto size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <Button asChild size="sm" className="mt-4">
-            <Link to="/dispatch">Dispatch task</Link>
-          </Button>
-        </section>
-      </div>
-    </Shell>
-  );
+function Home() {
+  const { prompt } = Route.useSearch();
+  return <DispatchForm initialPrompt={prompt} />;
 }
